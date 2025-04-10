@@ -1,0 +1,98 @@
+/* Custom styles to enhance Pico CSS */
+
+/* Add a subtle background and improve readability */
+:root {
+  --background-color: #f8f9fa;
+  --card-background-color: #ffffff;
+  --primary: #1095c1;
+  --primary-hover: #0a769a;
+}
+
+body {
+  background-color: var(--background-color);
+}
+
+article {
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  border-radius: 8px;
+  background-color: var(--card-background-color);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+}
+
+/* Improve spacing */
+form {
+  margin-bottom: 2rem;
+}
+
+table {
+  margin-bottom: 0;
+}
+
+/* Add animation for loading state */
+[aria-busy="true"]:not(input):not(select):not(textarea)::before {
+  animation: rotate 2s linear infinite;
+}
+
+/* Improve modal appearance */
+dialog {
+  border-radius: 8px;
+  max-width: 40rem;
+}
+
+dialog article {
+  margin: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+/* Custom branding */
+h1 {
+  color: var(--primary);
+}
+
+nav a[aria-current="page"] {
+  font-weight: bold;
+}
+
+/* Status messages */
+.status {
+  padding: 0.5rem;
+  margin: 1rem 0;
+  border-radius: 4px;
+}
+
+.status.success {
+  background-color: #d1e7dd;
+  color: #0f5132;
+}
+
+.status.error {
+  background-color: #f8d7da;
+  color: #842029;
+}
+
+/* Custom card styling */
+.card {
+  padding: 1rem;
+  border: 1px solid var(--form-element-border-color);
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.card-body {
+  padding: 0.5rem 0;
+}
+
+.card-footer {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--form-element-border-color);
+}

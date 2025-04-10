@@ -1,0 +1,19 @@
+# Node/JavaScript
+node_modules/
+npm-debug.log
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn
+.pnp.*
+*.tgz
+.next/
+out/
+.nuxt/
+.cache/
+.parcel-cache/
+.eslintcache
+
+# Frontend builds
+build/
+dist/
