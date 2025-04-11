@@ -1,6 +1,6 @@
 # Database
 *.sqlite3
-*.db
+#*.db
 *.db-shm
 *.db-wal
 
