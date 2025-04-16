@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package caspers.messages.v1;
+
+import "buf/validate/validate.proto";
+
+// The status of an order.
+enum Status {
+  // default status
+  STATUS_UNSPECIFIED = 0;
+
+  // status received
+  STATUS_RECEIVED = 1;
+
+  // status accepted
+  STATUS_ACCEPTED = 2;
+
+  // status processing
+  STATUS_PROCESSING = 3;
+
+  // status ready
+  STATUS_READY = 4;
+
+  // status picked up
+  STATUS_PICKED_UP = 5;
+
+  // status delivered
+  STATUS_DELIVERED = 6;
+
+  // status cancelled
+  STATUS_CANCELLED = 7;
+}
+
+message OrderStatus {
+  // The unique identifier for the order.
+  string id = 1 [(buf.validate.field).string.uuid = true];
+
+  // The status of the order.
+  Status status = 2 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+}
+
+// An order represents a customer's request to purchase one or more products.
+message Order {
+  // The unique identifier for the order.
+  string id = 1 [(buf.validate.field).string.uuid = true];
+
+  // The unique identifier for the customer.
+  string customer_id = 2 [(buf.validate.field).string.uuid = true];
+
+  // The line items in the order.
+  repeated LineItem line_items = 3 [(buf.validate.field).repeated.min_items = 1];
+}
+
+// A line item represents a single product in an order.
+message LineItem {
+  // The unique identifier for the line item.
+  string id = 1 [(buf.validate.field).string.uuid = true];
+
+  // The unique identifier for the product.
+  string product_id = 3 [(buf.validate.field).string.uuid = true];
+
+  // The quantity of the product in the line item.
+  int32 quantity = 4 [(buf.validate.field).int32.gte = 1];
+
+  // The price of the product in the line item.
+  double price = 5 [(buf.validate.field).double.gte = 0];
+
+  // The total price of the line item.
+  double total_price = 6 [(buf.validate.field).double.gte = 0];
+}

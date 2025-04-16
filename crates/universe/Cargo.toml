@@ -1,0 +1,18 @@
+[package]
+name = "caspers-universe"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+async-trait = { workspace = true }
+bytes = { workspace = true }
+chrono = { workspace = true }
+itertools = { workspace = true }
+pbjson = { workspace = true }
+pbjson-types = { workspace = true }
+prost = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+uuid = { workspace = true }
