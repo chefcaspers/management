@@ -41,13 +41,14 @@ Key relationships:
 
 ## Technical Documentation
 
-Right now this uses an embedded SQlite3. Can add postgres as a remote DB later.
+Can run with embedded sqlite or remote postgres instance
 
 To run:
 
 ```
 cd backend
 poetry install # for dependencies
+DB_HOST= DB_USER= DB_PASSWORD= DB_NAME= # optional environment for hooking up to remote postgres
 python app.py
 ```
 
