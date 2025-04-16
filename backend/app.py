@@ -2,15 +2,26 @@ import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from models import db, Location, Kitchen, Vendor, Brand, Menu, Category, Item, brand_kitchen_association
+from sqlalchemy.engine import URL
 
 def create_app():
     app = Flask(__name__)
     CORS(app)
 
     # Use environment variables to decide between SQLite or Postgres
-    db_url = os.getenv("DATABASE_URL")  # e.g. "postgresql://user:pass@localhost:5432/mydb"
-    if db_url:
-        app.config['SQLALCHEMY_DATABASE_URI'] = db_url
+    db_host = os.getenv("DB_HOST")
+    db_user = os.getenv("DB_USER")
+    db_password = os.getenv("DB_PASSWORD")
+    db_name = os.getenv("DB_NAME")
+    if db_host and db_user and db_password and db_name:
+        url_object = URL.create(
+            "postgresql",
+            username=db_user,
+            password=db_password,
+            host=db_host,
+            database=db_name,
+        )
+        app.config['SQLALCHEMY_DATABASE_URI'] = url_object.render_as_string(hide_password=False)
     else:
         # Fall back to SQLite
         app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///ghost_kitchen.db'
