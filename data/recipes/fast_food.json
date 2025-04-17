@@ -1,0 +1,92 @@
+[
+  {
+    "name": "Classic Burger",
+    "description": "A classic burger with beef patty, lettuce, and other toppings",
+    "category": "Fast Food",
+    "ingredients": [
+      {
+        "name": "ingredients/beef",
+        "display_name": "Beef Patty",
+        "description": "Delicious beef patty",
+        "quantity": "130g"
+      },
+      {
+        "name": "ingredients/lettuce",
+        "display_name": "Lettuce",
+        "description": "Crunchy lettuce leaves",
+        "quantity": "50g"
+      },
+      {
+        "name": "ingredients/bun",
+        "display_name": "Burger Bun",
+        "description": "Soft burger bun",
+        "quantity": "1"
+      }
+    ],
+    "instructions": [
+      {
+        "step": "prepare",
+        "required_assets": "workstation",
+        "expected_duration": "2 minutes",
+        "description": "Prepare the ingredients"
+      },
+      {
+        "step": "cook-patty",
+        "required_assets": "stove",
+        "expected_duration": "10 minutes",
+        "description": "Cook the beef patty on the stove until it's cooked through"
+      },
+      {
+        "step": "assemble",
+        "required_assets": "workstation",
+        "expected_duration": "2 minutes",
+        "description": "Assemble the burger with the cooked patty, lettuce, and bun"
+      }
+    ]
+  },
+  {
+    "name": "Egg Salad Sandwich",
+    "description": "Creamy egg salad served between slices of bread.",
+    "category": "Fast Food",
+    "ingredients": [
+      {
+        "name": "ingredients/egg",
+        "display_name": "Egg",
+        "description": "Boiled eggs",
+        "quantity": "2"
+      },
+      {
+        "name": "ingredients/bread",
+        "display_name": "Bread",
+        "description": "Sliced sandwich bread",
+        "quantity": "2 slices"
+      },
+      {
+        "name": "ingredients/lettuce",
+        "display_name": "Lettuce",
+        "description": "Crisp lettuce leaves",
+        "quantity": "30g"
+      }
+    ],
+    "instructions": [
+      {
+        "step": "boil-eggs",
+        "required_assets": "stove",
+        "expected_duration": "10 minutes",
+        "description": "Boil eggs until hard-cooked, then peel and chop."
+      },
+      {
+        "step": "mix-salad",
+        "required_assets": "workstation",
+        "expected_duration": "3 minutes",
+        "description": "Mix chopped eggs with mayonnaise and seasoning."
+      },
+      {
+        "step": "assemble",
+        "required_assets": "workstation",
+        "expected_duration": "2 minutes",
+        "description": "Spread egg salad on bread, add lettuce, and close sandwich."
+      }
+    ]
+  }
+]

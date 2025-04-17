@@ -1,0 +1,128 @@
+[
+  {
+    "name": "Beef and Broccoli Stir Fry",
+    "description": "Tender beef and crisp broccoli in a savory soy-based sauce.",
+    "category": "Asian",
+    "ingredients": [
+      {
+        "name": "ingredients/beef",
+        "display_name": "Beef",
+        "description": "Thinly sliced flank steak",
+        "quantity": "150g"
+      },
+      {
+        "name": "ingredients/broccoli",
+        "display_name": "Broccoli",
+        "description": "Fresh broccoli florets",
+        "quantity": "100g"
+      },
+      {
+        "name": "ingredients/soy_sauce",
+        "display_name": "Soy Sauce",
+        "description": "Salty, fermented soy sauce",
+        "quantity": "2 tbsp"
+      },
+      {
+        "name": "ingredients/garlic",
+        "display_name": "Garlic",
+        "description": "Minced garlic cloves",
+        "quantity": "2 cloves"
+      },
+      {
+        "name": "ingredients/rice",
+        "display_name": "Steamed Rice",
+        "description": "Cooked white rice",
+        "quantity": "150g"
+      }
+    ],
+    "instructions": [
+      {
+        "step": "marinate-beef",
+        "required_assets": "workstation",
+        "expected_duration": "10 minutes",
+        "description": "Marinate beef slices with 1 tbsp soy sauce and minced garlic."
+      },
+      {
+        "step": "blanch-broccoli",
+        "required_assets": "stove",
+        "expected_duration": "3 minutes",
+        "description": "Blanch broccoli in boiling water, then drain."
+      },
+      {
+        "step": "stir-fry",
+        "required_assets": "stove",
+        "expected_duration": "7 minutes",
+        "description": "Stir-fry beef, then add broccoli and remaining soy sauce. Cook until beef is done."
+      },
+      {
+        "step": "serve",
+        "required_assets": "workstation",
+        "expected_duration": "2 minutes",
+        "description": "Serve hot with steamed rice."
+      }
+    ]
+  },
+  {
+    "name": "Vegetable Fried Rice",
+    "description": "Classic fried rice with vegetables, egg, and soy sauce.",
+    "category": "Asian",
+    "ingredients": [
+      {
+        "name": "ingredients/rice",
+        "display_name": "Cooked Rice",
+        "description": "Day-old white rice",
+        "quantity": "180g"
+      },
+      {
+        "name": "ingredients/egg",
+        "display_name": "Egg",
+        "description": "Beaten egg",
+        "quantity": "1"
+      },
+      {
+        "name": "ingredients/soy_sauce",
+        "display_name": "Soy Sauce",
+        "description": "Salty, fermented soy sauce",
+        "quantity": "1.5 tbsp"
+      },
+      {
+        "name": "ingredients/green_onion",
+        "display_name": "Green Onion",
+        "description": "Chopped green onions",
+        "quantity": "2 stalks"
+      },
+      {
+        "name": "ingredients/garlic",
+        "display_name": "Garlic",
+        "description": "Minced garlic cloves",
+        "quantity": "1 clove"
+      }
+    ],
+    "instructions": [
+      {
+        "step": "scramble-egg",
+        "required_assets": "stove",
+        "expected_duration": "2 minutes",
+        "description": "Scramble egg in a hot wok, then set aside."
+      },
+      {
+        "step": "stir-fry-veggies",
+        "required_assets": "stove",
+        "expected_duration": "3 minutes",
+        "description": "Stir-fry green onion and garlic until fragrant."
+      },
+      {
+        "step": "add-rice",
+        "required_assets": "stove",
+        "expected_duration": "3 minutes",
+        "description": "Add rice, stir-fry, and mix in soy sauce."
+      },
+      {
+        "step": "combine",
+        "required_assets": "stove",
+        "expected_duration": "2 minutes",
+        "description": "Add scrambled egg back, mix well, and serve."
+      }
+    ]
+  }
+]
