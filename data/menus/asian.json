@@ -3,6 +3,7 @@
     "name": "Beef and Broccoli Stir Fry",
     "description": "Tender beef and crisp broccoli in a savory soy-based sauce.",
     "category": "Asian",
+    "price": 15.99,
     "ingredients": [
       {
         "name": "ingredients/beef",
@@ -39,25 +40,25 @@
       {
         "step": "marinate-beef",
         "required_assets": "workstation",
-        "expected_duration": "10 minutes",
+        "expected_duration": "600s",
         "description": "Marinate beef slices with 1 tbsp soy sauce and minced garlic."
       },
       {
         "step": "blanch-broccoli",
         "required_assets": "stove",
-        "expected_duration": "3 minutes",
+        "expected_duration": "180s",
         "description": "Blanch broccoli in boiling water, then drain."
       },
       {
         "step": "stir-fry",
         "required_assets": "stove",
-        "expected_duration": "7 minutes",
+        "expected_duration": "560s",
         "description": "Stir-fry beef, then add broccoli and remaining soy sauce. Cook until beef is done."
       },
       {
         "step": "serve",
         "required_assets": "workstation",
-        "expected_duration": "2 minutes",
+        "expected_duration": "120s",
         "description": "Serve hot with steamed rice."
       }
     ]
@@ -66,6 +67,7 @@
     "name": "Vegetable Fried Rice",
     "description": "Classic fried rice with vegetables, egg, and soy sauce.",
     "category": "Asian",
+    "price": 15.99,
     "ingredients": [
       {
         "name": "ingredients/rice",
@@ -102,25 +104,25 @@
       {
         "step": "scramble-egg",
         "required_assets": "stove",
-        "expected_duration": "2 minutes",
+        "expected_duration": "120s",
         "description": "Scramble egg in a hot wok, then set aside."
       },
       {
         "step": "stir-fry-veggies",
         "required_assets": "stove",
-        "expected_duration": "3 minutes",
+        "expected_duration": "180s",
         "description": "Stir-fry green onion and garlic until fragrant."
       },
       {
         "step": "add-rice",
         "required_assets": "stove",
-        "expected_duration": "3 minutes",
+        "expected_duration": "180s",
         "description": "Add rice, stir-fry, and mix in soy sauce."
       },
       {
         "step": "combine",
         "required_assets": "stove",
-        "expected_duration": "2 minutes",
+        "expected_duration": "120s",
         "description": "Add scrambled egg back, mix well, and serve."
       }
     ]

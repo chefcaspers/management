@@ -3,14 +3,15 @@ use std::time::Duration;
 
 use tracing::warn;
 
-use crate::models::{ItemIngredient, KitchenAsset};
+use crate::models::{ItemIngredient, KitchenStation};
+use crate::simulation::State;
 
 #[derive(Clone)]
-enum AssetStatus {
-    // Asset is available for use
+enum StationStatus {
+    // Station is available for use
     Available,
 
-    // Stores the recipe ID using this asset
+    // Stores the recipe ID using this station
     InUse(String),
 
     // Out of order
@@ -18,20 +19,20 @@ enum AssetStatus {
 }
 
 #[derive(Clone)]
-struct Asset {
+struct Station {
     id: String,
     name: String,
-    asset_type: KitchenAsset,
-    status: AssetStatus,
+    station_type: KitchenStation,
+    status: StationStatus,
 }
 
-impl Asset {
-    pub fn new(name: impl ToString, asset_type: KitchenAsset) -> Self {
-        Asset {
+impl Station {
+    pub fn new(name: impl ToString, station_type: KitchenStation) -> Self {
+        Station {
             id: uuid::Uuid::new_v4().to_string(),
             name: name.to_string(),
-            asset_type,
-            status: AssetStatus::Available,
+            station_type,
+            status: StationStatus::Available,
         }
     }
 }
@@ -40,7 +41,7 @@ impl Asset {
 struct Instruction {
     id: String,
     name: String,
-    required_asset: KitchenAsset,
+    required_station: KitchenStation,
     duration: Duration, // How long this instruction takes
 }
 
@@ -73,17 +74,17 @@ struct RecipeProgress {
 
 #[derive(Clone, Debug)]
 pub struct KitchenStats {
-    queued_recipes: usize,
-    in_progress_recipes: usize,
-    completed_recipes: usize,
-    available_assets: usize,
+    queued: usize,
+    in_progress: usize,
+    completed: usize,
+    idle_assets: usize,
     total_assets: usize,
     simulation_time: Duration,
 }
 
 pub struct Kitchen {
     name: String,
-    assets: Vec<Asset>,
+    assets: Vec<Station>,
     recipe_queue: VecDeque<Recipe>,
     in_progress: HashMap<String, RecipeProgress>,
     completed_recipes: Vec<Recipe>,
@@ -102,12 +103,12 @@ impl Kitchen {
         }
     }
 
-    pub fn add_asset(&mut self, name: impl ToString, asset_type: KitchenAsset) {
-        self.assets.push(Asset {
+    pub fn add_asset(&mut self, name: impl ToString, station_type: KitchenStation) {
+        self.assets.push(Station {
             id: uuid::Uuid::new_v4().to_string(),
             name: name.to_string(),
-            asset_type,
-            status: AssetStatus::Available,
+            station_type,
+            status: StationStatus::Available,
         });
     }
 
@@ -124,10 +125,10 @@ impl Kitchen {
             let first_instruction = &recipe.instructions[0];
 
             if let Some(asset_idx) =
-                find_available_asset(&self.assets, &first_instruction.required_asset)
+                find_available_asset(&self.assets, &first_instruction.required_station)
             {
                 // Mark asset as in use
-                self.assets[asset_idx].status = AssetStatus::InUse(recipe_id.clone());
+                self.assets[asset_idx].status = StationStatus::InUse(recipe_id.clone());
 
                 // Add recipe to in-progress with first instruction
                 self.in_progress.insert(
@@ -150,7 +151,7 @@ impl Kitchen {
         }
     }
 
-    pub fn simulation_step(&mut self, time_step: Duration) {
+    pub fn simulation_step(&mut self, time_step: Duration, ctx: &State) {
         self.simulation_time += time_step;
 
         // Try to start new recipes if possible
@@ -174,7 +175,7 @@ impl Kitchen {
                         let current_instruction = &recipe.instructions[instruction_idx];
                         release_asset(
                             &mut self.assets,
-                            &current_instruction.required_asset,
+                            &current_instruction.required_station,
                             recipe_id,
                         );
 
@@ -188,12 +189,13 @@ impl Kitchen {
                             // Try to acquire asset for next instruction
                             let next_instruction = &recipe.instructions[next_idx];
 
-                            if let Some(asset_idx) =
-                                find_available_asset(&self.assets, &next_instruction.required_asset)
-                            {
+                            if let Some(asset_idx) = find_available_asset(
+                                &self.assets,
+                                &next_instruction.required_station,
+                            ) {
                                 // Mark asset as in use
                                 self.assets[asset_idx].status =
-                                    AssetStatus::InUse(recipe_id.clone());
+                                    StationStatus::InUse(recipe_id.clone());
 
                                 // Update status
                                 to_update.push((
@@ -217,10 +219,10 @@ impl Kitchen {
                 let instruction = &progress.recipe.instructions[instruction_idx];
 
                 if let Some(asset_idx) =
-                    find_available_asset(&self.assets, &instruction.required_asset)
+                    find_available_asset(&self.assets, &instruction.required_station)
                 {
                     // Mark asset as in use
-                    self.assets[asset_idx].status = AssetStatus::InUse(recipe_id.clone());
+                    self.assets[asset_idx].status = StationStatus::InUse(recipe_id.clone());
 
                     // Update status
                     to_update.push((
@@ -250,13 +252,13 @@ impl Kitchen {
 
     pub fn get_stats(&self) -> KitchenStats {
         KitchenStats {
-            queued_recipes: self.recipe_queue.len(),
-            in_progress_recipes: self.in_progress.len(),
-            completed_recipes: self.completed_recipes.len(),
-            available_assets: self
+            queued: self.recipe_queue.len(),
+            in_progress: self.in_progress.len(),
+            completed: self.completed_recipes.len(),
+            idle_assets: self
                 .assets
                 .iter()
-                .filter(|a| matches!(a.status, AssetStatus::Available))
+                .filter(|a| matches!(a.status, StationStatus::Available))
                 .count(),
             total_assets: self.assets.len(),
             simulation_time: self.simulation_time,
@@ -264,19 +266,19 @@ impl Kitchen {
     }
 }
 
-fn find_available_asset(assets: &[Asset], asset_type: &KitchenAsset) -> Option<usize> {
+fn find_available_asset(assets: &[Station], asset_type: &KitchenStation) -> Option<usize> {
     assets.iter().position(|asset| {
-        matches!(asset.status, AssetStatus::Available)
-            && std::mem::discriminant(&asset.asset_type) == std::mem::discriminant(asset_type)
+        matches!(asset.status, StationStatus::Available)
+            && std::mem::discriminant(&asset.station_type) == std::mem::discriminant(asset_type)
     })
 }
 
-fn release_asset(assets: &mut Vec<Asset>, asset_type: &KitchenAsset, recipe_id: &str) {
+fn release_asset(assets: &mut Vec<Station>, asset_type: &KitchenStation, recipe_id: &str) {
     for asset in assets {
-        if std::mem::discriminant(&asset.asset_type) == std::mem::discriminant(asset_type) {
-            if let AssetStatus::InUse(id) = &asset.status {
+        if std::mem::discriminant(&asset.station_type) == std::mem::discriminant(asset_type) {
+            if let StationStatus::InUse(id) = &asset.status {
                 if id == recipe_id {
-                    asset.status = AssetStatus::Available;
+                    asset.status = StationStatus::Available;
                     break;
                 }
             }
@@ -308,19 +310,19 @@ mod tests {
                 Instruction {
                     id: "prep".to_string(),
                     name: "Prepare ingredients".to_string(),
-                    required_asset: KitchenAsset::Workstation,
+                    required_station: KitchenStation::Workstation,
                     duration: Duration::from_secs(120), // 2 minutes
                 },
                 Instruction {
                     id: "cook".to_string(),
                     name: "Cook patty".to_string(),
-                    required_asset: KitchenAsset::Oven,
+                    required_station: KitchenStation::Oven,
                     duration: Duration::from_secs(300), // 5 minutes
                 },
                 Instruction {
                     id: "assemble".to_string(),
                     name: "Assemble burger".to_string(),
-                    required_asset: KitchenAsset::Workstation,
+                    required_station: KitchenStation::Workstation,
                     duration: Duration::from_secs(60), // 1 minute
                 },
             ],
@@ -331,12 +333,12 @@ mod tests {
     fn test_kitchen_stats() {
         let mut kitchen = Kitchen::new("test-kitchen");
 
-        kitchen.add_asset("ws1", KitchenAsset::Workstation);
-        kitchen.add_asset("ws2", KitchenAsset::Workstation);
-        kitchen.add_asset("oven", KitchenAsset::Oven);
+        kitchen.add_asset("ws1", KitchenStation::Workstation);
+        kitchen.add_asset("ws2", KitchenStation::Workstation);
+        kitchen.add_asset("oven", KitchenStation::Oven);
 
         let stats = kitchen.get_stats();
-        assert_eq!(stats.available_assets, 3);
+        assert_eq!(stats.idle_assets, 3);
         assert_eq!(stats.total_assets, 3);
 
         kitchen.queue_recipe(get_recipe());
@@ -348,8 +350,10 @@ mod tests {
         kitchen.queue_recipe(get_recipe());
         kitchen.queue_recipe(get_recipe());
 
+        let state = State::try_new().unwrap();
+
         for _ in 0..100 {
-            kitchen.simulation_step(Duration::from_secs(60)); // 1 minute per step
+            kitchen.simulation_step(Duration::from_secs(60), &state);
 
             // Print status
             let stats = kitchen.get_stats();

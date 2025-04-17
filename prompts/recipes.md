@@ -8,6 +8,8 @@ The collected recipe data should be formatted in JSON as the following <example>
   "name": "Classic Burger",
   "description": "A classic burger with beef patty, lettuce, and other toppings",
   "category": "Fast Food",
+  "price": 10.99,
+  "image_url": "https://example.com/classic-burger.jpg",
   "ingredients": [
     {
       "name": "ingredients/beef",
@@ -15,27 +17,25 @@ The collected recipe data should be formatted in JSON as the following <example>
     },
     {
       "name": "ingredients/lettuce",
-      "display_name": "Lettuce",
-      "description": "Crunchy lettuce leaves",
       "quantity": "50g"
     }
   ],
   "instructions": [
     {
       "step": "prepare",
-      "required_assets": "workstation",
+      "required_station": "workstation",
       "expected_duration": "2 minutes",
       "description": "Prepare the ingredients"
     },
     {
       "step": "cook-patty",
-      "required_assets": "stove",
+      "required_station": "stove",
       "expected_duration": 10 minutes,
       "description": "Cook the beef patty on the stove until it's cooked through"
     },
     {
       "step": "assemble",
-      "required_assets": "workstation",
+      "required_station": "workstation",
       "expected_duration": "2 minutes",
       "description": "Assemble the burger with the cooked patty, lettuce, and other toppings"
     }

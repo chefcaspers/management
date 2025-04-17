@@ -2,10 +2,7 @@ use std::sync::{Arc, LazyLock};
 
 use arrow_array::{RecordBatch, StringArray};
 use arrow_schema::{DataType, Field, Schema, SchemaRef};
-use datafusion::prelude::*;
 use uuid::Uuid;
-
-use crate::error::Result;
 
 static LOCATION_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
     Arc::new(Schema::new(vec![
@@ -42,7 +39,7 @@ static KITCHEN_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
     ]))
 });
 
-fn generate_locations() -> RecordBatch {
+pub(super) fn generate_locations() -> RecordBatch {
     RecordBatch::try_new(
         LOCATION_SCHEMA.clone(),
         vec![
@@ -73,7 +70,7 @@ fn generate_locations() -> RecordBatch {
     .unwrap()
 }
 
-fn generate_brands() -> RecordBatch {
+pub(super) fn generate_brands() -> RecordBatch {
     RecordBatch::try_new(
         BRAND_SCHEMA.clone(),
         vec![
@@ -93,7 +90,7 @@ fn generate_brands() -> RecordBatch {
     .unwrap()
 }
 
-fn generate_vendors() -> RecordBatch {
+pub(super) fn generate_vendors() -> RecordBatch {
     RecordBatch::try_new(
         VENDOR_SCHEMA.clone(),
         vec![
@@ -113,7 +110,7 @@ fn generate_vendors() -> RecordBatch {
     .unwrap()
 }
 
-fn generate_kitchens() -> RecordBatch {
+pub(super) fn generate_kitchens() -> RecordBatch {
     RecordBatch::try_new(
         KITCHEN_SCHEMA.clone(),
         vec![
@@ -135,21 +132,4 @@ fn generate_kitchens() -> RecordBatch {
         ],
     )
     .unwrap()
-}
-
-pub struct State {
-    ctx: SessionContext,
-}
-
-impl State {
-    pub fn new() -> Result<Self> {
-        let ctx = SessionContext::new();
-
-        ctx.register_batch("locations", generate_locations())?;
-        ctx.register_batch("brands", generate_brands())?;
-        ctx.register_batch("vendors", generate_vendors())?;
-        ctx.register_batch("kitchens", generate_kitchens())?;
-
-        Ok(State { ctx })
-    }
 }

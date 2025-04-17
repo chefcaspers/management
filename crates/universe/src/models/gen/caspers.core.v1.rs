@@ -89,7 +89,9 @@ pub struct Brand {
     pub id: ::prost::alloc::string::String,
     #[prost(string, tag="2")]
     pub name: ::prost::alloc::string::String,
-    #[prost(message, optional, tag="3")]
+    #[prost(string, tag="3")]
+    pub description: ::prost::alloc::string::String,
+    #[prost(message, optional, tag="4")]
     pub menu: ::core::option::Option<Menu>,
 }
 impl ::prost::Name for Brand {
@@ -171,8 +173,8 @@ pub struct Instruction {
     #[prost(string, tag="2")]
     pub description: ::prost::alloc::string::String,
     /// The kitchen asset required to perform the step
-    #[prost(enumeration="KitchenAsset", tag="3")]
-    pub required_asset: i32,
+    #[prost(enumeration="KitchenStation", tag="3")]
+    pub required_station: i32,
     /// Estimated duration to perform the step
     #[prost(message, optional, tag="4")]
     pub expected_duration: ::core::option::Option<::pbjson_types::Duration>,
@@ -183,32 +185,32 @@ const PACKAGE: &'static str = "caspers.core.v1";
 fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.Instruction".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.Instruction".into() }}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
-pub enum KitchenAsset {
+pub enum KitchenStation {
     Unspecified = 0,
     Workstation = 1,
     Stove = 2,
     Oven = 3,
 }
-impl KitchenAsset {
+impl KitchenStation {
     /// String value of the enum field names used in the ProtoBuf definition.
     ///
     /// The values are not transformed in any way and thus are considered stable
     /// (if the ProtoBuf definition does not change) and safe for programmatic use.
     pub fn as_str_name(&self) -> &'static str {
         match self {
-            KitchenAsset::Unspecified => "KITCHEN_ASSET_UNSPECIFIED",
-            KitchenAsset::Workstation => "KITCHEN_ASSET_WORKSTATION",
-            KitchenAsset::Stove => "KITCHEN_ASSET_STOVE",
-            KitchenAsset::Oven => "KITCHEN_ASSET_OVEN",
+            KitchenStation::Unspecified => "KITCHEN_STATION_UNSPECIFIED",
+            KitchenStation::Workstation => "KITCHEN_STATION_WORKSTATION",
+            KitchenStation::Stove => "KITCHEN_STATION_STOVE",
+            KitchenStation::Oven => "KITCHEN_STATION_OVEN",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
     pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
         match value {
-            "KITCHEN_ASSET_UNSPECIFIED" => Some(Self::Unspecified),
-            "KITCHEN_ASSET_WORKSTATION" => Some(Self::Workstation),
-            "KITCHEN_ASSET_STOVE" => Some(Self::Stove),
-            "KITCHEN_ASSET_OVEN" => Some(Self::Oven),
+            "KITCHEN_STATION_UNSPECIFIED" => Some(Self::Unspecified),
+            "KITCHEN_STATION_WORKSTATION" => Some(Self::Workstation),
+            "KITCHEN_STATION_STOVE" => Some(Self::Stove),
+            "KITCHEN_STATION_OVEN" => Some(Self::Oven),
             _ => None,
         }
     }

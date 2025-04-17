@@ -13,6 +13,9 @@ impl serde::Serialize for Brand {
         if !self.name.is_empty() {
             len += 1;
         }
+        if !self.description.is_empty() {
+            len += 1;
+        }
         if self.menu.is_some() {
             len += 1;
         }
@@ -22,6 +25,9 @@ impl serde::Serialize for Brand {
         }
         if !self.name.is_empty() {
             struct_ser.serialize_field("name", &self.name)?;
+        }
+        if !self.description.is_empty() {
+            struct_ser.serialize_field("description", &self.description)?;
         }
         if let Some(v) = self.menu.as_ref() {
             struct_ser.serialize_field("menu", v)?;
@@ -38,6 +44,7 @@ impl<'de> serde::Deserialize<'de> for Brand {
         const FIELDS: &[&str] = &[
             "id",
             "name",
+            "description",
             "menu",
         ];
 
@@ -45,6 +52,7 @@ impl<'de> serde::Deserialize<'de> for Brand {
         enum GeneratedField {
             Id,
             Name,
+            Description,
             Menu,
             __SkipField__,
         }
@@ -70,6 +78,7 @@ impl<'de> serde::Deserialize<'de> for Brand {
                         match value {
                             "id" => Ok(GeneratedField::Id),
                             "name" => Ok(GeneratedField::Name),
+                            "description" => Ok(GeneratedField::Description),
                             "menu" => Ok(GeneratedField::Menu),
                             _ => Ok(GeneratedField::__SkipField__),
                         }
@@ -92,6 +101,7 @@ impl<'de> serde::Deserialize<'de> for Brand {
             {
                 let mut id__ = None;
                 let mut name__ = None;
+                let mut description__ = None;
                 let mut menu__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
@@ -107,6 +117,12 @@ impl<'de> serde::Deserialize<'de> for Brand {
                             }
                             name__ = Some(map_.next_value()?);
                         }
+                        GeneratedField::Description => {
+                            if description__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("description"));
+                            }
+                            description__ = Some(map_.next_value()?);
+                        }
                         GeneratedField::Menu => {
                             if menu__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("menu"));
@@ -121,6 +137,7 @@ impl<'de> serde::Deserialize<'de> for Brand {
                 Ok(Brand {
                     id: id__.unwrap_or_default(),
                     name: name__.unwrap_or_default(),
+                    description: description__.unwrap_or_default(),
                     menu: menu__,
                 })
             }
@@ -308,7 +325,7 @@ impl serde::Serialize for Instruction {
         if !self.description.is_empty() {
             len += 1;
         }
-        if self.required_asset != 0 {
+        if self.required_station != 0 {
             len += 1;
         }
         if self.expected_duration.is_some() {
@@ -321,10 +338,10 @@ impl serde::Serialize for Instruction {
         if !self.description.is_empty() {
             struct_ser.serialize_field("description", &self.description)?;
         }
-        if self.required_asset != 0 {
-            let v = KitchenAsset::try_from(self.required_asset)
-                .map_err(|_| serde::ser::Error::custom(format!("Invalid variant {}", self.required_asset)))?;
-            struct_ser.serialize_field("requiredAsset", &v)?;
+        if self.required_station != 0 {
+            let v = KitchenStation::try_from(self.required_station)
+                .map_err(|_| serde::ser::Error::custom(format!("Invalid variant {}", self.required_station)))?;
+            struct_ser.serialize_field("requiredStation", &v)?;
         }
         if let Some(v) = self.expected_duration.as_ref() {
             struct_ser.serialize_field("expectedDuration", v)?;
@@ -341,8 +358,8 @@ impl<'de> serde::Deserialize<'de> for Instruction {
         const FIELDS: &[&str] = &[
             "step",
             "description",
-            "required_asset",
-            "requiredAsset",
+            "required_station",
+            "requiredStation",
             "expected_duration",
             "expectedDuration",
         ];
@@ -351,7 +368,7 @@ impl<'de> serde::Deserialize<'de> for Instruction {
         enum GeneratedField {
             Step,
             Description,
-            RequiredAsset,
+            RequiredStation,
             ExpectedDuration,
             __SkipField__,
         }
@@ -377,7 +394,7 @@ impl<'de> serde::Deserialize<'de> for Instruction {
                         match value {
                             "step" => Ok(GeneratedField::Step),
                             "description" => Ok(GeneratedField::Description),
-                            "requiredAsset" | "required_asset" => Ok(GeneratedField::RequiredAsset),
+                            "requiredStation" | "required_station" => Ok(GeneratedField::RequiredStation),
                             "expectedDuration" | "expected_duration" => Ok(GeneratedField::ExpectedDuration),
                             _ => Ok(GeneratedField::__SkipField__),
                         }
@@ -400,7 +417,7 @@ impl<'de> serde::Deserialize<'de> for Instruction {
             {
                 let mut step__ = None;
                 let mut description__ = None;
-                let mut required_asset__ = None;
+                let mut required_station__ = None;
                 let mut expected_duration__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
@@ -416,11 +433,11 @@ impl<'de> serde::Deserialize<'de> for Instruction {
                             }
                             description__ = Some(map_.next_value()?);
                         }
-                        GeneratedField::RequiredAsset => {
-                            if required_asset__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("requiredAsset"));
+                        GeneratedField::RequiredStation => {
+                            if required_station__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("requiredStation"));
                             }
-                            required_asset__ = Some(map_.next_value::<KitchenAsset>()? as i32);
+                            required_station__ = Some(map_.next_value::<KitchenStation>()? as i32);
                         }
                         GeneratedField::ExpectedDuration => {
                             if expected_duration__.is_some() {
@@ -436,7 +453,7 @@ impl<'de> serde::Deserialize<'de> for Instruction {
                 Ok(Instruction {
                     step: step__.unwrap_or_default(),
                     description: description__.unwrap_or_default(),
-                    required_asset: required_asset__.unwrap_or_default(),
+                    required_station: required_station__.unwrap_or_default(),
                     expected_duration: expected_duration__,
                 })
             }
@@ -669,38 +686,38 @@ impl<'de> serde::Deserialize<'de> for Kitchen {
         deserializer.deserialize_struct("caspers.core.v1.Kitchen", FIELDS, GeneratedVisitor)
     }
 }
-impl serde::Serialize for KitchenAsset {
+impl serde::Serialize for KitchenStation {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
         let variant = match self {
-            Self::Unspecified => "KITCHEN_ASSET_UNSPECIFIED",
-            Self::Workstation => "KITCHEN_ASSET_WORKSTATION",
-            Self::Stove => "KITCHEN_ASSET_STOVE",
-            Self::Oven => "KITCHEN_ASSET_OVEN",
+            Self::Unspecified => "KITCHEN_STATION_UNSPECIFIED",
+            Self::Workstation => "KITCHEN_STATION_WORKSTATION",
+            Self::Stove => "KITCHEN_STATION_STOVE",
+            Self::Oven => "KITCHEN_STATION_OVEN",
         };
         serializer.serialize_str(variant)
     }
 }
-impl<'de> serde::Deserialize<'de> for KitchenAsset {
+impl<'de> serde::Deserialize<'de> for KitchenStation {
     #[allow(deprecated)]
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
         const FIELDS: &[&str] = &[
-            "KITCHEN_ASSET_UNSPECIFIED",
-            "KITCHEN_ASSET_WORKSTATION",
-            "KITCHEN_ASSET_STOVE",
-            "KITCHEN_ASSET_OVEN",
+            "KITCHEN_STATION_UNSPECIFIED",
+            "KITCHEN_STATION_WORKSTATION",
+            "KITCHEN_STATION_STOVE",
+            "KITCHEN_STATION_OVEN",
         ];
 
         struct GeneratedVisitor;
 
         impl serde::de::Visitor<'_> for GeneratedVisitor {
-            type Value = KitchenAsset;
+            type Value = KitchenStation;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 write!(formatter, "expected one of: {:?}", &FIELDS)
@@ -735,10 +752,10 @@ impl<'de> serde::Deserialize<'de> for KitchenAsset {
                 E: serde::de::Error,
             {
                 match value {
-                    "KITCHEN_ASSET_UNSPECIFIED" => Ok(KitchenAsset::Unspecified),
-                    "KITCHEN_ASSET_WORKSTATION" => Ok(KitchenAsset::Workstation),
-                    "KITCHEN_ASSET_STOVE" => Ok(KitchenAsset::Stove),
-                    "KITCHEN_ASSET_OVEN" => Ok(KitchenAsset::Oven),
+                    "KITCHEN_STATION_UNSPECIFIED" => Ok(KitchenStation::Unspecified),
+                    "KITCHEN_STATION_WORKSTATION" => Ok(KitchenStation::Workstation),
+                    "KITCHEN_STATION_STOVE" => Ok(KitchenStation::Stove),
+                    "KITCHEN_STATION_OVEN" => Ok(KitchenStation::Oven),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }

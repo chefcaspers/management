@@ -92,7 +92,12 @@ message Brand {
     (buf.validate.field).string.max_len = 255
   ];
 
-  Menu menu = 3;
+  string description = 3 [
+    (buf.validate.field).string.min_len = 3,
+    (buf.validate.field).string.max_len = 255
+  ];
+
+  Menu menu = 4;
 }
 
 // Menus comprise all offerings by a single brand
@@ -161,11 +166,11 @@ message ItemIngredient {
   string quantity = 2 [(buf.validate.field).string.min_len = 1];
 }
 
-enum KitchenAsset {
-  KITCHEN_ASSET_UNSPECIFIED = 0;
-  KITCHEN_ASSET_WORKSTATION = 1;
-  KITCHEN_ASSET_STOVE = 2;
-  KITCHEN_ASSET_OVEN = 3;
+enum KitchenStation {
+  KITCHEN_STATION_UNSPECIFIED = 0;
+  KITCHEN_STATION_WORKSTATION = 1;
+  KITCHEN_STATION_STOVE = 2;
+  KITCHEN_STATION_OVEN = 3;
 }
 
 // An instruction describes a step in the preparation of a menu item.
@@ -180,7 +185,7 @@ message Instruction {
   string description = 2;
 
   // The kitchen asset required to perform the step
-  KitchenAsset required_asset = 3;
+  KitchenStation required_station = 3;
 
   // Estimated duration to perform the step
   google.protobuf.Duration expected_duration = 4;
