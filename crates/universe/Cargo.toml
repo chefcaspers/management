@@ -46,3 +46,4 @@ geoarrow = { workspace = true }
 
 [dev-dependencies]
 arrow = { workspace = true }
+test-log = "0.2.17"
