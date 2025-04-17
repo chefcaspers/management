@@ -1,31 +1,32 @@
 use std::collections::{HashMap, VecDeque};
 use std::time::Duration;
 
-use tracing::{info, warn};
+use tracing::warn;
 
-#[derive(Clone)]
-enum AssetType {
-    Workstation,
-    Oven,
-    Refrigerator,
-}
+use crate::models::{ItemIngredient, KitchenAsset};
 
 #[derive(Clone)]
 enum AssetStatus {
+    // Asset is available for use
     Available,
-    InUse(String), // Stores the recipe ID using this asset
+
+    // Stores the recipe ID using this asset
+    InUse(String),
+
+    // Out of order
+    OutOfOrder,
 }
 
 #[derive(Clone)]
 struct Asset {
     id: String,
     name: String,
-    asset_type: AssetType,
+    asset_type: KitchenAsset,
     status: AssetStatus,
 }
 
 impl Asset {
-    pub fn new(name: impl ToString, asset_type: AssetType) -> Self {
+    pub fn new(name: impl ToString, asset_type: KitchenAsset) -> Self {
         Asset {
             id: uuid::Uuid::new_v4().to_string(),
             name: name.to_string(),
@@ -36,26 +37,18 @@ impl Asset {
 }
 
 #[derive(Clone)]
-struct Ingredient {
-    id: String,
-    name: String,
-}
-
-#[derive(Clone)]
 struct Instruction {
     id: String,
     name: String,
-    required_asset: AssetType,
+    required_asset: KitchenAsset,
     duration: Duration, // How long this instruction takes
 }
 
 #[derive(Clone)]
 struct Recipe {
     id: String,
-    name: String,
-    ingredients: Vec<Ingredient>,
+    ingredients: Vec<ItemIngredient>,
     instructions: Vec<Instruction>,
-    current_instruction: usize, // Index of the current instruction being processed
 }
 
 #[derive(Clone)]
@@ -68,9 +61,14 @@ enum RecipeStatus {
 
 #[derive(Clone)]
 struct RecipeProgress {
+    // The recipe being processed
     recipe: Recipe,
+
+    // The processing status of the recipe
     status: RecipeStatus,
-    remaining_time: Option<Duration>, // For the current instruction
+
+    // Remaining processing time for the current instruction
+    remaining_time: Option<Duration>,
 }
 
 #[derive(Clone, Debug)]
@@ -104,7 +102,7 @@ impl Kitchen {
         }
     }
 
-    pub fn add_asset(&mut self, name: impl ToString, asset_type: AssetType) {
+    pub fn add_asset(&mut self, name: impl ToString, asset_type: KitchenAsset) {
         self.assets.push(Asset {
             id: uuid::Uuid::new_v4().to_string(),
             name: name.to_string(),
@@ -266,14 +264,14 @@ impl Kitchen {
     }
 }
 
-fn find_available_asset(assets: &[Asset], asset_type: &AssetType) -> Option<usize> {
+fn find_available_asset(assets: &[Asset], asset_type: &KitchenAsset) -> Option<usize> {
     assets.iter().position(|asset| {
         matches!(asset.status, AssetStatus::Available)
             && std::mem::discriminant(&asset.asset_type) == std::mem::discriminant(asset_type)
     })
 }
 
-fn release_asset(assets: &mut Vec<Asset>, asset_type: &AssetType, recipe_id: &str) {
+fn release_asset(assets: &mut Vec<Asset>, asset_type: &KitchenAsset, recipe_id: &str) {
     for asset in assets {
         if std::mem::discriminant(&asset.asset_type) == std::mem::discriminant(asset_type) {
             if let AssetStatus::InUse(id) = &asset.status {
@@ -295,38 +293,37 @@ mod tests {
         let recipe_id = format!("recipe-{}", rand::random::<u32>());
         Recipe {
             id: recipe_id,
-            name: "Classic Burger".to_string(),
+
             ingredients: vec![
-                Ingredient {
-                    id: "beef".to_string(),
-                    name: "Ground Beef".to_string(),
+                ItemIngredient {
+                    ingredient_ref: "ingredients/beef".to_string(),
+                    quantity: "130g".to_string(),
                 },
-                Ingredient {
-                    id: "bun".to_string(),
-                    name: "Burger Bun".to_string(),
+                ItemIngredient {
+                    ingredient_ref: "ingredients/bun".to_string(),
+                    quantity: "150g".to_string(),
                 },
             ],
             instructions: vec![
                 Instruction {
                     id: "prep".to_string(),
                     name: "Prepare ingredients".to_string(),
-                    required_asset: AssetType::Workstation,
+                    required_asset: KitchenAsset::Workstation,
                     duration: Duration::from_secs(120), // 2 minutes
                 },
                 Instruction {
                     id: "cook".to_string(),
                     name: "Cook patty".to_string(),
-                    required_asset: AssetType::Oven,
+                    required_asset: KitchenAsset::Oven,
                     duration: Duration::from_secs(300), // 5 minutes
                 },
                 Instruction {
                     id: "assemble".to_string(),
                     name: "Assemble burger".to_string(),
-                    required_asset: AssetType::Workstation,
+                    required_asset: KitchenAsset::Workstation,
                     duration: Duration::from_secs(60), // 1 minute
                 },
             ],
-            current_instruction: 0,
         }
     }
 
@@ -334,9 +331,9 @@ mod tests {
     fn test_kitchen_stats() {
         let mut kitchen = Kitchen::new("test-kitchen");
 
-        kitchen.add_asset("ws1", AssetType::Workstation);
-        kitchen.add_asset("ws2", AssetType::Workstation);
-        kitchen.add_asset("oven", AssetType::Oven);
+        kitchen.add_asset("ws1", KitchenAsset::Workstation);
+        kitchen.add_asset("ws2", KitchenAsset::Workstation);
+        kitchen.add_asset("oven", KitchenAsset::Oven);
 
         let stats = kitchen.get_stats();
         assert_eq!(stats.available_assets, 3);

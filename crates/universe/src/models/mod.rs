@@ -1,4 +1,3 @@
-pub use caspers::messages::v1::*;
 pub use caspers::models::v1::*;
 
 pub mod caspers {

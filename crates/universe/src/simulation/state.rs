@@ -1,12 +1,11 @@
 use std::sync::{Arc, LazyLock};
 
-use crate::error::Result;
 use arrow_array::{RecordBatch, StringArray};
 use arrow_schema::{DataType, Field, Schema, SchemaRef};
 use datafusion::prelude::*;
 use uuid::Uuid;
 
-use crate::models::{Brand, Kitchen, Vendor};
+use crate::error::Result;
 
 static LOCATION_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
     Arc::new(Schema::new(vec![

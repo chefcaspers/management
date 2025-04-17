@@ -3,6 +3,7 @@ syntax = "proto3";
 package caspers.core.v1;
 
 import "buf/validate/validate.proto";
+import "google/protobuf/duration.proto";
 
 // Physical locations where kitchens operate
 //
@@ -59,57 +60,6 @@ message Kitchen {
   ];
 }
 
-// Distinct restaurant brands
-//
-// Brands are owned by vendors and operate in specific kitchens
-message Brand {
-  string id = 1 [(buf.validate.field).string.uuid = true];
-
-  string name = 2 [
-    (buf.validate.field).string.min_len = 3,
-    (buf.validate.field).string.max_len = 255
-  ];
-}
-
-// Menus comprise all offerings by a single brand
-message Menu {
-  string id = 1 [(buf.validate.field).string.uuid = true];
-
-  string name = 2 [
-    (buf.validate.field).string.min_len = 3,
-    (buf.validate.field).string.max_len = 255
-  ];
-}
-
-// Menu items are individual dishes within a menu
-//
-// Individual food/drink products with details like price, description, and images
-message MenuItem {
-  // Unique identifier for the menu item
-  string id = 1 [(buf.validate.field).string.uuid = true];
-
-  // Name of the menu item
-  string name = 2 [
-    (buf.validate.field).string.min_len = 3,
-    (buf.validate.field).string.max_len = 255
-  ];
-
-  // description of the menu item
-  string description = 3 [
-    (buf.validate.field).string.min_len = 3,
-    (buf.validate.field).string.max_len = 255
-  ];
-
-  // Price of the menu item in USD
-  double price = 4 [
-    (buf.validate.field).double.gte = 0.01,
-    (buf.validate.field).double.lte = 10000.00
-  ];
-
-  // URL to an image representing the menu item
-  string image_url = 5 [(buf.validate.field).string.uri = true];
-}
-
 message Ingredient {
   string id = 1 [(buf.validate.field).string.uuid = true];
 
@@ -129,4 +79,109 @@ message Ingredient {
   ];
 
   string image_url = 5 [(buf.validate.field).string.uri = true];
+}
+
+// Distinct restaurant brands
+//
+// Brands are owned by vendors and operate in specific kitchens
+message Brand {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+
+  string name = 2 [
+    (buf.validate.field).string.min_len = 3,
+    (buf.validate.field).string.max_len = 255
+  ];
+
+  Menu menu = 3;
+}
+
+// Menus comprise all offerings by a single brand
+message Menu {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+
+  // Name of the menu
+  string name = 2 [(buf.validate.field).string.uri_ref = true];
+
+  string description = 3 [
+    (buf.validate.field).string.min_len = 3,
+    (buf.validate.field).string.max_len = 255
+  ];
+
+  string category = 4 [
+    (buf.validate.field).string.min_len = 3,
+    (buf.validate.field).string.max_len = 255
+  ];
+
+  repeated MenuItem items = 5 [
+    (buf.validate.field).repeated.min_items = 1,
+    (buf.validate.field).repeated.max_items = 1000
+  ];
+}
+
+// Menu items are individual dishes within a menu
+//
+// Individual food/drink products with details like price, description, and images
+message MenuItem {
+  // Unique identifier for the menu item
+  string id = 1 [(buf.validate.field).string.uuid = true];
+
+  // Name of the menu item
+  string name = 2 [(buf.validate.field).string.uri_ref = true];
+
+  // description of the menu item
+  string description = 3 [
+    (buf.validate.field).string.min_len = 3,
+    (buf.validate.field).string.max_len = 255
+  ];
+
+  // Price of the menu item in USD
+  double price = 4 [
+    (buf.validate.field).double.gte = 0.01,
+    (buf.validate.field).double.lte = 10000.00
+  ];
+
+  // URL to an image representing the menu item
+  string image_url = 5 [(buf.validate.field).string.uri = true];
+
+  // Ingredients required to prepare the menu item
+  repeated ItemIngredient ingredients = 6 [
+    (buf.validate.field).repeated.min_items = 1,
+    (buf.validate.field).repeated.max_items = 1000
+  ];
+
+  // Instructions required to prepare the menu item
+  repeated Instruction instructions = 7 [
+    (buf.validate.field).repeated.min_items = 1,
+    (buf.validate.field).repeated.max_items = 1000
+  ];
+}
+
+message ItemIngredient {
+  string ingredient_ref = 1 [(buf.validate.field).string.uri_ref = true];
+  string quantity = 2 [(buf.validate.field).string.min_len = 1];
+}
+
+enum KitchenAsset {
+  KITCHEN_ASSET_UNSPECIFIED = 0;
+  KITCHEN_ASSET_WORKSTATION = 1;
+  KITCHEN_ASSET_STOVE = 2;
+  KITCHEN_ASSET_OVEN = 3;
+}
+
+// An instruction describes a step in the preparation of a menu item.
+message Instruction {
+  // Name of the step
+  string step = 1 [
+    (buf.validate.field).string.min_len = 3,
+    (buf.validate.field).string.max_len = 255
+  ];
+
+  // Free text description on how to perform the step
+  string description = 2;
+
+  // The kitchen asset required to perform the step
+  KitchenAsset required_asset = 3;
+
+  // Estimated duration to perform the step
+  google.protobuf.Duration expected_duration = 4;
 }

@@ -23,7 +23,7 @@ pub struct Location {
     pub zip_code: ::prost::alloc::string::String,
     /// Street address of the location
     #[prost(string, tag="6")]
-    pub street_address: ::prost::alloc::string::String,
+    pub street: ::prost::alloc::string::String,
 }
 impl ::prost::Name for Location {
 const NAME: &'static str = "Location";
@@ -61,6 +61,24 @@ impl ::prost::Name for Kitchen {
 const NAME: &'static str = "Kitchen";
 const PACKAGE: &'static str = "caspers.core.v1";
 fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.Kitchen".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.Kitchen".into() }}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Ingredient {
+    #[prost(string, tag="1")]
+    pub id: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub description: ::prost::alloc::string::String,
+    #[prost(double, tag="4")]
+    pub price: f64,
+    #[prost(string, tag="5")]
+    pub image_url: ::prost::alloc::string::String,
+}
+impl ::prost::Name for Ingredient {
+const NAME: &'static str = "Ingredient";
+const PACKAGE: &'static str = "caspers.core.v1";
+fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.Ingredient".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.Ingredient".into() }}
 /// Distinct restaurant brands
 ///
 /// Brands are owned by vendors and operate in specific kitchens
@@ -71,6 +89,8 @@ pub struct Brand {
     pub id: ::prost::alloc::string::String,
     #[prost(string, tag="2")]
     pub name: ::prost::alloc::string::String,
+    #[prost(message, optional, tag="3")]
+    pub menu: ::core::option::Option<Menu>,
 }
 impl ::prost::Name for Brand {
 const NAME: &'static str = "Brand";
@@ -82,8 +102,15 @@ fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.Brand".into(
 pub struct Menu {
     #[prost(string, tag="1")]
     pub id: ::prost::alloc::string::String,
+    /// Name of the menu
     #[prost(string, tag="2")]
     pub name: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub description: ::prost::alloc::string::String,
+    #[prost(string, tag="4")]
+    pub category: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag="5")]
+    pub items: ::prost::alloc::vec::Vec<MenuItem>,
 }
 impl ::prost::Name for Menu {
 const NAME: &'static str = "Menu";
@@ -110,10 +137,81 @@ pub struct MenuItem {
     /// URL to an image representing the menu item
     #[prost(string, tag="5")]
     pub image_url: ::prost::alloc::string::String,
+    /// Ingredients required to prepare the menu item
+    #[prost(message, repeated, tag="6")]
+    pub ingredients: ::prost::alloc::vec::Vec<ItemIngredient>,
+    /// Instructions required to prepare the menu item
+    #[prost(message, repeated, tag="7")]
+    pub instructions: ::prost::alloc::vec::Vec<Instruction>,
 }
 impl ::prost::Name for MenuItem {
 const NAME: &'static str = "MenuItem";
 const PACKAGE: &'static str = "caspers.core.v1";
 fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.MenuItem".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.MenuItem".into() }}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ItemIngredient {
+    #[prost(string, tag="1")]
+    pub ingredient_ref: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub quantity: ::prost::alloc::string::String,
+}
+impl ::prost::Name for ItemIngredient {
+const NAME: &'static str = "ItemIngredient";
+const PACKAGE: &'static str = "caspers.core.v1";
+fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.ItemIngredient".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.ItemIngredient".into() }}
+/// An instruction describes a step in the preparation of a menu item.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Instruction {
+    /// Name of the step
+    #[prost(string, tag="1")]
+    pub step: ::prost::alloc::string::String,
+    /// Free text description on how to perform the step
+    #[prost(string, tag="2")]
+    pub description: ::prost::alloc::string::String,
+    /// The kitchen asset required to perform the step
+    #[prost(enumeration="KitchenAsset", tag="3")]
+    pub required_asset: i32,
+    /// Estimated duration to perform the step
+    #[prost(message, optional, tag="4")]
+    pub expected_duration: ::core::option::Option<::pbjson_types::Duration>,
+}
+impl ::prost::Name for Instruction {
+const NAME: &'static str = "Instruction";
+const PACKAGE: &'static str = "caspers.core.v1";
+fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.Instruction".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.Instruction".into() }}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum KitchenAsset {
+    Unspecified = 0,
+    Workstation = 1,
+    Stove = 2,
+    Oven = 3,
+}
+impl KitchenAsset {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            KitchenAsset::Unspecified => "KITCHEN_ASSET_UNSPECIFIED",
+            KitchenAsset::Workstation => "KITCHEN_ASSET_WORKSTATION",
+            KitchenAsset::Stove => "KITCHEN_ASSET_STOVE",
+            KitchenAsset::Oven => "KITCHEN_ASSET_OVEN",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "KITCHEN_ASSET_UNSPECIFIED" => Some(Self::Unspecified),
+            "KITCHEN_ASSET_WORKSTATION" => Some(Self::Workstation),
+            "KITCHEN_ASSET_STOVE" => Some(Self::Stove),
+            "KITCHEN_ASSET_OVEN" => Some(Self::Oven),
+            _ => None,
+        }
+    }
+}
 include!("caspers.core.v1.serde.rs");
 // @@protoc_insertion_point(module)

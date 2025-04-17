@@ -1,9 +1,0 @@
-syntax = "proto3";
-
-package caspers.universe.v1;
-
-message Actor {
-  string id = 1;
-  string name = 2;
-  string description = 3;
-}

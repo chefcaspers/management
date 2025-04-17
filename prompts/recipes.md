@@ -11,8 +11,6 @@ The collected recipe data should be formatted in JSON as the following <example>
   "ingredients": [
     {
       "name": "ingredients/beef",
-      "display_name": "Beef Patty",
-      "description": "Delicious beef patty",
       "quantity": "130g"
     },
     {
@@ -50,5 +48,21 @@ We need to make sure that there is at least some overlap between the ingredients
 In the end provide a single file containing all ingredients used across all recipes.
 Additional details about each ingredient, including its nutritional value and potential allergens should be included.
 Nutritional values will be in relative terms per unit measure.
+The following example shows an <example> of the JSON structure.
+
+<example>
+{
+  "name": "ingredients/soy_sauce",
+  "display_name": "Soy Sauce",
+  "description": "Fermented soy and wheat sauce.",
+  "nutritional_value": {
+    "calories": "10 kcal/15ml",
+    "protein": "1g/15ml",
+    "fat": "0g/15ml",
+    "carbohydrates": "1g/15ml"
+  },
+  "potential_allergens": ["soy", "wheat"]
+}
+</example>
 
 The create fies per food category - like Asion, Mexican, Fast Food. Sepect a few popular categries.
