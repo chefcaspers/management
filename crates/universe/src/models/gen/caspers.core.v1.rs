@@ -25,6 +25,10 @@ pub struct Location {
     #[prost(string, tag="6")]
     pub street_address: ::prost::alloc::string::String,
 }
+impl ::prost::Name for Location {
+const NAME: &'static str = "Location";
+const PACKAGE: &'static str = "caspers.core.v1";
+fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.Location".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.Location".into() }}
 /// A company that owns and operates brands and kitchens
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -38,6 +42,10 @@ pub struct Vendor {
     #[prost(string, optional, tag="3")]
     pub logo_url: ::core::option::Option<::prost::alloc::string::String>,
 }
+impl ::prost::Name for Vendor {
+const NAME: &'static str = "Vendor";
+const PACKAGE: &'static str = "caspers.core.v1";
+fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.Vendor".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.Vendor".into() }}
 /// Physical cooking spaces within locations, operated by vendors
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -49,6 +57,10 @@ pub struct Kitchen {
     #[prost(string, tag="2")]
     pub name: ::prost::alloc::string::String,
 }
+impl ::prost::Name for Kitchen {
+const NAME: &'static str = "Kitchen";
+const PACKAGE: &'static str = "caspers.core.v1";
+fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.Kitchen".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.Kitchen".into() }}
 /// Distinct restaurant brands
 ///
 /// Brands are owned by vendors and operate in specific kitchens
@@ -60,6 +72,10 @@ pub struct Brand {
     #[prost(string, tag="2")]
     pub name: ::prost::alloc::string::String,
 }
+impl ::prost::Name for Brand {
+const NAME: &'static str = "Brand";
+const PACKAGE: &'static str = "caspers.core.v1";
+fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.Brand".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.Brand".into() }}
 /// Menus comprise all offerings by a single brand
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -69,6 +85,10 @@ pub struct Menu {
     #[prost(string, tag="2")]
     pub name: ::prost::alloc::string::String,
 }
+impl ::prost::Name for Menu {
+const NAME: &'static str = "Menu";
+const PACKAGE: &'static str = "caspers.core.v1";
+fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.Menu".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.Menu".into() }}
 /// Menu items are individual dishes within a menu
 ///
 /// Individual food/drink products with details like price, description, and images
@@ -91,5 +111,9 @@ pub struct MenuItem {
     #[prost(string, tag="5")]
     pub image_url: ::prost::alloc::string::String,
 }
+impl ::prost::Name for MenuItem {
+const NAME: &'static str = "MenuItem";
+const PACKAGE: &'static str = "caspers.core.v1";
+fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.MenuItem".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.MenuItem".into() }}
 include!("caspers.core.v1.serde.rs");
 // @@protoc_insertion_point(module)

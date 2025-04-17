@@ -9,6 +9,7 @@ plugins:
       - compile_well_known_types=true
       - extern_path=.google.protobuf=::pbjson_types
       - file_descriptor_set=false
+      - enable_type_names=true
   - remote: buf.build/community/neoeinstein-prost-serde:v0.3.1
     out: crates/universe/src/models/gen
     opt:

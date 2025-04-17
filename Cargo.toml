@@ -5,7 +5,7 @@ members = ["crates/*"]
 [workspace.dependencies]
 async-trait = { version = "0.1.83" }
 bytes = { version = "1.1" }
-chrono = { version = "0.4.38, <0.4.40", features = ["serde"] }
+chrono = { version = "^0.4.40", features = ["serde"] }
 itertools = { version = "0.14.0" }
 pbjson = { version = "0.7" }
 pbjson-types = { version = "0.7" }
@@ -16,7 +16,35 @@ strum = { version = "0.27", features = ["derive"] }
 thiserror = { version = "2" }
 tracing = { version = "0.1", features = ["log"] }
 url = { version = "2.5.2", features = [
-    "serde",
-    "std",
+  "serde",
+  "std",
 ], default-features = false }
 uuid = { version = "1", features = ["serde"] }
+
+# arrow
+arrow = { version = "54" }
+arrow-arith = { version = "54" }
+arrow-array = { version = "54", features = ["chrono-tz"] }
+arrow-buffer = { version = "54" }
+arrow-cast = { version = "54" }
+arrow-ipc = { version = "54" }
+arrow-json = { version = "54" }
+arrow-ord = { version = "54" }
+arrow-row = { version = "54" }
+arrow-schema = { version = "54" }
+arrow-select = { version = "54" }
+
+# datafusion
+datafusion = "46"
+datafusion-expr = "46"
+datafusion-common = "46"
+datafusion-execution = "46"
+datafusion-ffi = "46"
+datafusion-functions = "46"
+datafusion-functions-aggregate = "46"
+datafusion-physical-expr = "46"
+datafusion-physical-plan = "46"
+datafusion-proto = "46"
+datafusion-sql = "46"
+
+geoarrow = { path = "../geoarrow-rs/rust/geoarrow" }

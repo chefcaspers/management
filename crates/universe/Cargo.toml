@@ -15,4 +15,34 @@ serde = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
-uuid = { workspace = true }
+uuid = { workspace = true, features = ["v4", "v7"] }
+
+dashmap = { version = "6" }
+futures = { version = "0.3" }
+rand = { version = "0.9", features = ["std", "std_rng"] }
+
+arrow-arith = { workspace = true }
+arrow-array = { workspace = true, features = ["chrono-tz"] }
+arrow-buffer = { workspace = true }
+arrow-cast = { workspace = true }
+arrow-ipc = { workspace = true }
+arrow-json = { workspace = true }
+arrow-ord = { workspace = true }
+arrow-row = { workspace = true }
+arrow-schema = { workspace = true, features = ["serde"] }
+arrow-select = { workspace = true }
+
+datafusion = { workspace = true }
+datafusion-execution = { workspace = true }
+datafusion-expr = { workspace = true }
+datafusion-common = { workspace = true }
+datafusion-proto = { workspace = true }
+datafusion-sql = { workspace = true }
+datafusion-physical-expr = { workspace = true }
+datafusion-physical-plan = { workspace = true }
+datafusion-functions = { workspace = true }
+datafusion-functions-aggregate = { workspace = true }
+geoarrow = { workspace = true }
+
+[dev-dependencies]
+arrow = { workspace = true }

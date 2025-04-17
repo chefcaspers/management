@@ -10,5 +10,9 @@ pub struct Actor {
     #[prost(string, tag="3")]
     pub description: ::prost::alloc::string::String,
 }
+impl ::prost::Name for Actor {
+const NAME: &'static str = "Actor";
+const PACKAGE: &'static str = "caspers.universe.v1";
+fn full_name() -> ::prost::alloc::string::String { "caspers.universe.v1.Actor".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.universe.v1.Actor".into() }}
 include!("caspers.universe.v1.serde.rs");
 // @@protoc_insertion_point(module)

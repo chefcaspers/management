@@ -1,8 +1,15 @@
+pub use caspers::messages::v1::*;
+pub use caspers::models::v1::*;
+
 pub mod caspers {
     pub mod models {
-        include!("./gen/caspers.core.v1.rs");
+        pub mod v1 {
+            include!("./gen/caspers.core.v1.rs");
+        }
     }
     pub mod messages {
-        include!("./gen/caspers.messages.v1.rs");
+        pub mod v1 {
+            include!("./gen/caspers.messages.v1.rs");
+        }
     }
 }
