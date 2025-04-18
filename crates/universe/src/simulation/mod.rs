@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use chrono::{DateTime, Utc};
-use rand::prelude::*;
 use uuid::Uuid;
 
 pub use state::State;
@@ -10,14 +8,14 @@ pub mod execution;
 mod state;
 
 pub struct Movement(f64, f64);
-pub struct Location(f64, f64);
+pub struct GeoLocation(f64, f64);
 
-impl Location {
+impl GeoLocation {
     pub fn new(long: f64, lat: f64) -> Self {
-        Location(long, lat)
+        GeoLocation(long, lat)
     }
 
-    pub fn distance(&self, other: &Location) -> f64 {
+    pub fn distance(&self, other: &GeoLocation) -> f64 {
         ((self.0 - other.0).powi(2) + (self.1 - other.1).powi(2)).sqrt()
     }
 }
@@ -34,28 +32,7 @@ pub trait Entity: Send + Sync + 'static {
 /// Trait for entities that need to be updated each simulation step
 pub trait Simulatable: Entity {
     /// Update the entity state based on the current simulation context
-    fn tick(&mut self, context: &SimulationContext) -> Option<()>;
-}
-
-/// Global simulation state and parameters
-pub struct SimulationContext {
-    /// Current simulation time
-    pub time: DateTime<Utc>,
-
-    /// Time increment per simulation step
-    pub time_step: chrono::Duration,
-
-    /// Random number generator for stochastic processes
-    pub random: ThreadRng,
-
-    /// Events that occurred during the current simulation step
-    pub events: Vec<Event>,
-}
-
-impl SimulationContext {
-    pub fn local_time(&self) -> DateTime<Utc> {
-        self.time + self.time_step
-    }
+    fn step(&mut self, context: &state::State) -> Option<()>;
 }
 
 /// Events that can occur during simulation
@@ -87,7 +64,7 @@ pub enum OrderStatus {
 /// The main simulation engine
 pub struct Simulation {
     /// Global simulation state
-    pub context: SimulationContext,
+    pub context: state::State,
 
     /// All entities in the simulation, organized by their type and ID
     entities: HashMap<String, HashMap<Uuid, Box<dyn Simulatable>>>,
@@ -103,12 +80,7 @@ impl Simulation {
     /// Create a new simulation with default parameters
     pub fn new() -> Self {
         Self {
-            context: SimulationContext {
-                time: Utc::now(),
-                time_step: chrono::Duration::minutes(5),
-                random: rand::rng(),
-                events: Vec::new(),
-            },
+            context: state::State::try_new().unwrap(),
             entities: HashMap::new(),
             event_handlers: HashMap::new(),
         }
@@ -136,24 +108,8 @@ impl Simulation {
 
     /// Advance the simulation by one time step
     pub fn tick(&mut self) {
-        // Clear events from previous tick
-        self.context.events.clear();
-
-        // Update all entities
-        for (_, type_map) in self.entities.iter_mut() {
-            for (_, entity) in type_map.iter_mut() {
-                entity.tick(&self.context);
-            }
-        }
-
-        // Process events
-        let events = self.context.events.clone();
-        for event in events {
-            self.process_event(&event);
-        }
-
         // Advance simulation time
-        self.context.time += self.context.time_step;
+        self.context.step();
     }
 
     /// Run the simulation for a specified number of steps

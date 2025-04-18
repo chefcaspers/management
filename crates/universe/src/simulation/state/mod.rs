@@ -1,11 +1,14 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::thread;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use datafusion::prelude::*;
+use rand::Rng;
 use uuid::Uuid;
 
+use crate::agents::LocationId;
 use crate::error::Result;
 use crate::models::{Brand, MenuItemRef};
 
@@ -16,6 +19,7 @@ pub struct State {
     ctx: SessionContext,
     brands: Arc<Vec<Brand>>,
     items: Arc<HashMap<Uuid, MenuItemRef>>,
+    item_ids: Vec<Uuid>,
 
     /// Current simulation time
     time: DateTime<Utc>,
@@ -34,16 +38,18 @@ impl State {
         ctx.register_batch("kitchens", schemas::generate_kitchens())?;
 
         let brands = parse::get_brands();
-        let items = brands
+        let items: HashMap<_, _> = brands
             .iter()
             .flat_map(|brand| brand.items.iter())
             .map(|item| (Uuid::try_parse(&item.id).unwrap(), Arc::new(item.clone())))
             .collect();
+        let item_ids = items.keys().cloned().collect();
 
         Ok(State {
             ctx,
             brands,
             items: Arc::new(items),
+            item_ids,
             time_step: Duration::from_secs(60),
             time: Utc::now(),
         })
@@ -59,6 +65,35 @@ impl State {
 
     pub fn menu_items(&self) -> Arc<HashMap<Uuid, MenuItemRef>> {
         self.items.clone()
+    }
+
+    /// Randomly sample menu items from the database
+
+    fn sample_menu_items(
+        &self,
+        count: Option<usize>,
+        rng: &mut rand::rngs::ThreadRng,
+    ) -> Vec<MenuItemRef> {
+        let count = count.unwrap_or_else(|| rng.random_range(1..11));
+        let mut selected_items = Vec::with_capacity(count);
+        for _ in 0..count {
+            let item_index = rng.random_range(0..self.item_ids.len());
+            if let Some(item) = self.items.get(&self.item_ids[item_index]) {
+                selected_items.push(item.clone());
+            }
+        }
+        selected_items
+    }
+
+    pub fn orders_for_location(
+        &self,
+        _location_id: &LocationId,
+    ) -> impl Iterator<Item = Vec<MenuItemRef>> {
+        let mut rng = rand::rng();
+        let order_count = rng.random_range(1..11);
+        [0..order_count]
+            .map(|_| self.sample_menu_items(Some(3), &mut rng))
+            .into_iter()
     }
 
     pub fn time_step(&self) -> Duration {

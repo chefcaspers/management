@@ -1,7 +1,7 @@
 use chrono::{DateTime, Timelike, Utc};
 use uuid::Uuid;
 
-use crate::simulation::{Entity, Location, Simulatable, SimulationContext};
+use crate::simulation::{Entity, GeoLocation, Simulatable, State};
 
 pub enum CustomerActions {
     Register,
@@ -13,13 +13,13 @@ pub enum CustomerActions {
 enum CustomerState {
     Idle,
     Waiting(DateTime<Utc>),
-    Moving(Location),
+    Moving(GeoLocation),
 }
 
 pub struct Customer {
     id: Uuid,
     name: String,
-    location: Location,
+    location: GeoLocation,
     hunger: f64,
     state: CustomerState,
 }
@@ -29,16 +29,16 @@ impl Customer {
         Customer {
             id: Uuid::new_v4(),
             name: name.into(),
-            location: Location::new(0.0, 0.0),
+            location: GeoLocation::new(0.0, 0.0),
             hunger: 0.0,
             state: CustomerState::Idle,
         }
     }
 
-    fn action(&self, ctx: &SimulationContext) -> Option<CustomerActions> {
+    fn action(&self, ctx: &State) -> Option<CustomerActions> {
         match self.state {
             CustomerState::Idle => {
-                if ctx.time.time().hour() == 11 {
+                if ctx.current_time().hour() == 11 {
                     Some(CustomerActions::PlaceOrder)
                 } else {
                     None
@@ -61,11 +61,11 @@ impl Entity for Customer {
 }
 
 impl Simulatable for Customer {
-    fn tick(&mut self, ctx: &SimulationContext) -> Option<()> {
+    fn step(&mut self, ctx: &State) -> Option<()> {
         match self.action(ctx)? {
             CustomerActions::PlaceOrder => {
                 self.hunger += 1.0;
-                self.state = CustomerState::Waiting(ctx.local_time());
+                self.state = CustomerState::Waiting(ctx.current_time());
                 Some(())
             }
             _ => None,

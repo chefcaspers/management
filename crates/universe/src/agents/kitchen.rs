@@ -5,6 +5,8 @@ use chrono::{DateTime, Utc};
 use tracing::debug;
 use uuid::Uuid;
 
+use super::OrderLine;
+use super::location::OrderLineId;
 use crate::models::{KitchenStation, MenuItemRef};
 use crate::simulation::{Entity, State};
 
@@ -14,7 +16,7 @@ enum StationStatus {
     Available,
 
     // Stores the recipe ID using this station
-    InUse(Uuid),
+    InUse(OrderLineId),
 
     // Out of order
     OutOfOrder,
@@ -43,13 +45,6 @@ impl Station {
             status: StationStatus::Available,
         }
     }
-}
-
-#[derive(Clone)]
-struct OrderLine {
-    id: Uuid,
-    order_id: Uuid,
-    item: MenuItemRef,
 }
 
 #[derive(Clone)]
@@ -86,7 +81,7 @@ pub struct Kitchen {
     name: String,
     stations: Vec<Station>,
     queue: VecDeque<OrderLine>,
-    in_progress: HashMap<Uuid, OrderProgress>,
+    in_progress: HashMap<OrderLineId, OrderProgress>,
     completed: Vec<MenuItemRef>,
     simulation_time: Duration,
 }
@@ -114,7 +109,7 @@ impl Kitchen {
         }
     }
 
-    pub fn add_asset(&mut self, name: impl ToString, station_type: KitchenStation) {
+    pub fn add_station(&mut self, name: impl ToString, station_type: KitchenStation) {
         self.stations.push(Station {
             id: uuid::Uuid::new_v4().to_string(),
             name: name.to_string(),
@@ -125,8 +120,8 @@ impl Kitchen {
 
     pub fn queue_order_line(&mut self, item: MenuItemRef) {
         self.queue.push_back(OrderLine {
-            id: Uuid::new_v4(),
-            order_id: Uuid::new_v4(),
+            id: Uuid::new_v4().into(),
+            order_id: Uuid::new_v4().into(),
             item,
         });
     }
@@ -134,7 +129,7 @@ impl Kitchen {
     fn start_order_line(&mut self, ctx: &State) -> bool {
         if let Some(recipe) = self.queue.pop_front() {
             let recipe_id = recipe.id.clone();
-            debug!("starting recipe {}", recipe_id);
+            debug!("starting recipe {:?}", recipe_id);
 
             // Check if we can start the first instruction
             let first_instruction = &recipe.item.instructions[0];
@@ -279,7 +274,7 @@ fn find_available_station(assets: &[Station], asset_type: &i32) -> Option<usize>
     })
 }
 
-fn release_station(assets: &mut Vec<Station>, asset_type: &i32, recipe_id: &Uuid) {
+fn release_station(assets: &mut Vec<Station>, asset_type: &i32, recipe_id: &OrderLineId) {
     for asset in assets {
         if &(asset.station_type as i32) == asset_type {
             if let StationStatus::InUse(id) = &asset.status {
@@ -300,10 +295,10 @@ mod tests {
     fn test_kitchen_stats() {
         let mut kitchen = Kitchen::new("test-kitchen");
 
-        kitchen.add_asset("ws1", KitchenStation::Workstation);
-        kitchen.add_asset("ws2", KitchenStation::Workstation);
-        kitchen.add_asset("oven", KitchenStation::Oven);
-        kitchen.add_asset("stove", KitchenStation::Stove);
+        kitchen.add_station("ws1", KitchenStation::Workstation);
+        kitchen.add_station("ws2", KitchenStation::Workstation);
+        kitchen.add_station("oven", KitchenStation::Oven);
+        kitchen.add_station("stove", KitchenStation::Stove);
 
         let mut state = State::try_new().unwrap();
 
