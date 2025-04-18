@@ -1,5 +1,6 @@
 use std::collections::{HashMap, VecDeque};
 
+use counter::Counter;
 use itertools::Itertools;
 
 use super::Kitchen;
@@ -17,19 +18,51 @@ pub struct Order {
 pub struct OrderLine {
     pub(crate) id: OrderLineId,
     pub(crate) order_id: OrderId,
-    pub(crate) item: MenuItemRef,
+    pub(crate) item: (BrandId, MenuItemRef),
 }
 
-struct OrderRouter {
-    brand_to_kitchens: HashMap<String, Vec<KitchenId>>,
+struct OrderRouter<'a> {
+    kitchens: &'a mut HashMap<KitchenId, Kitchen>,
+    brand_to_kitchens: HashMap<BrandId, Vec<KitchenId>>,
+    submit_counter: Counter<BrandId>,
+}
+
+impl<'a> OrderRouter<'a> {
+    fn new(kitchens: &'a mut HashMap<KitchenId, Kitchen>) -> Self {
+        let brand_to_kitchens = kitchens
+            .iter()
+            .flat_map(|(id, kitchen)| kitchen.accepted_brands().iter().map(|brand| (*brand, *id)))
+            .into_group_map();
+        OrderRouter {
+            kitchens,
+            brand_to_kitchens,
+            submit_counter: Counter::new(),
+        }
+    }
+
+    pub fn route_order_line(&mut self, order_line: OrderLine) {
+        let brand = order_line.item.0;
+        self.submit_counter[&brand] += 1;
+        let kitchen_ids = &self.brand_to_kitchens[&brand];
+        let index = self.submit_counter[&brand] % kitchen_ids.len();
+        if let Some(kitchen) = self.kitchens.get_mut(&kitchen_ids[index]) {
+            kitchen.queue_order_line(order_line);
+        } else {
+            tracing::error!("No kitchen available for brand {:?}", brand);
+        }
+    }
 }
 
 pub struct Location {
     id: LocationId,
     name: String,
+    /// Kitchens available at this location.
     kitchens: HashMap<KitchenId, Kitchen>,
+    /// Orders currently being processed at this location.
     orders: HashMap<OrderId, Order>,
+    /// Orders waiting to be processed at this location.
     order_queue: VecDeque<OrderId>,
+    /// Order lines currently being processed at this location.
     order_lines: HashMap<OrderLineId, OrderLine>,
 }
 
@@ -45,20 +78,18 @@ impl Entity for Location {
 
 impl Simulatable for Location {
     fn step(&mut self, ctx: &State) -> Option<()> {
-        // Queue incoming orders
         let orders = ctx.orders_for_location(&self.id).collect_vec();
         for items in orders {
             self.queue_order(items);
         }
 
         // Process order queue
+        let mut router = OrderRouter::new(&mut self.kitchens);
         while let Some(order_id) = self.order_queue.pop_front() {
             if let Some(order) = self.orders.get(&order_id) {
-                // Process order lines
                 for line_id in &order.lines {
                     if let Some(line) = self.order_lines.get(line_id) {
-                        // Process order line
-                        // ...
+                        router.route_order_line(line.clone());
                     }
                 }
             }
@@ -85,7 +116,7 @@ impl Location {
         self.kitchens.insert(kitchen.id, kitchen);
     }
 
-    fn queue_order(&mut self, items: impl IntoIterator<Item = MenuItemRef>) {
+    fn queue_order(&mut self, items: impl IntoIterator<Item = (BrandId, MenuItemRef)>) {
         let mut order = Order {
             id: OrderId::new(),
             lines: Vec::new(),
@@ -109,44 +140,21 @@ impl Location {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::KitchenStation;
+    use crate::simulation::state;
 
     fn setup() -> Location {
-        let mut location = Location::new("locations/location-1");
-
-        let kitchens = [
-            vec![
-                ("workstation-1", KitchenStation::Workstation),
-                ("workstation-2", KitchenStation::Workstation),
-                ("stove", KitchenStation::Stove),
-                ("oven", KitchenStation::Oven),
-            ],
-            vec![
-                ("workstation-1", KitchenStation::Workstation),
-                ("workstation-2", KitchenStation::Workstation),
-                ("stove", KitchenStation::Stove),
-                ("oven", KitchenStation::Oven),
-            ],
-        ];
-
-        for (index, stations) in kitchens.iter().enumerate() {
-            let mut kitchen = Kitchen::new(format!(
-                "{}/kitchens/kitchen-{}",
-                location.name(),
-                index + 1
-            ));
-            for (name, station) in stations {
-                kitchen.add_station(format!("{}/stations/{}", kitchen.name(), name), *station);
-            }
-            location.add_kitchen(kitchen);
-        }
-
+        let brands = state::get_brands();
+        let location = state::generate_location("location-1", brands.as_ref());
         location
     }
 
     #[test_log::test]
     fn test_new_location() {
-        let location = setup();
-        println!("{}", location.name());
+        let mut location = setup();
+        let state = State::try_new().unwrap();
+
+        for _ in 0..10 {
+            location.step(&state);
+        }
     }
 }

@@ -121,7 +121,8 @@ impl Simulatable for Kitchen {
         for (recipe_id, progress) in self.in_progress.iter() {
             match &progress.status {
                 OrderLineStatus::InProgress(instruction_idx, stated_time) => {
-                    let expected_duration = progress.order_line.item.instructions[*instruction_idx]
+                    let expected_duration = progress.order_line.item.1.instructions
+                        [*instruction_idx]
                         .expected_duration
                         .map(|duration| duration.seconds)
                         .unwrap_or(0);
@@ -132,19 +133,19 @@ impl Simulatable for Kitchen {
                     }
 
                     // We finished to current step, so release the current asset
-                    let curr = &progress.order_line.item.instructions[*instruction_idx];
+                    let curr = &progress.order_line.item.1.instructions[*instruction_idx];
                     release_station(&mut self.stations, &curr.required_station, recipe_id);
 
                     // Move to next instruction
                     let next_idx = instruction_idx + 1;
-                    if next_idx >= progress.order_line.item.instructions.len() {
+                    if next_idx >= progress.order_line.item.1.instructions.len() {
                         // Recipe is complete
                         completed_recipe_ids.push(*recipe_id);
                         continue;
                     }
 
                     // Move the order to the next station, or block if not available
-                    let next_step = &progress.order_line.item.instructions[next_idx];
+                    let next_step = &progress.order_line.item.1.instructions[next_idx];
                     if let Some(idx) = take_station(&self.stations, &next_step.required_station) {
                         self.stations[idx].status = StationStatus::InUse(*recipe_id);
                         to_update.push((
@@ -157,7 +158,7 @@ impl Simulatable for Kitchen {
                 }
                 OrderLineStatus::Blocked(instruction_idx) => {
                     // Check if we can now acquire the needed asset
-                    let step = &progress.order_line.item.instructions[*instruction_idx];
+                    let step = &progress.order_line.item.1.instructions[*instruction_idx];
                     if let Some(asset_idx) = take_station(&self.stations, &step.required_station) {
                         // Mark asset as in use
                         self.stations[asset_idx].status = StationStatus::InUse(*recipe_id);
@@ -181,7 +182,7 @@ impl Simulatable for Kitchen {
         // Move completed recipes
         for recipe_id in completed_recipe_ids {
             if let Some(progress) = self.in_progress.remove(&recipe_id) {
-                self.completed.push(progress.order_line.item);
+                self.completed.push(progress.order_line.item.1);
             }
         }
 
@@ -216,18 +217,14 @@ impl Kitchen {
         self.accepted_brands.insert(brand_id);
     }
 
-    pub fn queue_order_line(&mut self, item: MenuItemRef) {
-        self.queue.push_back(OrderLine {
-            id: OrderLineId::new(),
-            order_id: OrderId::new(),
-            item,
-        });
+    pub fn queue_order_line(&mut self, item: OrderLine) {
+        self.queue.push_back(item);
     }
 
     fn start_order_line(&mut self, ctx: &State) -> bool {
         if let Some(order_line) = self.queue.pop_front() {
             // Check if we can start the first step
-            let step = &order_line.item.instructions[0];
+            let step = &order_line.item.1.instructions[0];
             if let Some(asset_idx) = take_station(&self.stations, &step.required_station) {
                 // Mark asset as in use
                 self.stations[asset_idx].status = StationStatus::InUse(order_line.id);
@@ -285,35 +282,6 @@ fn release_station(assets: &mut Vec<Station>, asset_type: &i32, recipe_id: &Orde
                     break;
                 }
             }
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test_log::test]
-    fn test_kitchen_stats() {
-        let mut kitchen = Kitchen::new("test-kitchen");
-
-        kitchen.add_station("ws1", KitchenStation::Workstation);
-        kitchen.add_station("ws2", KitchenStation::Workstation);
-        kitchen.add_station("oven", KitchenStation::Oven);
-        kitchen.add_station("stove", KitchenStation::Stove);
-
-        let mut state = State::try_new().unwrap();
-
-        for item in state.menu_items().values() {
-            kitchen.queue_order_line(item.clone());
-        }
-
-        for _ in 0..100 {
-            kitchen.step(&state);
-            state.step();
-
-            let stats = kitchen.stats();
-            println!("{:?}", stats);
         }
     }
 }

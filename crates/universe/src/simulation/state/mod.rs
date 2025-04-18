@@ -11,6 +11,8 @@ use crate::error::Result;
 use crate::idents::*;
 use crate::models::{Brand, MenuItemRef};
 
+pub use self::parse::{generate_kitchens_for_location, generate_location, get_brands};
+
 mod parse;
 mod schemas;
 
@@ -80,19 +82,17 @@ impl State {
         self.items.clone()
     }
 
-    /// Randomly sample menu items from the database
-
     fn sample_menu_items(
         &self,
         count: Option<usize>,
         rng: &mut rand::rngs::ThreadRng,
-    ) -> Vec<MenuItemRef> {
+    ) -> Vec<(BrandId, MenuItemRef)> {
         let count = count.unwrap_or_else(|| rng.random_range(1..11));
         let mut selected_items = Vec::with_capacity(count);
         for _ in 0..count {
             let item_index = rng.random_range(0..self.item_ids.len());
             if let Some(item) = self.items.get(&self.item_ids[item_index]) {
-                selected_items.push(item.clone());
+                selected_items.push((self.item_ids[item_index].0, item.clone()));
             }
         }
         selected_items
@@ -101,7 +101,7 @@ impl State {
     pub fn orders_for_location(
         &self,
         _location_id: &LocationId,
-    ) -> impl Iterator<Item = Vec<MenuItemRef>> {
+    ) -> impl Iterator<Item = Vec<(BrandId, MenuItemRef)>> {
         let mut rng = rand::rng();
         let order_count = rng.random_range(1..11);
         [0..order_count]

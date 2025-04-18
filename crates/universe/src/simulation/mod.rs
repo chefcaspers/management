@@ -5,7 +5,7 @@ use uuid::Uuid;
 pub use state::State;
 
 pub mod execution;
-mod state;
+pub mod state;
 
 pub struct Movement(f64, f64);
 pub struct GeoLocation(f64, f64);
