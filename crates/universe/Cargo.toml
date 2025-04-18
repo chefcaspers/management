@@ -45,6 +45,8 @@ datafusion-physical-plan = { workspace = true }
 datafusion-functions = { workspace = true }
 datafusion-functions-aggregate = { workspace = true }
 geoarrow = { workspace = true }
+clap = { version = "4.5.37", features = ["derive"] }
+tabled = { version = "0.18.0", features = ["std"] }
 
 [dev-dependencies]
 arrow = { workspace = true }

@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
+use tabled::Tabled;
 
 use super::OrderLine;
 use crate::idents::*;
@@ -75,13 +76,14 @@ struct OrderProgress {
     status: OrderLineStatus,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Tabled)]
 pub struct KitchenStats {
     queued: usize,
     in_progress: usize,
     completed: usize,
     idle_assets: usize,
     total_assets: usize,
+    #[tabled(skip)]
     simulation_time: Duration,
 }
 

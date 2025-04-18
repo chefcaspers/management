@@ -4,6 +4,7 @@ use counter::Counter;
 use itertools::Itertools;
 
 use super::Kitchen;
+use super::kitchen::KitchenStats;
 use crate::idents::*;
 use crate::models::MenuItemRef;
 use crate::simulation::{Entity, Simulatable, State};
@@ -95,6 +96,10 @@ impl Simulatable for Location {
             }
         }
 
+        for kitchen in self.kitchens.values_mut() {
+            kitchen.step(ctx);
+        }
+
         Some(())
     }
 }
@@ -134,6 +139,13 @@ impl Location {
 
         self.order_queue.push_back(order.id);
         self.orders.insert(order.id, order);
+    }
+
+    pub fn kitchen_stats(&self) -> Vec<KitchenStats> {
+        self.kitchens
+            .values()
+            .map(|kitchen| kitchen.stats())
+            .collect()
     }
 }
 

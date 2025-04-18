@@ -11,3 +11,6 @@ generate:
     # mv tmp.yaml openapi/openapi.yaml
     cargo clippy --fix --allow-dirty --allow-staged
     cargo fmt --all
+
+run:
+    cargo run --bin caspers-universe -- --location-count 1

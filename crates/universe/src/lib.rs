@@ -5,4 +5,5 @@ mod models;
 mod simulation;
 
 pub use self::agents::*;
-pub use self::simulation::Simulation;
+pub use self::simulation::state;
+pub use self::simulation::{Simulatable, Simulation};
