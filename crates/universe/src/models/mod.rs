@@ -1,4 +1,8 @@
+use std::sync::Arc;
+
 pub use caspers::models::v1::*;
+
+pub type MenuItemRef = Arc<MenuItem>;
 
 pub mod caspers {
     pub mod models {

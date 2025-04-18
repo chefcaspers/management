@@ -26,20 +26,20 @@
     "instructions": [
       {
         "step": "prepare",
-        "required_assets": "workstation",
-        "expected_duration": "2 minutes",
+        "required_station": "KITCHEN_STATION_WORKSTATION",
+        "expected_duration": "120s",
         "description": "Prepare the ingredients"
       },
       {
         "step": "cook-patty",
-        "required_assets": "stove",
-        "expected_duration": "10 minutes",
+        "required_station": "KITCHEN_STATION_STOVE",
+        "expected_duration": "600s",
         "description": "Cook the beef patty on the stove until it's cooked through"
       },
       {
         "step": "assemble",
-        "required_assets": "workstation",
-        "expected_duration": "2 minutes",
+        "required_station": "KITCHEN_STATION_WORKSTATION",
+        "expected_duration": "120s",
         "description": "Assemble the burger with the cooked patty, lettuce, and bun"
       }
     ]
@@ -71,20 +71,20 @@
     "instructions": [
       {
         "step": "boil-eggs",
-        "required_assets": "stove",
-        "expected_duration": "10 minutes",
+        "required_station": "KITCHEN_STATION_STOVE",
+        "expected_duration": "600s",
         "description": "Boil eggs until hard-cooked, then peel and chop."
       },
       {
         "step": "mix-salad",
-        "required_assets": "workstation",
-        "expected_duration": "3 minutes",
+        "required_station": "KITCHEN_STATION_WORKSTATION",
+        "expected_duration": "180s",
         "description": "Mix chopped eggs with mayonnaise and seasoning."
       },
       {
         "step": "assemble",
-        "required_assets": "workstation",
-        "expected_duration": "2 minutes",
+        "required_station": "KITCHEN_STATION_WORKSTATION",
+        "expected_duration": "120s",
         "description": "Spread egg salad on bread, add lettuce, and close sandwich."
       }
     ]

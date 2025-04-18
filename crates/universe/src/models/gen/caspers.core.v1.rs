@@ -91,33 +91,15 @@ pub struct Brand {
     pub name: ::prost::alloc::string::String,
     #[prost(string, tag="3")]
     pub description: ::prost::alloc::string::String,
-    #[prost(message, optional, tag="4")]
-    pub menu: ::core::option::Option<Menu>,
-}
-impl ::prost::Name for Brand {
-const NAME: &'static str = "Brand";
-const PACKAGE: &'static str = "caspers.core.v1";
-fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.Brand".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.Brand".into() }}
-/// Menus comprise all offerings by a single brand
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Menu {
-    #[prost(string, tag="1")]
-    pub id: ::prost::alloc::string::String,
-    /// Name of the menu
-    #[prost(string, tag="2")]
-    pub name: ::prost::alloc::string::String,
-    #[prost(string, tag="3")]
-    pub description: ::prost::alloc::string::String,
     #[prost(string, tag="4")]
     pub category: ::prost::alloc::string::String,
     #[prost(message, repeated, tag="5")]
     pub items: ::prost::alloc::vec::Vec<MenuItem>,
 }
-impl ::prost::Name for Menu {
-const NAME: &'static str = "Menu";
+impl ::prost::Name for Brand {
+const NAME: &'static str = "Brand";
 const PACKAGE: &'static str = "caspers.core.v1";
-fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.Menu".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.Menu".into() }}
+fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.Brand".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.Brand".into() }}
 /// Menu items are individual dishes within a menu
 ///
 /// Individual food/drink products with details like price, description, and images
@@ -141,7 +123,7 @@ pub struct MenuItem {
     pub image_url: ::prost::alloc::string::String,
     /// Ingredients required to prepare the menu item
     #[prost(message, repeated, tag="6")]
-    pub ingredients: ::prost::alloc::vec::Vec<ItemIngredient>,
+    pub ingredients: ::prost::alloc::vec::Vec<IngredientQuantity>,
     /// Instructions required to prepare the menu item
     #[prost(message, repeated, tag="7")]
     pub instructions: ::prost::alloc::vec::Vec<Instruction>,
@@ -152,16 +134,16 @@ const PACKAGE: &'static str = "caspers.core.v1";
 fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.MenuItem".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.MenuItem".into() }}
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ItemIngredient {
+pub struct IngredientQuantity {
     #[prost(string, tag="1")]
     pub ingredient_ref: ::prost::alloc::string::String,
     #[prost(string, tag="2")]
     pub quantity: ::prost::alloc::string::String,
 }
-impl ::prost::Name for ItemIngredient {
-const NAME: &'static str = "ItemIngredient";
+impl ::prost::Name for IngredientQuantity {
+const NAME: &'static str = "IngredientQuantity";
 const PACKAGE: &'static str = "caspers.core.v1";
-fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.ItemIngredient".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.ItemIngredient".into() }}
+fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.IngredientQuantity".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.IngredientQuantity".into() }}
 /// An instruction describes a step in the preparation of a menu item.
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]

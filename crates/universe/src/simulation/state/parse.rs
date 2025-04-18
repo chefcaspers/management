@@ -1,6 +1,8 @@
 use std::sync::{Arc, LazyLock};
 
-use crate::models::{Brand, Menu, MenuItem};
+use uuid::Uuid;
+
+use crate::models::{Brand, MenuItem};
 
 pub static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
     let mut brands = Vec::new();
@@ -11,13 +13,14 @@ pub static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
         id: uuid::Uuid::new_v4().to_string(),
         name: "brands/asian".to_string(),
         description: "Asian cuisine".to_string(),
-        menu: Some(Menu {
-            id: uuid::Uuid::new_v4().to_string(),
-            name: "brands/asian/menu".to_string(),
-            description: "Asian cuisine".to_string(),
-            category: "Asian".to_string(),
-            items,
-        }),
+        category: "Asian".to_string(),
+        items: items
+            .into_iter()
+            .map(|mut it| {
+                it.id = Uuid::new_v4().to_string();
+                it.clone()
+            })
+            .collect(),
     });
 
     let mexican = include_str!("../../../../../data/menus/mexican.json");
@@ -26,13 +29,14 @@ pub static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
         id: uuid::Uuid::new_v4().to_string(),
         name: "brands/mexican".to_string(),
         description: "Mexican cuisine".to_string(),
-        menu: Some(Menu {
-            id: uuid::Uuid::new_v4().to_string(),
-            name: "brands/mexican/menu".to_string(),
-            description: "Mexican cuisine".to_string(),
-            category: "Mexican".to_string(),
-            items,
-        }),
+        category: "Mexican".to_string(),
+        items: items
+            .into_iter()
+            .map(|mut it| {
+                it.id = Uuid::new_v4().to_string();
+                it.clone()
+            })
+            .collect(),
     });
 
     let fast_food = include_str!("../../../../../data/menus/fast_food.json");
@@ -41,18 +45,19 @@ pub static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
         id: uuid::Uuid::new_v4().to_string(),
         name: "brands/fast-food".to_string(),
         description: "Fast food".to_string(),
-        menu: Some(Menu {
-            id: uuid::Uuid::new_v4().to_string(),
-            name: "brands/fast-food/menu".to_string(),
-            description: "Fast food".to_string(),
-            category: "Fast Food".to_string(),
-            items,
-        }),
+        category: "Fast Food".to_string(),
+        items: items
+            .into_iter()
+            .map(|mut it| {
+                it.id = Uuid::new_v4().to_string();
+                it.clone()
+            })
+            .collect(),
     });
 
     Arc::new(brands)
 });
 
-pub fn parse_brands() -> Arc<Vec<Brand>> {
+pub fn get_brands() -> Arc<Vec<Brand>> {
     BRANDS.clone()
 }

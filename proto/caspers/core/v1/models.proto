@@ -97,21 +97,6 @@ message Brand {
     (buf.validate.field).string.max_len = 255
   ];
 
-  Menu menu = 4;
-}
-
-// Menus comprise all offerings by a single brand
-message Menu {
-  string id = 1 [(buf.validate.field).string.uuid = true];
-
-  // Name of the menu
-  string name = 2 [(buf.validate.field).string.uri_ref = true];
-
-  string description = 3 [
-    (buf.validate.field).string.min_len = 3,
-    (buf.validate.field).string.max_len = 255
-  ];
-
   string category = 4 [
     (buf.validate.field).string.min_len = 3,
     (buf.validate.field).string.max_len = 255
@@ -149,7 +134,7 @@ message MenuItem {
   string image_url = 5 [(buf.validate.field).string.uri = true];
 
   // Ingredients required to prepare the menu item
-  repeated ItemIngredient ingredients = 6 [
+  repeated IngredientQuantity ingredients = 6 [
     (buf.validate.field).repeated.min_items = 1,
     (buf.validate.field).repeated.max_items = 1000
   ];
@@ -161,7 +146,7 @@ message MenuItem {
   ];
 }
 
-message ItemIngredient {
+message IngredientQuantity {
   string ingredient_ref = 1 [(buf.validate.field).string.uri_ref = true];
   string quantity = 2 [(buf.validate.field).string.min_len = 1];
 }

@@ -39,25 +39,25 @@
     "instructions": [
       {
         "step": "marinate-beef",
-        "required_assets": "workstation",
+        "required_station": "KITCHEN_STATION_WORKSTATION",
         "expected_duration": "600s",
         "description": "Marinate beef slices with 1 tbsp soy sauce and minced garlic."
       },
       {
         "step": "blanch-broccoli",
-        "required_assets": "stove",
+        "required_station": "KITCHEN_STATION_STOVE",
         "expected_duration": "180s",
         "description": "Blanch broccoli in boiling water, then drain."
       },
       {
         "step": "stir-fry",
-        "required_assets": "stove",
+        "required_station": "KITCHEN_STATION_STOVE",
         "expected_duration": "560s",
         "description": "Stir-fry beef, then add broccoli and remaining soy sauce. Cook until beef is done."
       },
       {
         "step": "serve",
-        "required_assets": "workstation",
+        "required_station": "KITCHEN_STATION_WORKSTATION",
         "expected_duration": "120s",
         "description": "Serve hot with steamed rice."
       }
@@ -103,25 +103,25 @@
     "instructions": [
       {
         "step": "scramble-egg",
-        "required_assets": "stove",
+        "required_station": "KITCHEN_STATION_STOVE",
         "expected_duration": "120s",
         "description": "Scramble egg in a hot wok, then set aside."
       },
       {
         "step": "stir-fry-veggies",
-        "required_assets": "stove",
+        "required_station": "KITCHEN_STATION_STOVE",
         "expected_duration": "180s",
         "description": "Stir-fry green onion and garlic until fragrant."
       },
       {
         "step": "add-rice",
-        "required_assets": "stove",
+        "required_station": "KITCHEN_STATION_STOVE",
         "expected_duration": "180s",
         "description": "Add rice, stir-fry, and mix in soy sauce."
       },
       {
         "step": "combine",
-        "required_assets": "stove",
+        "required_station": "KITCHEN_STATION_STOVE",
         "expected_duration": "120s",
         "description": "Add scrambled egg back, mix well, and serve."
       }

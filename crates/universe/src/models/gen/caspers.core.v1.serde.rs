@@ -16,7 +16,10 @@ impl serde::Serialize for Brand {
         if !self.description.is_empty() {
             len += 1;
         }
-        if self.menu.is_some() {
+        if !self.category.is_empty() {
+            len += 1;
+        }
+        if !self.items.is_empty() {
             len += 1;
         }
         let mut struct_ser = serializer.serialize_struct("caspers.core.v1.Brand", len)?;
@@ -29,8 +32,11 @@ impl serde::Serialize for Brand {
         if !self.description.is_empty() {
             struct_ser.serialize_field("description", &self.description)?;
         }
-        if let Some(v) = self.menu.as_ref() {
-            struct_ser.serialize_field("menu", v)?;
+        if !self.category.is_empty() {
+            struct_ser.serialize_field("category", &self.category)?;
+        }
+        if !self.items.is_empty() {
+            struct_ser.serialize_field("items", &self.items)?;
         }
         struct_ser.end()
     }
@@ -45,7 +51,8 @@ impl<'de> serde::Deserialize<'de> for Brand {
             "id",
             "name",
             "description",
-            "menu",
+            "category",
+            "items",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -53,7 +60,8 @@ impl<'de> serde::Deserialize<'de> for Brand {
             Id,
             Name,
             Description,
-            Menu,
+            Category,
+            Items,
             __SkipField__,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
@@ -63,7 +71,7 @@ impl<'de> serde::Deserialize<'de> for Brand {
             {
                 struct GeneratedVisitor;
 
-                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
                     type Value = GeneratedField;
 
                     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -79,7 +87,8 @@ impl<'de> serde::Deserialize<'de> for Brand {
                             "id" => Ok(GeneratedField::Id),
                             "name" => Ok(GeneratedField::Name),
                             "description" => Ok(GeneratedField::Description),
-                            "menu" => Ok(GeneratedField::Menu),
+                            "category" => Ok(GeneratedField::Category),
+                            "items" => Ok(GeneratedField::Items),
                             _ => Ok(GeneratedField::__SkipField__),
                         }
                     }
@@ -102,7 +111,8 @@ impl<'de> serde::Deserialize<'de> for Brand {
                 let mut id__ = None;
                 let mut name__ = None;
                 let mut description__ = None;
-                let mut menu__ = None;
+                let mut category__ = None;
+                let mut items__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::Id => {
@@ -123,11 +133,17 @@ impl<'de> serde::Deserialize<'de> for Brand {
                             }
                             description__ = Some(map_.next_value()?);
                         }
-                        GeneratedField::Menu => {
-                            if menu__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("menu"));
+                        GeneratedField::Category => {
+                            if category__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("category"));
                             }
-                            menu__ = map_.next_value()?;
+                            category__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Items => {
+                            if items__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("items"));
+                            }
+                            items__ = Some(map_.next_value()?);
                         }
                         GeneratedField::__SkipField__ => {
                             let _ = map_.next_value::<serde::de::IgnoredAny>()?;
@@ -138,7 +154,8 @@ impl<'de> serde::Deserialize<'de> for Brand {
                     id: id__.unwrap_or_default(),
                     name: name__.unwrap_or_default(),
                     description: description__.unwrap_or_default(),
-                    menu: menu__,
+                    category: category__.unwrap_or_default(),
+                    items: items__.unwrap_or_default(),
                 })
             }
         }
@@ -218,7 +235,7 @@ impl<'de> serde::Deserialize<'de> for Ingredient {
             {
                 struct GeneratedVisitor;
 
-                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
                     type Value = GeneratedField;
 
                     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -311,6 +328,119 @@ impl<'de> serde::Deserialize<'de> for Ingredient {
         deserializer.deserialize_struct("caspers.core.v1.Ingredient", FIELDS, GeneratedVisitor)
     }
 }
+impl serde::Serialize for IngredientQuantity {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.ingredient_ref.is_empty() {
+            len += 1;
+        }
+        if !self.quantity.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("caspers.core.v1.IngredientQuantity", len)?;
+        if !self.ingredient_ref.is_empty() {
+            struct_ser.serialize_field("ingredientRef", &self.ingredient_ref)?;
+        }
+        if !self.quantity.is_empty() {
+            struct_ser.serialize_field("quantity", &self.quantity)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for IngredientQuantity {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "ingredient_ref",
+            "ingredientRef",
+            "quantity",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            IngredientRef,
+            Quantity,
+            __SkipField__,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "ingredientRef" | "ingredient_ref" => Ok(GeneratedField::IngredientRef),
+                            "quantity" => Ok(GeneratedField::Quantity),
+                            _ => Ok(GeneratedField::__SkipField__),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = IngredientQuantity;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct caspers.core.v1.IngredientQuantity")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<IngredientQuantity, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut ingredient_ref__ = None;
+                let mut quantity__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::IngredientRef => {
+                            if ingredient_ref__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("ingredientRef"));
+                            }
+                            ingredient_ref__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Quantity => {
+                            if quantity__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("quantity"));
+                            }
+                            quantity__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::__SkipField__ => {
+                            let _ = map_.next_value::<serde::de::IgnoredAny>()?;
+                        }
+                    }
+                }
+                Ok(IngredientQuantity {
+                    ingredient_ref: ingredient_ref__.unwrap_or_default(),
+                    quantity: quantity__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("caspers.core.v1.IngredientQuantity", FIELDS, GeneratedVisitor)
+    }
+}
 impl serde::Serialize for Instruction {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -379,7 +509,7 @@ impl<'de> serde::Deserialize<'de> for Instruction {
             {
                 struct GeneratedVisitor;
 
-                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
                     type Value = GeneratedField;
 
                     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -461,119 +591,6 @@ impl<'de> serde::Deserialize<'de> for Instruction {
         deserializer.deserialize_struct("caspers.core.v1.Instruction", FIELDS, GeneratedVisitor)
     }
 }
-impl serde::Serialize for ItemIngredient {
-    #[allow(deprecated)]
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeStruct;
-        let mut len = 0;
-        if !self.ingredient_ref.is_empty() {
-            len += 1;
-        }
-        if !self.quantity.is_empty() {
-            len += 1;
-        }
-        let mut struct_ser = serializer.serialize_struct("caspers.core.v1.ItemIngredient", len)?;
-        if !self.ingredient_ref.is_empty() {
-            struct_ser.serialize_field("ingredientRef", &self.ingredient_ref)?;
-        }
-        if !self.quantity.is_empty() {
-            struct_ser.serialize_field("quantity", &self.quantity)?;
-        }
-        struct_ser.end()
-    }
-}
-impl<'de> serde::Deserialize<'de> for ItemIngredient {
-    #[allow(deprecated)]
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        const FIELDS: &[&str] = &[
-            "ingredient_ref",
-            "ingredientRef",
-            "quantity",
-        ];
-
-        #[allow(clippy::enum_variant_names)]
-        enum GeneratedField {
-            IngredientRef,
-            Quantity,
-            __SkipField__,
-        }
-        impl<'de> serde::Deserialize<'de> for GeneratedField {
-            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
-            where
-                D: serde::Deserializer<'de>,
-            {
-                struct GeneratedVisitor;
-
-                impl serde::de::Visitor<'_> for GeneratedVisitor {
-                    type Value = GeneratedField;
-
-                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                        write!(formatter, "expected one of: {:?}", &FIELDS)
-                    }
-
-                    #[allow(unused_variables)]
-                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
-                    where
-                        E: serde::de::Error,
-                    {
-                        match value {
-                            "ingredientRef" | "ingredient_ref" => Ok(GeneratedField::IngredientRef),
-                            "quantity" => Ok(GeneratedField::Quantity),
-                            _ => Ok(GeneratedField::__SkipField__),
-                        }
-                    }
-                }
-                deserializer.deserialize_identifier(GeneratedVisitor)
-            }
-        }
-        struct GeneratedVisitor;
-        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
-            type Value = ItemIngredient;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                formatter.write_str("struct caspers.core.v1.ItemIngredient")
-            }
-
-            fn visit_map<V>(self, mut map_: V) -> std::result::Result<ItemIngredient, V::Error>
-                where
-                    V: serde::de::MapAccess<'de>,
-            {
-                let mut ingredient_ref__ = None;
-                let mut quantity__ = None;
-                while let Some(k) = map_.next_key()? {
-                    match k {
-                        GeneratedField::IngredientRef => {
-                            if ingredient_ref__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("ingredientRef"));
-                            }
-                            ingredient_ref__ = Some(map_.next_value()?);
-                        }
-                        GeneratedField::Quantity => {
-                            if quantity__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("quantity"));
-                            }
-                            quantity__ = Some(map_.next_value()?);
-                        }
-                        GeneratedField::__SkipField__ => {
-                            let _ = map_.next_value::<serde::de::IgnoredAny>()?;
-                        }
-                    }
-                }
-                Ok(ItemIngredient {
-                    ingredient_ref: ingredient_ref__.unwrap_or_default(),
-                    quantity: quantity__.unwrap_or_default(),
-                })
-            }
-        }
-        deserializer.deserialize_struct("caspers.core.v1.ItemIngredient", FIELDS, GeneratedVisitor)
-    }
-}
 impl serde::Serialize for Kitchen {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -622,7 +639,7 @@ impl<'de> serde::Deserialize<'de> for Kitchen {
             {
                 struct GeneratedVisitor;
 
-                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
                     type Value = GeneratedField;
 
                     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -716,7 +733,7 @@ impl<'de> serde::Deserialize<'de> for KitchenStation {
 
         struct GeneratedVisitor;
 
-        impl serde::de::Visitor<'_> for GeneratedVisitor {
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
             type Value = KitchenStation;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -844,7 +861,7 @@ impl<'de> serde::Deserialize<'de> for Location {
             {
                 struct GeneratedVisitor;
 
-                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
                     type Value = GeneratedField;
 
                     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -944,169 +961,6 @@ impl<'de> serde::Deserialize<'de> for Location {
         deserializer.deserialize_struct("caspers.core.v1.Location", FIELDS, GeneratedVisitor)
     }
 }
-impl serde::Serialize for Menu {
-    #[allow(deprecated)]
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeStruct;
-        let mut len = 0;
-        if !self.id.is_empty() {
-            len += 1;
-        }
-        if !self.name.is_empty() {
-            len += 1;
-        }
-        if !self.description.is_empty() {
-            len += 1;
-        }
-        if !self.category.is_empty() {
-            len += 1;
-        }
-        if !self.items.is_empty() {
-            len += 1;
-        }
-        let mut struct_ser = serializer.serialize_struct("caspers.core.v1.Menu", len)?;
-        if !self.id.is_empty() {
-            struct_ser.serialize_field("id", &self.id)?;
-        }
-        if !self.name.is_empty() {
-            struct_ser.serialize_field("name", &self.name)?;
-        }
-        if !self.description.is_empty() {
-            struct_ser.serialize_field("description", &self.description)?;
-        }
-        if !self.category.is_empty() {
-            struct_ser.serialize_field("category", &self.category)?;
-        }
-        if !self.items.is_empty() {
-            struct_ser.serialize_field("items", &self.items)?;
-        }
-        struct_ser.end()
-    }
-}
-impl<'de> serde::Deserialize<'de> for Menu {
-    #[allow(deprecated)]
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        const FIELDS: &[&str] = &[
-            "id",
-            "name",
-            "description",
-            "category",
-            "items",
-        ];
-
-        #[allow(clippy::enum_variant_names)]
-        enum GeneratedField {
-            Id,
-            Name,
-            Description,
-            Category,
-            Items,
-            __SkipField__,
-        }
-        impl<'de> serde::Deserialize<'de> for GeneratedField {
-            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
-            where
-                D: serde::Deserializer<'de>,
-            {
-                struct GeneratedVisitor;
-
-                impl serde::de::Visitor<'_> for GeneratedVisitor {
-                    type Value = GeneratedField;
-
-                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                        write!(formatter, "expected one of: {:?}", &FIELDS)
-                    }
-
-                    #[allow(unused_variables)]
-                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
-                    where
-                        E: serde::de::Error,
-                    {
-                        match value {
-                            "id" => Ok(GeneratedField::Id),
-                            "name" => Ok(GeneratedField::Name),
-                            "description" => Ok(GeneratedField::Description),
-                            "category" => Ok(GeneratedField::Category),
-                            "items" => Ok(GeneratedField::Items),
-                            _ => Ok(GeneratedField::__SkipField__),
-                        }
-                    }
-                }
-                deserializer.deserialize_identifier(GeneratedVisitor)
-            }
-        }
-        struct GeneratedVisitor;
-        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
-            type Value = Menu;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                formatter.write_str("struct caspers.core.v1.Menu")
-            }
-
-            fn visit_map<V>(self, mut map_: V) -> std::result::Result<Menu, V::Error>
-                where
-                    V: serde::de::MapAccess<'de>,
-            {
-                let mut id__ = None;
-                let mut name__ = None;
-                let mut description__ = None;
-                let mut category__ = None;
-                let mut items__ = None;
-                while let Some(k) = map_.next_key()? {
-                    match k {
-                        GeneratedField::Id => {
-                            if id__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("id"));
-                            }
-                            id__ = Some(map_.next_value()?);
-                        }
-                        GeneratedField::Name => {
-                            if name__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("name"));
-                            }
-                            name__ = Some(map_.next_value()?);
-                        }
-                        GeneratedField::Description => {
-                            if description__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("description"));
-                            }
-                            description__ = Some(map_.next_value()?);
-                        }
-                        GeneratedField::Category => {
-                            if category__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("category"));
-                            }
-                            category__ = Some(map_.next_value()?);
-                        }
-                        GeneratedField::Items => {
-                            if items__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("items"));
-                            }
-                            items__ = Some(map_.next_value()?);
-                        }
-                        GeneratedField::__SkipField__ => {
-                            let _ = map_.next_value::<serde::de::IgnoredAny>()?;
-                        }
-                    }
-                }
-                Ok(Menu {
-                    id: id__.unwrap_or_default(),
-                    name: name__.unwrap_or_default(),
-                    description: description__.unwrap_or_default(),
-                    category: category__.unwrap_or_default(),
-                    items: items__.unwrap_or_default(),
-                })
-            }
-        }
-        deserializer.deserialize_struct("caspers.core.v1.Menu", FIELDS, GeneratedVisitor)
-    }
-}
 impl serde::Serialize for MenuItem {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -1196,7 +1050,7 @@ impl<'de> serde::Deserialize<'de> for MenuItem {
             {
                 struct GeneratedVisitor;
 
-                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
                     type Value = GeneratedField;
 
                     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1364,7 +1218,7 @@ impl<'de> serde::Deserialize<'de> for Vendor {
             {
                 struct GeneratedVisitor;
 
-                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
                     type Value = GeneratedField;
 
                     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
