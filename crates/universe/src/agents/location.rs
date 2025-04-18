@@ -1,38 +1,11 @@
 use std::collections::{HashMap, VecDeque};
 
 use itertools::Itertools;
-use uuid::Uuid;
 
 use super::Kitchen;
+use crate::idents::*;
 use crate::models::MenuItemRef;
 use crate::simulation::{Entity, Simulatable, State};
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct LocationId(pub Uuid);
-
-impl From<Uuid> for LocationId {
-    fn from(id: Uuid) -> Self {
-        LocationId(id)
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct OrderId(pub Uuid);
-
-impl From<Uuid> for OrderId {
-    fn from(id: Uuid) -> Self {
-        OrderId(id)
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct OrderLineId(pub Uuid);
-
-impl From<Uuid> for OrderLineId {
-    fn from(id: Uuid) -> Self {
-        OrderLineId(id)
-    }
-}
 
 #[derive(Clone)]
 pub struct Order {
@@ -47,18 +20,22 @@ pub struct OrderLine {
     pub(crate) item: MenuItemRef,
 }
 
+struct OrderRouter {
+    brand_to_kitchens: HashMap<String, Vec<KitchenId>>,
+}
+
 pub struct Location {
     id: LocationId,
     name: String,
-    kitchens: HashMap<Uuid, Kitchen>,
+    kitchens: HashMap<KitchenId, Kitchen>,
     orders: HashMap<OrderId, Order>,
     order_queue: VecDeque<OrderId>,
     order_lines: HashMap<OrderLineId, OrderLine>,
 }
 
 impl Entity for Location {
-    fn id(&self) -> Uuid {
-        self.id.0
+    fn id(&self) -> uuid::Uuid {
+        *self.id.as_ref()
     }
 
     fn name(&self) -> &str {
@@ -93,9 +70,10 @@ impl Simulatable for Location {
 
 impl Location {
     pub fn new(name: impl ToString) -> Self {
+        let name = name.to_string();
         Location {
-            id: LocationId(Uuid::new_v4()),
-            name: name.to_string(),
+            id: LocationId::from_uri_ref(&name),
+            name,
             kitchens: HashMap::new(),
             orders: HashMap::new(),
             order_queue: VecDeque::new(),
@@ -104,18 +82,18 @@ impl Location {
     }
 
     pub fn add_kitchen(&mut self, kitchen: Kitchen) {
-        self.kitchens.insert(kitchen.id(), kitchen);
+        self.kitchens.insert(kitchen.id, kitchen);
     }
 
     fn queue_order(&mut self, items: impl IntoIterator<Item = MenuItemRef>) {
         let mut order = Order {
-            id: OrderId(Uuid::new_v4()),
+            id: OrderId::new(),
             lines: Vec::new(),
         };
 
         for item in items {
             let line = OrderLine {
-                id: OrderLineId(Uuid::new_v4()),
+                id: OrderLineId::new(),
                 order_id: order.id,
                 item,
             };
@@ -158,10 +136,7 @@ mod tests {
                 index + 1
             ));
             for (name, station) in stations {
-                kitchen.add_station(
-                    format!("{}/stations/{}", kitchen.name(), name),
-                    station.clone(),
-                );
+                kitchen.add_station(format!("{}/stations/{}", kitchen.name(), name), *station);
             }
             location.add_kitchen(kitchen);
         }

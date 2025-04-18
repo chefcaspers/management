@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::thread;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
@@ -8,8 +7,8 @@ use datafusion::prelude::*;
 use rand::Rng;
 use uuid::Uuid;
 
-use crate::agents::LocationId;
 use crate::error::Result;
+use crate::idents::*;
 use crate::models::{Brand, MenuItemRef};
 
 mod parse;
@@ -17,9 +16,9 @@ mod schemas;
 
 pub struct State {
     ctx: SessionContext,
-    brands: Arc<Vec<Brand>>,
-    items: Arc<HashMap<Uuid, MenuItemRef>>,
-    item_ids: Vec<Uuid>,
+    brands: Arc<HashMap<BrandId, Brand>>,
+    items: Arc<HashMap<(BrandId, MenuItemId), MenuItemRef>>,
+    item_ids: Vec<(BrandId, MenuItemId)>,
 
     /// Current simulation time
     time: DateTime<Utc>,
@@ -37,17 +36,31 @@ impl State {
         ctx.register_batch("vendors", schemas::generate_vendors())?;
         ctx.register_batch("kitchens", schemas::generate_kitchens())?;
 
-        let brands = parse::get_brands();
+        let brands: HashMap<_, _> = parse::get_brands()
+            .as_ref()
+            .clone()
+            .into_iter()
+            .map(|brand| {
+                let brand_id = Uuid::try_parse(&brand.id).unwrap().into();
+                (brand_id, brand)
+            })
+            .collect();
+
         let items: HashMap<_, _> = brands
             .iter()
-            .flat_map(|brand| brand.items.iter())
-            .map(|item| (Uuid::try_parse(&item.id).unwrap(), Arc::new(item.clone())))
+            .flat_map(|(brand_id, brand)| brand.items.iter().map(|it| (*brand_id, it)))
+            .map(|(brand_id, item)| {
+                (
+                    (brand_id, Uuid::try_parse(&item.id).unwrap().into()),
+                    Arc::new(item.clone()),
+                )
+            })
             .collect();
         let item_ids = items.keys().cloned().collect();
 
         Ok(State {
             ctx,
-            brands,
+            brands: Arc::new(brands),
             items: Arc::new(items),
             item_ids,
             time_step: Duration::from_secs(60),
@@ -59,11 +72,11 @@ impl State {
         &self.ctx
     }
 
-    pub fn menu_item(&self, id: &Uuid) -> Result<MenuItemRef> {
+    pub fn menu_item(&self, id: &(BrandId, MenuItemId)) -> Result<MenuItemRef> {
         self.items.get(id).cloned().ok_or("Brand not found".into())
     }
 
-    pub fn menu_items(&self) -> Arc<HashMap<Uuid, MenuItemRef>> {
+    pub fn menu_items(&self) -> Arc<HashMap<(BrandId, MenuItemId), MenuItemRef>> {
         self.items.clone()
     }
 

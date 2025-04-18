@@ -76,6 +76,12 @@ pub struct Simulation {
     >,
 }
 
+impl Default for Simulation {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Simulation {
     /// Create a new simulation with default parameters
     pub fn new() -> Self {
