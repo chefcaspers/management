@@ -1,19 +1,27 @@
+use chrono::{DateTime, Utc};
 use clap::Parser;
 use tabled::{
-    Table,
+    Table, Tabled,
     settings::{
         Color, Height, Style,
         object::{Columns, Rows},
     },
 };
 
-use caspers_universe::{Simulatable, state};
+use caspers_universe::{KitchenStats, Simulatable, state};
 
 #[derive(Debug, Clone, clap::Parser)]
 #[command(name = "caspers-universe", version, about = "Running Caspers Universe", long_about = None)]
 struct Cli {
     #[arg(short, long, default_value_t = 1)]
     location_count: u32,
+}
+
+#[derive(Debug, Clone, Tabled)]
+struct Report {
+    timestamp: DateTime<Utc>,
+    #[tabled(inline)]
+    stats: KitchenStats,
 }
 
 fn main() {
@@ -24,12 +32,19 @@ fn main() {
 
     let mut state = state::State::try_new().unwrap();
 
-    for _ in 0..1000 {
+    let mut stats = Vec::new();
+    for it in 0..1000 {
+        if it % 100 == 0 {
+            stats.push(Report {
+                timestamp: state.current_time(),
+                stats: location.total_kitchen_stats(),
+            });
+        }
         location.step(&state);
         state.step();
     }
 
-    let table = Table::new(location.kitchen_stats())
+    let table = Table::new(stats)
         .with(Style::modern_rounded())
         .modify(Columns::single(0), Color::FG_RED)
         .modify(Columns::single(1), Color::FG_BLUE)

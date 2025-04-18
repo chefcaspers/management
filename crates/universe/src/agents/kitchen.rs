@@ -76,7 +76,7 @@ struct OrderProgress {
     status: OrderLineStatus,
 }
 
-#[derive(Clone, Debug, Tabled)]
+#[derive(Clone, Debug, Tabled, Default)]
 pub struct KitchenStats {
     queued: usize,
     in_progress: usize,
@@ -85,6 +85,21 @@ pub struct KitchenStats {
     total_assets: usize,
     #[tabled(skip)]
     simulation_time: Duration,
+}
+
+impl std::ops::Add for KitchenStats {
+    type Output = KitchenStats;
+
+    fn add(self, other: KitchenStats) -> KitchenStats {
+        KitchenStats {
+            queued: self.queued + other.queued,
+            in_progress: self.in_progress + other.in_progress,
+            completed: self.completed + other.completed,
+            idle_assets: self.idle_assets + other.idle_assets,
+            total_assets: self.total_assets + other.total_assets,
+            simulation_time: self.simulation_time.max(other.simulation_time),
+        }
+    }
 }
 
 pub struct Kitchen {

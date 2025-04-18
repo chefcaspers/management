@@ -147,6 +147,13 @@ impl Location {
             .map(|kitchen| kitchen.stats())
             .collect()
     }
+
+    pub fn total_kitchen_stats(&self) -> KitchenStats {
+        self.kitchens
+            .values()
+            .map(|kitchen| kitchen.stats())
+            .fold(KitchenStats::default(), |acc, stats| acc + stats)
+    }
 }
 
 #[cfg(test)]
