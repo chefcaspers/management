@@ -5,7 +5,7 @@ use counter::Counter;
 use rand::Rng;
 use uuid::Uuid;
 
-use crate::agents::{Kitchen, Location};
+use crate::agents::{Kitchen, Site};
 use crate::idents::{BrandId, MenuItemId};
 use crate::models::{Brand, KitchenStation, MenuItem};
 
@@ -16,7 +16,7 @@ pub static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
     let items: Vec<MenuItem> = serde_json::from_str(asian).unwrap();
     let brand_name = "brands/asian".to_string();
     brands.push(Brand {
-        id: BrandId::from_uri_ref(&brand_name).as_ref().to_string(),
+        id: BrandId::from_uri_ref(&brand_name).to_string(),
         name: brand_name.clone(),
         description: "Asian cuisine".to_string(),
         category: "Asian".to_string(),
@@ -24,7 +24,7 @@ pub static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
             .into_iter()
             .map(|mut it| {
                 let item_name = format!("{}/items/{}", brand_name, it.name);
-                it.id = MenuItemId::from_uri_ref(&item_name).as_ref().to_string();
+                it.id = MenuItemId::from_uri_ref(&item_name).to_string();
                 it
             })
             .collect(),
@@ -42,7 +42,7 @@ pub static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
             .into_iter()
             .map(|mut it| {
                 let item_name = format!("{}/items/{}", brand_name, it.name);
-                it.id = MenuItemId::from_uri_ref(&item_name).as_ref().to_string();
+                it.id = MenuItemId::from_uri_ref(&item_name).to_string();
                 it
             })
             .collect(),
@@ -60,7 +60,7 @@ pub static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
             .into_iter()
             .map(|mut it| {
                 let item_name = format!("{}/items/{}", brand_name, it.name);
-                it.id = MenuItemId::from_uri_ref(&item_name).as_ref().to_string();
+                it.id = MenuItemId::from_uri_ref(&item_name).to_string();
                 it
             })
             .collect(),
@@ -73,7 +73,7 @@ pub fn get_brands() -> Arc<Vec<Brand>> {
     BRANDS.clone()
 }
 
-pub fn generate_location(name: impl ToString, brands: &[Brand]) -> Location {
+pub fn generate_location(name: impl ToString, brands: &[Brand]) -> Site {
     let location_name = name.to_string();
 
     let counters: HashMap<BrandId, Counter<KitchenStation>> = brands
@@ -93,7 +93,7 @@ pub fn generate_location(name: impl ToString, brands: &[Brand]) -> Location {
     let kitchens = generate_kitchens_for_location(&location_name, &counters, num_kitchens);
 
     // Add kitchens to the location
-    let mut location = Location::new(format!("locations/{}", location_name));
+    let mut location = Site::new(format!("locations/{}", location_name));
     for kitchen in kitchens {
         location.add_kitchen(kitchen);
     }

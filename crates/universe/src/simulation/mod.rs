@@ -23,7 +23,7 @@ impl GeoLocation {
 /// Core trait that any simulatable entity must implement
 pub trait Entity: Send + Sync + 'static {
     /// Unique identifier for the entity
-    fn id(&self) -> Uuid;
+    fn id(&self) -> &Uuid;
 
     /// Human-readable name of the entity
     fn name(&self) -> &str;
@@ -96,7 +96,7 @@ impl Simulation {
     pub fn add_entity<T: Simulatable>(&mut self, entity_type: &str, entity: T) {
         let type_map = self.entities.entry(entity_type.to_string()).or_default();
 
-        type_map.insert(entity.id(), Box::new(entity));
+        type_map.insert(*entity.id(), Box::new(entity));
     }
 
     /// Register an event handler for a specific event type

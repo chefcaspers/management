@@ -54,8 +54,8 @@ impl<'a> OrderRouter<'a> {
     }
 }
 
-pub struct Location {
-    id: LocationId,
+pub struct Site {
+    id: SiteId,
     name: String,
     /// Kitchens available at this location.
     kitchens: HashMap<KitchenId, Kitchen>,
@@ -67,9 +67,9 @@ pub struct Location {
     order_lines: HashMap<OrderLineId, OrderLine>,
 }
 
-impl Entity for Location {
-    fn id(&self) -> uuid::Uuid {
-        *self.id.as_ref()
+impl Entity for Site {
+    fn id(&self) -> &uuid::Uuid {
+        self.id.as_ref()
     }
 
     fn name(&self) -> &str {
@@ -77,7 +77,7 @@ impl Entity for Location {
     }
 }
 
-impl Simulatable for Location {
+impl Simulatable for Site {
     fn step(&mut self, ctx: &State) -> Option<()> {
         let orders = ctx.orders_for_location(&self.id).collect_vec();
         for items in orders {
@@ -104,11 +104,11 @@ impl Simulatable for Location {
     }
 }
 
-impl Location {
+impl Site {
     pub fn new(name: impl ToString) -> Self {
         let name = name.to_string();
-        Location {
-            id: LocationId::from_uri_ref(&name),
+        Site {
+            id: SiteId::from_uri_ref(&name),
             name,
             kitchens: HashMap::new(),
             orders: HashMap::new(),
@@ -161,7 +161,7 @@ mod tests {
     use super::*;
     use crate::simulation::state;
 
-    fn setup() -> Location {
+    fn setup() -> Site {
         let brands = state::get_brands();
         let location = state::generate_location("location-1", brands.as_ref());
         location

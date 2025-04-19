@@ -1,1 +1,1 @@
-pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+pub type Result<T, E = Box<dyn std::error::Error>> = std::result::Result<T, E>;

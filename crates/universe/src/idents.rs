@@ -1,23 +1,35 @@
 use uuid::Uuid;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct LocationId(Uuid);
+pub struct SiteId(Uuid);
 
-impl LocationId {
+impl SiteId {
     pub fn from_uri_ref(name: impl AsRef<str>) -> Self {
-        LocationId(Uuid::new_v5(&Uuid::NAMESPACE_URL, name.as_ref().as_bytes()))
+        SiteId(Uuid::new_v5(&Uuid::NAMESPACE_URL, name.as_ref().as_bytes()))
     }
 }
 
-impl From<Uuid> for LocationId {
+impl From<Uuid> for SiteId {
     fn from(id: Uuid) -> Self {
-        LocationId(id)
+        SiteId(id)
     }
 }
 
-impl AsRef<Uuid> for LocationId {
+impl AsRef<Uuid> for SiteId {
     fn as_ref(&self) -> &Uuid {
         &self.0
+    }
+}
+
+impl AsRef<[u8]> for SiteId {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_bytes()
+    }
+}
+
+impl ToString for SiteId {
+    fn to_string(&self) -> String {
+        self.0.to_string()
     }
 }
 
@@ -42,6 +54,18 @@ impl AsRef<Uuid> for KitchenId {
     }
 }
 
+impl AsRef<[u8]> for KitchenId {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_bytes()
+    }
+}
+
+impl ToString for KitchenId {
+    fn to_string(&self) -> String {
+        self.0.to_string()
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct StationId(Uuid);
 
@@ -60,6 +84,18 @@ impl From<Uuid> for StationId {
 impl AsRef<Uuid> for StationId {
     fn as_ref(&self) -> &Uuid {
         &self.0
+    }
+}
+
+impl AsRef<[u8]> for StationId {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_bytes()
+    }
+}
+
+impl ToString for StationId {
+    fn to_string(&self) -> String {
+        self.0.to_string()
     }
 }
 
@@ -84,6 +120,18 @@ impl AsRef<Uuid> for OrderId {
     }
 }
 
+impl AsRef<[u8]> for OrderId {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_bytes()
+    }
+}
+
+impl ToString for OrderId {
+    fn to_string(&self) -> String {
+        self.0.to_string()
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct OrderLineId(Uuid);
 
@@ -102,6 +150,18 @@ impl From<Uuid> for OrderLineId {
 impl AsRef<Uuid> for OrderLineId {
     fn as_ref(&self) -> &Uuid {
         &self.0
+    }
+}
+
+impl AsRef<[u8]> for OrderLineId {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_bytes()
+    }
+}
+
+impl ToString for OrderLineId {
+    fn to_string(&self) -> String {
+        self.0.to_string()
     }
 }
 
@@ -126,6 +186,18 @@ impl AsRef<Uuid> for BrandId {
     }
 }
 
+impl AsRef<[u8]> for BrandId {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_bytes()
+    }
+}
+
+impl ToString for BrandId {
+    fn to_string(&self) -> String {
+        self.0.to_string()
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct MenuItemId(Uuid);
 
@@ -144,5 +216,50 @@ impl From<Uuid> for MenuItemId {
 impl AsRef<Uuid> for MenuItemId {
     fn as_ref(&self) -> &Uuid {
         &self.0
+    }
+}
+
+impl AsRef<[u8]> for MenuItemId {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_bytes()
+    }
+}
+
+impl ToString for MenuItemId {
+    fn to_string(&self) -> String {
+        self.0.to_string()
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct PersonId(pub(crate) Uuid);
+
+impl PersonId {
+    pub fn new() -> Self {
+        PersonId(Uuid::new_v4())
+    }
+}
+
+impl From<Uuid> for PersonId {
+    fn from(uuid: Uuid) -> Self {
+        PersonId(uuid)
+    }
+}
+
+impl AsRef<Uuid> for PersonId {
+    fn as_ref(&self) -> &Uuid {
+        &self.0
+    }
+}
+
+impl AsRef<[u8]> for PersonId {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_bytes()
+    }
+}
+
+impl ToString for PersonId {
+    fn to_string(&self) -> String {
+        self.0.to_string()
     }
 }

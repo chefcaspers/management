@@ -36,8 +36,8 @@ struct Station {
 }
 
 impl Entity for Station {
-    fn id(&self) -> uuid::Uuid {
-        self.id.as_ref().clone()
+    fn id(&self) -> &uuid::Uuid {
+        self.id.as_ref()
     }
 
     fn name(&self) -> &str {
@@ -114,8 +114,8 @@ pub struct Kitchen {
 }
 
 impl Entity for Kitchen {
-    fn id(&self) -> uuid::Uuid {
-        self.id.as_ref().clone()
+    fn id(&self) -> &uuid::Uuid {
+        self.id.as_ref()
     }
 
     fn name(&self) -> &str {

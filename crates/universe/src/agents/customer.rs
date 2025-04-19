@@ -51,8 +51,8 @@ impl Customer {
 }
 
 impl Entity for Customer {
-    fn id(&self) -> Uuid {
-        self.id
+    fn id(&self) -> &Uuid {
+        &self.id
     }
 
     fn name(&self) -> &str {

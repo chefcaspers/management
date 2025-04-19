@@ -100,7 +100,7 @@ impl State {
 
     pub fn orders_for_location(
         &self,
-        _location_id: &LocationId,
+        _location_id: &SiteId,
     ) -> impl Iterator<Item = Vec<(BrandId, MenuItemRef)>> {
         let mut rng = rand::rng();
         let order_count = rng.random_range(1..11);
