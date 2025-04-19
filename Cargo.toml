@@ -48,3 +48,5 @@ datafusion-proto = "46"
 datafusion-sql = "46"
 
 geoarrow = { path = "../geoarrow-rs/rust/geoarrow" }
+geoarrow-geoparquet = { path = "../geoarrow-rs/rust/geoarrow-geoparquet" }
+geoarrow-schema = { path = "../geoarrow-rs/rust/geoarrow-schema" }
