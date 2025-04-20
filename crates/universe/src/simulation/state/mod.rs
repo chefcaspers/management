@@ -14,7 +14,6 @@ use crate::models::{Brand, MenuItemRef};
 pub use self::parse::{generate_kitchens_for_location, generate_location, get_brands};
 
 mod parse;
-mod schemas;
 
 pub struct State {
     ctx: SessionContext,
@@ -33,10 +32,10 @@ impl State {
     pub fn try_new() -> Result<Self> {
         let ctx = SessionContext::new();
 
-        ctx.register_batch("locations", schemas::generate_locations())?;
-        ctx.register_batch("brands", schemas::generate_brands())?;
-        ctx.register_batch("vendors", schemas::generate_vendors())?;
-        ctx.register_batch("kitchens", schemas::generate_kitchens())?;
+        // ctx.register_batch("locations", schemas::generate_locations())?;
+        // ctx.register_batch("brands", schemas::generate_brands())?;
+        // ctx.register_batch("vendors", schemas::generate_vendors())?;
+        // ctx.register_batch("kitchens", schemas::generate_kitchens())?;
 
         let brands: HashMap<_, _> = parse::get_brands()
             .as_ref()

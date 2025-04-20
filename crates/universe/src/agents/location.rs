@@ -3,11 +3,10 @@ use std::collections::{HashMap, VecDeque};
 use counter::Counter;
 use itertools::Itertools;
 
-use super::Kitchen;
-use super::kitchen::KitchenStats;
+use super::kitchen::{Kitchen, KitchenStats};
 use crate::idents::*;
 use crate::models::MenuItemRef;
-use crate::simulation::{Entity, Simulatable, State};
+use crate::{Entity, Simulatable, State};
 
 #[derive(Clone)]
 pub struct Order {
@@ -68,8 +67,10 @@ pub struct Site {
 }
 
 impl Entity for Site {
-    fn id(&self) -> &uuid::Uuid {
-        self.id.as_ref()
+    type Id = SiteId;
+
+    fn id(&self) -> &Self::Id {
+        &self.id
     }
 
     fn name(&self) -> &str {

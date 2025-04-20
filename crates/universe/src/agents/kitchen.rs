@@ -7,7 +7,7 @@ use tabled::Tabled;
 use super::OrderLine;
 use crate::idents::*;
 use crate::models::{KitchenStation, MenuItemRef};
-use crate::simulation::{Entity, Simulatable, State};
+use crate::{Entity, Simulatable, State};
 
 #[derive(Clone)]
 enum StationStatus {
@@ -36,8 +36,10 @@ struct Station {
 }
 
 impl Entity for Station {
-    fn id(&self) -> &uuid::Uuid {
-        self.id.as_ref()
+    type Id = StationId;
+
+    fn id(&self) -> &Self::Id {
+        &self.id
     }
 
     fn name(&self) -> &str {
@@ -114,8 +116,10 @@ pub struct Kitchen {
 }
 
 impl Entity for Kitchen {
-    fn id(&self) -> &uuid::Uuid {
-        self.id.as_ref()
+    type Id = KitchenId;
+
+    fn id(&self) -> &Self::Id {
+        &self.id
     }
 
     fn name(&self) -> &str {

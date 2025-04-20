@@ -1,7 +1,7 @@
 use chrono::{DateTime, Timelike, Utc};
-use uuid::Uuid;
 
-use crate::simulation::{Entity, GeoLocation, Simulatable, State};
+use crate::idents::PersonId;
+use crate::{Entity, Simulatable, State};
 
 pub enum CustomerActions {
     Register,
@@ -13,13 +13,11 @@ pub enum CustomerActions {
 enum CustomerState {
     Idle,
     Waiting(DateTime<Utc>),
-    Moving(GeoLocation),
 }
 
 pub struct Customer {
-    id: Uuid,
+    id: PersonId,
     name: String,
-    location: GeoLocation,
     hunger: f64,
     state: CustomerState,
 }
@@ -27,9 +25,8 @@ pub struct Customer {
 impl Customer {
     pub fn new(name: impl Into<String>) -> Self {
         Customer {
-            id: Uuid::new_v4(),
+            id: PersonId::new(),
             name: name.into(),
-            location: GeoLocation::new(0.0, 0.0),
             hunger: 0.0,
             state: CustomerState::Idle,
         }
@@ -45,13 +42,14 @@ impl Customer {
                 }
             }
             CustomerState::Waiting(_) => None,
-            CustomerState::Moving(_) => None,
         }
     }
 }
 
 impl Entity for Customer {
-    fn id(&self) -> &Uuid {
+    type Id = PersonId;
+
+    fn id(&self) -> &PersonId {
         &self.id
     }
 

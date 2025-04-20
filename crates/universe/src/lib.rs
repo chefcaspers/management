@@ -1,13 +1,14 @@
 mod agents;
 mod error;
 mod idents;
+mod init;
 mod models;
-mod positions;
+mod population;
 mod simulation;
 
 pub use self::agents::*;
 pub use self::simulation::state;
-pub use self::simulation::{Simulatable, Simulation};
+pub use self::simulation::{Entity, Simulatable, Simulation, state::State};
 
 #[cfg(test)]
 mod tests {
