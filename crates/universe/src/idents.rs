@@ -136,7 +136,7 @@ pub struct PersonId(pub(crate) Uuid);
 
 impl PersonId {
     pub fn new() -> Self {
-        PersonId(Uuid::new_v4())
+        PersonId(Uuid::now_v7())
     }
 }
 

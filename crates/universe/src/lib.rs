@@ -1,9 +1,8 @@
 mod agents;
 mod error;
 mod idents;
-mod init;
+pub mod init;
 mod models;
-mod population;
 mod simulation;
 
 pub use self::agents::*;

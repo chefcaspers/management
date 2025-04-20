@@ -163,8 +163,8 @@ mod tests {
     use crate::simulation::state;
 
     fn setup() -> Site {
-        let brands = state::get_brands();
-        let location = state::generate_location("location-1", brands.as_ref());
+        let brands = crate::init::generate_brands();
+        let location = crate::init::generate_site("site-1", brands.as_ref());
         location
     }
 

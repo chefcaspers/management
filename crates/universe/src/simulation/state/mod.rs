@@ -7,13 +7,12 @@ use datafusion::prelude::*;
 use rand::Rng;
 use uuid::Uuid;
 
+use self::population::PopulationData;
 use crate::error::Result;
 use crate::idents::*;
 use crate::models::{Brand, MenuItemRef};
 
-pub use self::parse::{generate_kitchens_for_location, generate_location, get_brands};
-
-mod parse;
+mod population;
 
 pub struct State {
     ctx: SessionContext,
@@ -26,6 +25,9 @@ pub struct State {
 
     /// Time increment per simulation step
     time_step: Duration,
+
+    /// Population data
+    population: PopulationData,
 }
 
 impl State {
@@ -37,7 +39,7 @@ impl State {
         // ctx.register_batch("vendors", schemas::generate_vendors())?;
         // ctx.register_batch("kitchens", schemas::generate_kitchens())?;
 
-        let brands: HashMap<_, _> = parse::get_brands()
+        let brands: HashMap<_, _> = crate::init::generate_brands()
             .as_ref()
             .clone()
             .into_iter()
@@ -59,6 +61,9 @@ impl State {
             .collect();
         let item_ids = items.keys().cloned().collect();
 
+        let n_people = rand::rng().random_range(100..1000);
+        let population = PopulationData::from_site((0., 0.), (1., 1.), n_people)?;
+
         Ok(State {
             ctx,
             brands: Arc::new(brands),
@@ -66,6 +71,7 @@ impl State {
             item_ids,
             time_step: Duration::from_secs(60),
             time: Utc::now(),
+            population,
         })
     }
 

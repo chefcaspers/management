@@ -27,8 +27,8 @@ struct Report {
 fn main() {
     let cli = Cli::parse();
 
-    let brands = state::get_brands();
-    let mut location = state::generate_location("location-1", brands.as_ref());
+    let brands = caspers_universe::init::generate_brands();
+    let mut location = caspers_universe::init::generate_site("site-1", brands.as_ref());
 
     let mut state = state::State::try_new().unwrap();
 

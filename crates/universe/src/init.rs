@@ -1,18 +1,27 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, LazyLock};
 
+use arrow_array::RecordBatch;
+use arrow_array::builder::{FixedSizeBinaryBuilder, StringBuilder};
 use counter::Counter;
+use fake::Fake;
+use geo::Point;
+use geoarrow::array::{PointArray, PointBuilder};
+use geoarrow_schema::Dimension;
 use rand::Rng;
+use rand::distr::{Distribution, Uniform};
 use uuid::Uuid;
 
-use crate::agents::{Kitchen, Site};
-use crate::idents::{BrandId, MenuItemId};
+use crate::error::Result;
+use crate::idents::{BrandId, MenuItemId, PersonId};
 use crate::models::{Brand, KitchenStation, MenuItem};
+use crate::simulation::schemas::POPULATION_DATA;
+use crate::{Kitchen, Site};
 
-pub static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
+static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
     let mut brands = Vec::new();
 
-    let asian = include_str!("../../../../../data/menus/asian.json");
+    let asian = include_str!("../../../data/menus/asian.json");
     let items: Vec<MenuItem> = serde_json::from_str(asian).unwrap();
     let brand_name = "brands/asian".to_string();
     brands.push(Brand {
@@ -30,11 +39,11 @@ pub static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
             .collect(),
     });
 
-    let mexican = include_str!("../../../../../data/menus/mexican.json");
+    let mexican = include_str!("../../../data/menus/mexican.json");
     let items: Vec<MenuItem> = serde_json::from_str(mexican).unwrap();
     let brand_name = "brands/mexican".to_string();
     brands.push(Brand {
-        id: Uuid::new_v5(&Uuid::NAMESPACE_URL, brand_name.as_bytes()).to_string(),
+        id: BrandId::from_uri_ref(&brand_name).to_string(),
         name: brand_name.clone(),
         description: "Mexican cuisine".to_string(),
         category: "Mexican".to_string(),
@@ -48,11 +57,11 @@ pub static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
             .collect(),
     });
 
-    let fast_food = include_str!("../../../../../data/menus/fast_food.json");
+    let fast_food = include_str!("../../../data/menus/fast_food.json");
     let items: Vec<MenuItem> = serde_json::from_str(fast_food).unwrap();
     let brand_name = "brands/fast-food".to_string();
     brands.push(Brand {
-        id: Uuid::new_v5(&Uuid::NAMESPACE_URL, brand_name.as_bytes()).to_string(),
+        id: BrandId::from_uri_ref(&brand_name).to_string(),
         name: brand_name.clone(),
         description: "Fast food".to_string(),
         category: "Fast Food".to_string(),
@@ -69,11 +78,11 @@ pub static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
     Arc::new(brands)
 });
 
-pub fn get_brands() -> Arc<Vec<Brand>> {
+pub fn generate_brands() -> Arc<Vec<Brand>> {
     BRANDS.clone()
 }
 
-pub fn generate_location(name: impl ToString, brands: &[Brand]) -> Site {
+pub fn generate_site(name: impl ToString, brands: &[Brand]) -> Site {
     let location_name = name.to_string();
 
     let counters: HashMap<BrandId, Counter<KitchenStation>> = brands
@@ -90,7 +99,7 @@ pub fn generate_location(name: impl ToString, brands: &[Brand]) -> Site {
 
     // Generate 5-10 kitchens for this location
     let num_kitchens = rand::rng().random_range(5..=10);
-    let kitchens = generate_kitchens_for_location(&location_name, &counters, num_kitchens);
+    let kitchens = generate_kitchens_for_site(&location_name, &counters, num_kitchens);
 
     // Add kitchens to the location
     let mut location = Site::new(format!("locations/{}", location_name));
@@ -101,7 +110,7 @@ pub fn generate_location(name: impl ToString, brands: &[Brand]) -> Site {
     location
 }
 
-pub fn generate_kitchens_for_location(
+pub fn generate_kitchens_for_site(
     location_name: &str,
     brand_counters: &HashMap<BrandId, Counter<KitchenStation>>,
     num_kitchens: usize,
@@ -157,4 +166,61 @@ fn station_type_to_name(station_type: KitchenStation) -> &'static str {
         // KitchenStation::Freezer => "freezer",
         _ => "unknown",
     }
+}
+
+pub(crate) fn generate_population(
+    (minx, miny): (f64, f64),
+    (maxx, maxy): (f64, f64),
+    n_people: usize,
+) -> Result<(RecordBatch, PointArray)> {
+    // 16 bytes to store raw uuids
+    let mut ids = FixedSizeBinaryBuilder::with_capacity(n_people, 16);
+    let mut first_names = StringBuilder::new();
+    let mut last_names = StringBuilder::new();
+    let mut emails = StringBuilder::new();
+    let mut cc_numbers = StringBuilder::new();
+
+    let mut rng = rand::rng();
+
+    let gen_first_name = fake::faker::name::en::FirstName();
+    let gen_last_name = fake::faker::name::en::LastName();
+    let gen_email = fake::faker::internet::en::SafeEmail();
+    let gen_cc = fake::faker::creditcard::en::CreditCardNumber();
+
+    for _ in 0..n_people {
+        let id = PersonId::new();
+        ids.append_value(&id)?;
+        first_names.append_value(gen_first_name.fake_with_rng::<String, _>(&mut rng));
+        last_names.append_value(gen_last_name.fake_with_rng::<String, _>(&mut rng));
+        emails.append_value(gen_email.fake_with_rng::<String, _>(&mut rng));
+        cc_numbers.append_value(gen_cc.fake_with_rng::<String, _>(&mut rng));
+    }
+
+    let ids = Arc::new(ids.finish());
+    let first_names = Arc::new(first_names.finish());
+    let last_names = Arc::new(last_names.finish());
+    let emails = Arc::new(emails.finish());
+    let cc_numbers = Arc::new(cc_numbers.finish());
+
+    let people = RecordBatch::try_new(
+        POPULATION_DATA.clone(),
+        vec![ids, first_names, last_names, emails, cc_numbers],
+    )?;
+
+    let x_range = Uniform::new(minx, maxx)?;
+    let y_range = Uniform::new(miny, maxy)?;
+    let positions = x_range
+        .sample_iter(rand::rng())
+        .take(n_people)
+        .zip(y_range.sample_iter(rand::rng()).take(n_people))
+        .fold(
+            PointBuilder::with_capacity(Dimension::XY, n_people),
+            |mut builder, (x, y)| {
+                builder.push_point(Some(&Point::new(x, y)));
+                builder
+            },
+        )
+        .finish();
+
+    Ok((people, positions))
 }
