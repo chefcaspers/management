@@ -4,15 +4,17 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use datafusion::prelude::*;
+use itertools::Itertools;
 use rand::Rng;
 use uuid::Uuid;
 
-use self::population::PopulationData;
 use crate::error::Result;
 use crate::idents::*;
 use crate::models::{Brand, MenuItemRef};
 
 mod population;
+
+pub(crate) use population::PopulationData;
 
 pub struct State {
     ctx: SessionContext,
@@ -31,44 +33,27 @@ pub struct State {
 }
 
 impl State {
-    pub fn try_new() -> Result<Self> {
-        let ctx = SessionContext::new();
-
-        // ctx.register_batch("locations", schemas::generate_locations())?;
-        // ctx.register_batch("brands", schemas::generate_brands())?;
-        // ctx.register_batch("vendors", schemas::generate_vendors())?;
-        // ctx.register_batch("kitchens", schemas::generate_kitchens())?;
-
-        let brands: HashMap<_, _> = crate::init::generate_brands()
-            .as_ref()
-            .clone()
-            .into_iter()
-            .map(|brand| {
-                let brand_id = Uuid::try_parse(&brand.id).unwrap().into();
-                (brand_id, brand)
-            })
-            .collect();
-
+    pub(crate) fn try_new(brands: impl IntoIterator<Item = (BrandId, Brand)>) -> Result<Self> {
+        let brands: HashMap<_, _> = brands.into_iter().collect();
         let items: HashMap<_, _> = brands
             .iter()
             .flat_map(|(brand_id, brand)| brand.items.iter().map(|it| (*brand_id, it)))
             .map(|(brand_id, item)| {
-                (
-                    (brand_id, Uuid::try_parse(&item.id).unwrap().into()),
+                Ok::<_, Box<dyn std::error::Error>>((
+                    (brand_id, Uuid::try_parse(&item.id)?.into()),
                     Arc::new(item.clone()),
-                )
+                ))
             })
-            .collect();
-        let item_ids = items.keys().cloned().collect();
+            .try_collect()?;
 
         let n_people = rand::rng().random_range(100..1000);
         let population = PopulationData::from_site((0., 0.), (1., 1.), n_people)?;
 
         Ok(State {
-            ctx,
+            ctx: SessionContext::new(),
             brands: Arc::new(brands),
+            item_ids: items.keys().cloned().collect(),
             items: Arc::new(items),
-            item_ids,
             time_step: Duration::from_secs(60),
             time: Utc::now(),
             population,
@@ -103,7 +88,7 @@ impl State {
         selected_items
     }
 
-    pub fn orders_for_location(
+    pub(crate) fn orders_for_location(
         &self,
         _location_id: &SiteId,
     ) -> impl Iterator<Item = Vec<(BrandId, MenuItemRef)>> {

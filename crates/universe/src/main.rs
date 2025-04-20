@@ -8,13 +8,16 @@ use tabled::{
     },
 };
 
-use caspers_universe::{KitchenStats, Simulatable, state};
+use caspers_universe::KitchenStats;
 
 #[derive(Debug, Clone, clap::Parser)]
 #[command(name = "caspers-universe", version, about = "Running Caspers Universe", long_about = None)]
 struct Cli {
     #[arg(short, long, default_value_t = 1)]
     location_count: u32,
+
+    #[arg(short, long, default_value_t = 1000)]
+    population: u32,
 }
 
 #[derive(Debug, Clone, Tabled)]
@@ -24,33 +27,25 @@ struct Report {
     stats: KitchenStats,
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
-    let brands = caspers_universe::init::generate_brands();
-    let mut location = caspers_universe::init::generate_site("site-1", brands.as_ref());
+    let mut simulation = caspers_universe::SimulationBuilder::new();
 
-    let mut state = state::State::try_new().unwrap();
-
-    let mut stats = Vec::new();
-    for it in 0..1000 {
-        if it % 100 == 0 {
-            stats.push(Report {
-                timestamp: state.current_time(),
-                stats: location.total_kitchen_stats(),
-            });
-        }
-        location.step(&state);
-        state.step();
+    for brand in caspers_universe::init::generate_brands() {
+        simulation.with_brand(brand);
     }
 
-    let table = Table::new(stats)
-        .with(Style::modern_rounded())
-        .modify(Columns::single(0), Color::FG_RED)
-        .modify(Columns::single(1), Color::FG_BLUE)
-        .modify(Columns::new(2..), Color::FG_GREEN)
-        .modify(Rows::new(0..), Height::limit(5))
-        .to_string();
+    let mut simulation = simulation.build()?;
+    simulation.run(10)?;
 
-    println!("{}", table);
+    // let table = Table::new(stats)
+    //     .with(Style::modern_rounded())
+    //     .modify(Columns::single(0), Color::FG_RED)
+    //     .modify(Columns::single(1), Color::FG_BLUE)
+    //     .modify(Columns::new(2..), Color::FG_GREEN)
+    //     .modify(Rows::new(0..), Height::limit(5))
+    //     .to_string();
+
+    Ok(())
 }

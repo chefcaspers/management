@@ -85,8 +85,6 @@ pub struct KitchenStats {
     completed: usize,
     idle_assets: usize,
     total_assets: usize,
-    #[tabled(skip)]
-    simulation_time: Duration,
 }
 
 impl std::ops::Add for KitchenStats {
@@ -99,13 +97,12 @@ impl std::ops::Add for KitchenStats {
             completed: self.completed + other.completed,
             idle_assets: self.idle_assets + other.idle_assets,
             total_assets: self.total_assets + other.total_assets,
-            simulation_time: self.simulation_time.max(other.simulation_time),
         }
     }
 }
 
 pub struct Kitchen {
-    pub(crate) id: KitchenId,
+    id: KitchenId,
     name: String,
     stations: Vec<Station>,
     queue: VecDeque<OrderLine>,
@@ -282,7 +279,6 @@ impl Kitchen {
                 .filter(|a| matches!(a.status, StationStatus::Available))
                 .count(),
             total_assets: self.stations.len(),
-            simulation_time: self.simulation_time,
         }
     }
 }

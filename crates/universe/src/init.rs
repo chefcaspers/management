@@ -78,16 +78,19 @@ static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
     Arc::new(brands)
 });
 
-pub fn generate_brands() -> Arc<Vec<Brand>> {
-    BRANDS.clone()
+pub fn generate_brands() -> Vec<Brand> {
+    BRANDS.clone().as_ref().clone()
 }
 
-pub fn generate_site(name: impl ToString, brands: &[Brand]) -> Site {
+pub fn generate_site(
+    name: impl ToString,
+    brands: impl IntoIterator<Item = (BrandId, Brand)>,
+) -> Site {
     let location_name = name.to_string();
 
     let counters: HashMap<BrandId, Counter<KitchenStation>> = brands
-        .iter()
-        .map(|brand| {
+        .into_iter()
+        .map(|(_id, brand)| {
             let stations = brand
                 .items
                 .iter()

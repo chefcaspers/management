@@ -7,7 +7,7 @@ mod simulation;
 
 pub use self::agents::*;
 pub use self::simulation::state;
-pub use self::simulation::{Entity, Simulatable, Simulation, state::State};
+pub use self::simulation::{Entity, Simulatable, Simulation, SimulationBuilder, State};
 
 #[cfg(test)]
 mod tests {

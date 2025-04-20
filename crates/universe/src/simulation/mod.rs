@@ -1,15 +1,17 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Duration, Utc};
+use itertools::Itertools;
 
-use self::state::State;
-use crate::models::Brand;
-use crate::{
-    Site,
-    idents::{SiteId, TypedId},
-};
+use crate::agents::Site;
+use crate::error::Result;
+use crate::idents::{SiteId, TypedId};
 
-pub mod execution;
+pub use self::builder::SimulationBuilder;
+pub use self::state::State;
+
+mod builder;
+mod execution;
 pub mod schemas;
 pub mod state;
 
@@ -30,24 +32,12 @@ pub trait Simulatable: Entity {
     fn step(&mut self, context: &state::State) -> Option<()>;
 }
 
-struct InitialConditions {
-    /// All vendors that will be included in the simulation
-    vendors: Vec<(String, Vec<Brand>)>,
-
-    /// all ghost kitchen sites.
-    sites: Vec<String>,
-}
-
 struct SimulationConfig {
     /// all ghost kitchen sites.
     simulation_start: DateTime<Utc>,
 
     /// time increment for simulation steps
     time_increment: Duration,
-}
-
-pub struct SimulationBuilder {
-    brands: Vec<Brand>,
 }
 
 /// The main simulation engine
@@ -58,32 +48,49 @@ pub struct Simulation {
     config: SimulationConfig,
 
     /// Global simulation state
-    context: State,
+    state: State,
 
     /// all ghost kitchen sites.
     sites: HashMap<SiteId, Site>,
 }
 
 impl Simulation {
-    /// Create a new simulation with default parameters
-    pub fn new(config: SimulationConfig) -> Self {
-        Self {
-            config,
-            context: state::State::try_new().unwrap(),
-            sites: HashMap::new(),
-        }
-    }
-
     /// Advance the simulation by one time step
     fn step(&mut self) {
-        // Advance simulation time
-        self.context.step();
+        for site in self.sites.values_mut() {
+            let orders = self.state.orders_for_location(site.id()).collect_vec();
+            for items in orders {
+                site.queue_order(items);
+            }
+            site.step(&self.state);
+        }
+        self.state.step();
     }
 
     /// Run the simulation for a specified number of steps
-    pub fn run(&mut self, steps: usize) {
+    pub fn run(&mut self, steps: usize) -> Result<()> {
         for _ in 0..steps {
             self.step();
         }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_simulation() -> Result<(), Box<dyn std::error::Error>> {
+        let mut simulation = SimulationBuilder::new();
+
+        for brand in crate::init::generate_brands() {
+            simulation.with_brand(brand);
+        }
+
+        let mut simulation = simulation.build()?;
+        simulation.run(10)?;
+
+        Ok(())
     }
 }

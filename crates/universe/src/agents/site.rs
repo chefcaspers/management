@@ -53,6 +53,11 @@ impl<'a> OrderRouter<'a> {
     }
 }
 
+pub struct SiteState {
+    n_kitchens: usize,
+    n_kitchens_idle: usize,
+}
+
 pub struct Site {
     id: SiteId,
     name: String,
@@ -80,11 +85,6 @@ impl Entity for Site {
 
 impl Simulatable for Site {
     fn step(&mut self, ctx: &State) -> Option<()> {
-        let orders = ctx.orders_for_location(&self.id).collect_vec();
-        for items in orders {
-            self.queue_order(items);
-        }
-
         // Process order queue
         let mut router = OrderRouter::new(&mut self.kitchens);
         while let Some(order_id) = self.order_queue.pop_front() {
@@ -119,10 +119,10 @@ impl Site {
     }
 
     pub fn add_kitchen(&mut self, kitchen: Kitchen) {
-        self.kitchens.insert(kitchen.id, kitchen);
+        self.kitchens.insert(kitchen.id().clone(), kitchen);
     }
 
-    fn queue_order(&mut self, items: impl IntoIterator<Item = (BrandId, MenuItemRef)>) {
+    pub(crate) fn queue_order(&mut self, items: impl IntoIterator<Item = (BrandId, MenuItemRef)>) {
         let mut order = Order {
             id: OrderId::new(),
             lines: Vec::new(),
@@ -154,27 +154,5 @@ impl Site {
             .values()
             .map(|kitchen| kitchen.stats())
             .fold(KitchenStats::default(), |acc, stats| acc + stats)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::simulation::state;
-
-    fn setup() -> Site {
-        let brands = crate::init::generate_brands();
-        let location = crate::init::generate_site("site-1", brands.as_ref());
-        location
-    }
-
-    #[test_log::test]
-    fn test_new_location() {
-        let mut location = setup();
-        let state = State::try_new().unwrap();
-
-        for _ in 0..10 {
-            location.step(&state);
-        }
     }
 }

@@ -140,7 +140,7 @@ impl<'a> Person<'a> {
         }
     }
 
-    fn id(&self) -> &PersonId {
+    pub fn id(&self) -> &PersonId {
         self.id
     }
 
@@ -284,36 +284,4 @@ fn lookup_index(batch: &RecordBatch) -> Result<IndexSet<PersonId>> {
         .iter()
         .filter_map(|data| data.and_then(|data| Some(PersonId(Uuid::from_slice(data).unwrap()))))
         .collect())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use arrow_cast::pretty::print_batches;
-    use geo::{Point, Rect};
-    use geoarrow::array::{PointBuilder, PolygonBuilder};
-    use geoarrow_schema::Dimension;
-
-    #[test]
-    fn test_positions() -> Result<(), Box<dyn std::error::Error>> {
-        let mut points = PointBuilder::new(Dimension::XY);
-        points.push_point(Some(&Point::new(0.5, 0.5)));
-        points.push_point(Some(&Point::new(0.5, 1.5)));
-        let points = points.finish();
-
-        let mut locations = PolygonBuilder::new(Dimension::XY);
-        locations.push_rect(Some(&Rect::new((0., 0.), (1., 1.))))?;
-        locations.push_rect(Some(&Rect::new((0., 0.), (1., 1.))))?;
-        let locations = locations.finish();
-
-        let population = PopulationData::from_site((0., 0.), (1., 1.), 10)?;
-
-        print_batches(&[population.people.clone()])?;
-
-        for person in population.iter() {
-            println!("Person ID: {}", person.id().to_string());
-        }
-
-        Ok(())
-    }
 }

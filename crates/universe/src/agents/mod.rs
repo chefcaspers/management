@@ -1,6 +1,6 @@
 mod customer;
 mod kitchen;
-mod location;
+mod site;
 
 pub use self::kitchen::*;
-pub use self::location::*;
+pub use self::site::*;
