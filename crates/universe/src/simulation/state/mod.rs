@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
+use dashmap::mapref::one::Ref;
 use datafusion::prelude::*;
 use itertools::Itertools;
 use rand::Rng;
@@ -10,11 +11,13 @@ use uuid::Uuid;
 
 use crate::error::Result;
 use crate::idents::*;
-use crate::models::{Brand, MenuItemRef};
+use crate::models::{Brand, MenuItem, MenuItemRef};
 
 mod population;
+mod vendors;
 
 pub(crate) use population::PopulationData;
+pub(crate) use vendors::VendorData;
 
 pub struct State {
     ctx: SessionContext,
@@ -30,6 +33,9 @@ pub struct State {
 
     /// Population data
     population: PopulationData,
+
+    /// Vendor data
+    vendors: VendorData,
 }
 
 impl State {
@@ -49,6 +55,8 @@ impl State {
         let n_people = rand::rng().random_range(100..1000);
         let population = PopulationData::from_site((0., 0.), (1., 1.), n_people)?;
 
+        let vendors = crate::init::generate_objects(&brands)?;
+
         Ok(State {
             ctx: SessionContext::new(),
             brands: Arc::new(brands),
@@ -57,6 +65,7 @@ impl State {
             time_step: Duration::from_secs(60),
             time: Utc::now(),
             population,
+            vendors: VendorData::try_new(vendors)?,
         })
     }
 
@@ -64,8 +73,8 @@ impl State {
         &self.ctx
     }
 
-    pub fn menu_item(&self, id: &(BrandId, MenuItemId)) -> Result<MenuItemRef> {
-        self.items.get(id).cloned().ok_or("Brand not found".into())
+    pub fn menu_item(&self, id: &(BrandId, MenuItemId)) -> Result<Ref<'_, MenuItemId, MenuItem>> {
+        self.vendors.menu_item(id)
     }
 
     pub fn menu_items(&self) -> Arc<HashMap<(BrandId, MenuItemId), MenuItemRef>> {

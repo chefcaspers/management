@@ -85,27 +85,27 @@ message Ingredient {
 //
 // Brands are owned by vendors and operate in specific kitchens
 message Brand {
-  string id = 1 [(buf.validate.field).string.uuid = true];
-
-  string name = 2 [
+  string name = 1 [
     (buf.validate.field).string.min_len = 3,
     (buf.validate.field).string.max_len = 255
   ];
 
-  string description = 3 [
+  string description = 2 [
     (buf.validate.field).string.min_len = 3,
     (buf.validate.field).string.max_len = 255
   ];
 
-  string category = 4 [
+  string category = 3 [
     (buf.validate.field).string.min_len = 3,
     (buf.validate.field).string.max_len = 255
   ];
 
-  repeated MenuItem items = 5 [
+  repeated MenuItem items = 4 [
     (buf.validate.field).repeated.min_items = 1,
     (buf.validate.field).repeated.max_items = 1000
   ];
+
+  optional string id = 5 [(buf.validate.field).string.uuid = true];
 }
 
 // Menu items are individual dishes within a menu

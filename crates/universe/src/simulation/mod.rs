@@ -29,7 +29,7 @@ pub trait Entity: Send + Sync + 'static {
 /// Trait for entities that need to be updated each simulation step
 pub trait Simulatable: Entity {
     /// Update the entity state based on the current simulation context
-    fn step(&mut self, context: &state::State) -> Option<()>;
+    fn step(&mut self, context: &state::State) -> Result<()>;
 }
 
 struct SimulationConfig {
@@ -60,7 +60,11 @@ impl Simulation {
         for site in self.sites.values_mut() {
             let orders = self.state.orders_for_location(site.id()).collect_vec();
             for items in orders {
-                site.queue_order(items);
+                site.queue_order(
+                    items.into_iter().map(|(order, item)| {
+                        (order, uuid::Uuid::parse_str(&item.id).unwrap().into())
+                    }),
+                );
             }
             site.step(&self.state);
         }
@@ -81,7 +85,7 @@ mod tests {
     use super::*;
 
     #[test_log::test]
-    fn test_simulation() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_inner_simulation() -> Result<(), Box<dyn std::error::Error>> {
         let mut simulation = SimulationBuilder::new();
 
         for brand in crate::init::generate_brands() {

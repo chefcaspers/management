@@ -6,8 +6,8 @@ use tabled::Tabled;
 
 use super::OrderLine;
 use crate::idents::*;
-use crate::models::{KitchenStation, MenuItemRef};
-use crate::{Entity, Simulatable, State};
+use crate::models::KitchenStation;
+use crate::{Entity, Simulatable, State, error::Result};
 
 #[derive(Clone)]
 enum StationStatus {
@@ -107,7 +107,7 @@ pub struct Kitchen {
     stations: Vec<Station>,
     queue: VecDeque<OrderLine>,
     in_progress: HashMap<OrderLineId, OrderProgress>,
-    completed: Vec<MenuItemRef>,
+    completed: Vec<(OrderId, OrderLineId)>,
     simulation_time: Duration,
     accepted_brands: HashSet<BrandId>,
 }
@@ -125,22 +125,22 @@ impl Entity for Kitchen {
 }
 
 impl Simulatable for Kitchen {
-    fn step(&mut self, ctx: &State) -> Option<()> {
+    fn step(&mut self, ctx: &State) -> Result<()> {
         let time_step = ctx.time_step();
         self.simulation_time += time_step;
 
         // Try to start new recipes if possible
-        while self.start_order_line(ctx) {}
+        while self.start_order_line(ctx)? {}
 
         // Process in-progress recipes
         let mut completed_recipe_ids = Vec::new();
         let mut to_update = Vec::new();
 
-        for (recipe_id, progress) in self.in_progress.iter() {
+        for (order_line_id, progress) in self.in_progress.iter() {
+            let menu_item = ctx.menu_item(&progress.order_line.item)?;
             match &progress.status {
                 OrderLineStatus::InProgress(instruction_idx, stated_time) => {
-                    let expected_duration = progress.order_line.item.1.instructions
-                        [*instruction_idx]
+                    let expected_duration = menu_item.instructions[*instruction_idx]
                         .expected_duration
                         .map(|duration| duration.seconds)
                         .unwrap_or(0);
@@ -151,37 +151,37 @@ impl Simulatable for Kitchen {
                     }
 
                     // We finished to current step, so release the current asset
-                    let curr = &progress.order_line.item.1.instructions[*instruction_idx];
-                    release_station(&mut self.stations, &curr.required_station, recipe_id);
+                    let curr = &menu_item.instructions[*instruction_idx];
+                    release_station(&mut self.stations, &curr.required_station, order_line_id);
 
                     // Move to next instruction
                     let next_idx = instruction_idx + 1;
-                    if next_idx >= progress.order_line.item.1.instructions.len() {
+                    if next_idx >= menu_item.instructions.len() {
                         // Recipe is complete
-                        completed_recipe_ids.push(*recipe_id);
+                        completed_recipe_ids.push(*order_line_id);
                         continue;
                     }
 
                     // Move the order to the next station, or block if not available
-                    let next_step = &progress.order_line.item.1.instructions[next_idx];
+                    let next_step = &menu_item.instructions[next_idx];
                     if let Some(idx) = take_station(&self.stations, &next_step.required_station) {
-                        self.stations[idx].status = StationStatus::InUse(*recipe_id);
+                        self.stations[idx].status = StationStatus::InUse(*order_line_id);
                         to_update.push((
-                            *recipe_id,
+                            *order_line_id,
                             OrderLineStatus::InProgress(next_idx, ctx.next_time()),
                         ));
                     } else {
-                        to_update.push((*recipe_id, OrderLineStatus::Blocked(next_idx)));
+                        to_update.push((*order_line_id, OrderLineStatus::Blocked(next_idx)));
                     }
                 }
                 OrderLineStatus::Blocked(instruction_idx) => {
                     // Check if we can now acquire the needed asset
-                    let step = &progress.order_line.item.1.instructions[*instruction_idx];
+                    let step = &menu_item.instructions[*instruction_idx];
                     if let Some(asset_idx) = take_station(&self.stations, &step.required_station) {
                         // Mark asset as in use
-                        self.stations[asset_idx].status = StationStatus::InUse(*recipe_id);
+                        self.stations[asset_idx].status = StationStatus::InUse(*order_line_id);
                         to_update.push((
-                            *recipe_id,
+                            *order_line_id,
                             OrderLineStatus::InProgress(*instruction_idx, ctx.next_time()),
                         ));
                     }
@@ -200,11 +200,12 @@ impl Simulatable for Kitchen {
         // Move completed recipes
         for recipe_id in completed_recipe_ids {
             if let Some(progress) = self.in_progress.remove(&recipe_id) {
-                self.completed.push(progress.order_line.item.1);
+                self.completed
+                    .push((progress.order_line.order_id, progress.order_line.id));
             }
         }
 
-        Some(())
+        Ok(())
     }
 }
 
@@ -239,10 +240,11 @@ impl Kitchen {
         self.queue.push_back(item);
     }
 
-    fn start_order_line(&mut self, ctx: &State) -> bool {
+    fn start_order_line(&mut self, ctx: &State) -> Result<bool> {
         if let Some(order_line) = self.queue.pop_front() {
+            let menu_item = ctx.menu_item(&order_line.item)?;
             // Check if we can start the first step
-            let step = &order_line.item.1.instructions[0];
+            let step = &menu_item.instructions[0];
             if let Some(asset_idx) = take_station(&self.stations, &step.required_station) {
                 // Mark asset as in use
                 self.stations[asset_idx].status = StationStatus::InUse(order_line.id);
@@ -256,14 +258,14 @@ impl Kitchen {
                     },
                 );
 
-                true
+                Ok(true)
             } else {
                 // Can't start the recipe yet, put it back in the queue
                 self.queue.push_front(order_line);
-                false
+                Ok(false)
             }
         } else {
-            false
+            Ok(false)
         }
     }
 

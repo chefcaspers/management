@@ -11,7 +11,7 @@ pub use self::simulation::{Entity, Simulatable, Simulation, SimulationBuilder, S
 
 #[cfg(test)]
 mod tests {
-    use arrow_cast::pretty::print_columns;
+    use arrow_cast::pretty::{print_batches, print_columns};
     use geoarrow_geoparquet::GeoParquetRecordBatchReaderBuilder;
 
     #[test]

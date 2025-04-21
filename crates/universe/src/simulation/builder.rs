@@ -65,7 +65,8 @@ impl SimulationBuilder {
 
     /// Build the simulation with the given initial conditions
     pub fn build(self) -> Result<Simulation> {
-        let brands: HashMap<BrandId, _> = crate::init::generate_brands()
+        let brands: HashMap<BrandId, _> = self
+            .brands
             .into_iter()
             .map(|brand| {
                 let brand_id = uuid::Uuid::try_parse(&brand.id)?.into();

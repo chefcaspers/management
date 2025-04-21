@@ -1,7 +1,7 @@
 use chrono::{DateTime, Timelike, Utc};
 
 use crate::idents::PersonId;
-use crate::{Entity, Simulatable, State};
+use crate::{Entity, Simulatable, State, error::Result};
 
 pub enum CustomerActions {
     Register,
@@ -59,14 +59,14 @@ impl Entity for Customer {
 }
 
 impl Simulatable for Customer {
-    fn step(&mut self, ctx: &State) -> Option<()> {
-        match self.action(ctx)? {
-            CustomerActions::PlaceOrder => {
+    fn step(&mut self, ctx: &State) -> Result<()> {
+        match self.action(ctx) {
+            Some(CustomerActions::PlaceOrder) => {
                 self.hunger += 1.0;
                 self.state = CustomerState::Waiting(ctx.current_time());
-                Some(())
             }
-            _ => None,
-        }
+            _ => (),
+        };
+        Ok(())
     }
 }

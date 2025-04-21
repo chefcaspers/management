@@ -5,8 +5,7 @@ use itertools::Itertools;
 
 use super::kitchen::{Kitchen, KitchenStats};
 use crate::idents::*;
-use crate::models::MenuItemRef;
-use crate::{Entity, Simulatable, State};
+use crate::{Entity, Simulatable, State, error::Result};
 
 #[derive(Clone)]
 pub struct Order {
@@ -18,7 +17,7 @@ pub struct Order {
 pub struct OrderLine {
     pub(crate) id: OrderLineId,
     pub(crate) order_id: OrderId,
-    pub(crate) item: (BrandId, MenuItemRef),
+    pub(crate) item: (BrandId, MenuItemId),
 }
 
 struct OrderRouter<'a> {
@@ -84,7 +83,7 @@ impl Entity for Site {
 }
 
 impl Simulatable for Site {
-    fn step(&mut self, ctx: &State) -> Option<()> {
+    fn step(&mut self, ctx: &State) -> Result<()> {
         // Process order queue
         let mut router = OrderRouter::new(&mut self.kitchens);
         while let Some(order_id) = self.order_queue.pop_front() {
@@ -101,7 +100,7 @@ impl Simulatable for Site {
             kitchen.step(ctx);
         }
 
-        Some(())
+        Ok(())
     }
 }
 
@@ -122,7 +121,7 @@ impl Site {
         self.kitchens.insert(kitchen.id().clone(), kitchen);
     }
 
-    pub(crate) fn queue_order(&mut self, items: impl IntoIterator<Item = (BrandId, MenuItemRef)>) {
+    pub(crate) fn queue_order(&mut self, items: impl IntoIterator<Item = (BrandId, MenuItemId)>) {
         let mut order = Order {
             id: OrderId::new(),
             lines: Vec::new(),

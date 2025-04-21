@@ -2,7 +2,9 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, LazyLock};
 
 use arrow_array::RecordBatch;
-use arrow_array::builder::{FixedSizeBinaryBuilder, StringBuilder};
+use arrow_array::builder::{
+    FixedSizeBinaryBuilder, ListBuilder, StringBuilder, TimestampMillisecondBuilder,
+};
 use counter::Counter;
 use fake::Fake;
 use geo::Point;
@@ -15,7 +17,7 @@ use uuid::Uuid;
 use crate::error::Result;
 use crate::idents::{BrandId, MenuItemId, PersonId};
 use crate::models::{Brand, KitchenStation, MenuItem};
-use crate::simulation::schemas::POPULATION_DATA;
+use crate::simulation::schemas::{OBJECT_SCHEMA, POPULATION_SCHEMA};
 use crate::{Kitchen, Site};
 
 static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
@@ -23,16 +25,16 @@ static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
 
     let asian = include_str!("../../../data/menus/asian.json");
     let items: Vec<MenuItem> = serde_json::from_str(asian).unwrap();
-    let brand_name = "brands/asian".to_string();
+    let brand_name = "asian".to_string();
     brands.push(Brand {
-        id: BrandId::from_uri_ref(&brand_name).to_string(),
+        id: BrandId::from_uri_ref(&format!("brands/{}", brand_name)).to_string(),
         name: brand_name.clone(),
         description: "Asian cuisine".to_string(),
         category: "Asian".to_string(),
         items: items
             .into_iter()
             .map(|mut it| {
-                let item_name = format!("{}/items/{}", brand_name, it.name);
+                let item_name = format!("brands/{}/items/{}", brand_name, it.name);
                 it.id = MenuItemId::from_uri_ref(&item_name).to_string();
                 it
             })
@@ -41,16 +43,16 @@ static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
 
     let mexican = include_str!("../../../data/menus/mexican.json");
     let items: Vec<MenuItem> = serde_json::from_str(mexican).unwrap();
-    let brand_name = "brands/mexican".to_string();
+    let brand_name = "mexican".to_string();
     brands.push(Brand {
-        id: BrandId::from_uri_ref(&brand_name).to_string(),
+        id: BrandId::from_uri_ref(&format!("brands/{}", brand_name)).to_string(),
         name: brand_name.clone(),
         description: "Mexican cuisine".to_string(),
         category: "Mexican".to_string(),
         items: items
             .into_iter()
             .map(|mut it| {
-                let item_name = format!("{}/items/{}", brand_name, it.name);
+                let item_name = format!("brands/{}/items/{}", brand_name, it.name);
                 it.id = MenuItemId::from_uri_ref(&item_name).to_string();
                 it
             })
@@ -59,16 +61,16 @@ static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
 
     let fast_food = include_str!("../../../data/menus/fast_food.json");
     let items: Vec<MenuItem> = serde_json::from_str(fast_food).unwrap();
-    let brand_name = "brands/fast-food".to_string();
+    let brand_name = "fast-food".to_string();
     brands.push(Brand {
-        id: BrandId::from_uri_ref(&brand_name).to_string(),
+        id: BrandId::from_uri_ref(&format!("brands/{}", brand_name)).to_string(),
         name: brand_name.clone(),
         description: "Fast food".to_string(),
         category: "Fast Food".to_string(),
         items: items
             .into_iter()
             .map(|mut it| {
-                let item_name = format!("{}/items/{}", brand_name, it.name);
+                let item_name = format!("brands/{}/items/{}", brand_name, it.name);
                 it.id = MenuItemId::from_uri_ref(&item_name).to_string();
                 it
             })
@@ -77,6 +79,78 @@ static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
 
     Arc::new(brands)
 });
+
+pub enum ObjectLabel {
+    Brand,
+    MenuItem,
+    Instruction,
+    Ingredient,
+    IngredientUse,
+}
+
+impl AsRef<str> for ObjectLabel {
+    fn as_ref(&self) -> &str {
+        match self {
+            ObjectLabel::Brand => "brand",
+            ObjectLabel::MenuItem => "menu_item",
+            ObjectLabel::Instruction => "instruction",
+            ObjectLabel::Ingredient => "ingredient",
+            ObjectLabel::IngredientUse => "ingredient_use",
+        }
+    }
+}
+
+pub fn generate_objects(brands: &HashMap<BrandId, Brand>) -> Result<RecordBatch> {
+    let mut id = FixedSizeBinaryBuilder::new(16);
+    let mut parent_id = FixedSizeBinaryBuilder::new(16);
+    let mut name = ListBuilder::new(StringBuilder::new());
+    let mut label = StringBuilder::new();
+    let mut properties = StringBuilder::new();
+    let mut created_at = TimestampMillisecondBuilder::new().with_timezone("UTC");
+    let mut updated_at = TimestampMillisecondBuilder::new().with_timezone("UTC");
+
+    for (brand_id, brand) in brands.iter() {
+        id.append_value(brand_id).unwrap();
+        parent_id.append_null();
+        label.append_value(ObjectLabel::Brand);
+        name.append_value([Some("brands"), Some(&brand.name)]);
+        properties.append_null();
+        created_at.append_value(chrono::Utc::now().timestamp_millis());
+        updated_at.append_null();
+
+        for item in &brand.items {
+            let item_name = format!("brands/{}/items/{}", brand.name, item.name);
+            let item_id = MenuItemId::from_uri_ref(&item_name);
+            id.append_value(item_id).unwrap();
+            parent_id.append_value(brand_id).unwrap();
+            label.append_value(ObjectLabel::MenuItem);
+            name.append_value([
+                Some("brands"),
+                Some(&brand.name),
+                Some("items"),
+                Some(&item.name),
+            ]);
+            properties.append_value(serde_json::to_string(&item).unwrap());
+            created_at.append_value(chrono::Utc::now().timestamp_millis());
+            updated_at.append_null();
+        }
+    }
+
+    let id = Arc::new(id.finish());
+    let parent_id = Arc::new(parent_id.finish());
+    let label = Arc::new(label.finish());
+    let name = Arc::new(name.finish());
+    let properties = Arc::new(properties.finish());
+    let created_at = Arc::new(created_at.finish());
+    let updated_at = Arc::new(updated_at.finish());
+
+    Ok(RecordBatch::try_new(
+        OBJECT_SCHEMA.clone(),
+        vec![
+            id, parent_id, label, name, properties, created_at, updated_at,
+        ],
+    )?)
+}
 
 pub fn generate_brands() -> Vec<Brand> {
     BRANDS.clone().as_ref().clone()
@@ -206,7 +280,7 @@ pub(crate) fn generate_population(
     let cc_numbers = Arc::new(cc_numbers.finish());
 
     let people = RecordBatch::try_new(
-        POPULATION_DATA.clone(),
+        POPULATION_SCHEMA.clone(),
         vec![ids, first_names, last_names, emails, cc_numbers],
     )?;
 
