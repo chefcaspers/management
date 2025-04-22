@@ -9,7 +9,7 @@ use indexmap::IndexSet;
 use itertools::Itertools;
 use uuid::Uuid;
 
-use crate::Site;
+use crate::SiteRunner;
 use crate::error::Result;
 use crate::idents::PersonId;
 use crate::simulation::Entity;
@@ -23,7 +23,7 @@ pub trait Location: Entity {
     }
 }
 
-impl Location for Site {
+impl Location for SiteRunner {
     fn location(&self) -> &Geometry {
         todo!()
     }

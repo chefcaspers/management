@@ -13,11 +13,11 @@ use geoarrow_schema::Dimension;
 use rand::Rng;
 use rand::distr::{Distribution, Uniform};
 
+use crate::agents::{Kitchen, SiteRunner};
 use crate::error::Result;
-use crate::idents::{BrandId, MenuItemId, PersonId};
-use crate::models::{Brand, KitchenStation, MenuItem};
+use crate::idents::{BrandId, KitchenId, MenuItemId, PersonId, SiteId, StationId};
+use crate::models::{Brand, KitchenStation, MenuItem, Site, Station};
 use crate::simulation::schemas::{OBJECT_SCHEMA, POPULATION_SCHEMA};
-use crate::{Kitchen, Site};
 
 static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
     let mut brands = Vec::new();
@@ -80,6 +80,9 @@ static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
 });
 
 pub enum ObjectLabel {
+    Site,
+    Kitchen,
+    Station,
     Brand,
     MenuItem,
     Instruction,
@@ -90,6 +93,9 @@ pub enum ObjectLabel {
 impl AsRef<str> for ObjectLabel {
     fn as_ref(&self) -> &str {
         match self {
+            ObjectLabel::Site => "site",
+            ObjectLabel::Kitchen => "kitchen",
+            ObjectLabel::Station => "station",
             ObjectLabel::Brand => "brand",
             ObjectLabel::MenuItem => "menu_item",
             ObjectLabel::Instruction => "instruction",
@@ -99,56 +105,164 @@ impl AsRef<str> for ObjectLabel {
     }
 }
 
-pub fn generate_objects(brands: &HashMap<BrandId, Brand>) -> Result<RecordBatch> {
-    let mut id = FixedSizeBinaryBuilder::new(16);
-    let mut parent_id = FixedSizeBinaryBuilder::new(16);
-    let mut name = ListBuilder::new(StringBuilder::new());
-    let mut label = StringBuilder::new();
-    let mut properties = StringBuilder::new();
-    let mut created_at = TimestampMillisecondBuilder::new().with_timezone("UTC");
-    let mut updated_at = TimestampMillisecondBuilder::new().with_timezone("UTC");
+pub struct ObjectDataBuilder {
+    id: FixedSizeBinaryBuilder,
+    parent_id: FixedSizeBinaryBuilder,
+    name: ListBuilder<StringBuilder>,
+    label: StringBuilder,
+    properties: StringBuilder,
+    created_at: TimestampMillisecondBuilder,
+    updated_at: TimestampMillisecondBuilder,
+}
 
-    for (brand_id, brand) in brands.iter() {
-        id.append_value(brand_id).unwrap();
-        parent_id.append_null();
-        label.append_value(ObjectLabel::Brand);
-        name.append_value([Some("brands"), Some(&brand.name)]);
-        properties.append_null();
-        created_at.append_value(chrono::Utc::now().timestamp_millis());
-        updated_at.append_null();
+impl Default for ObjectDataBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ObjectDataBuilder {
+    pub fn new() -> Self {
+        Self {
+            id: FixedSizeBinaryBuilder::new(16),
+            parent_id: FixedSizeBinaryBuilder::new(16),
+            name: ListBuilder::new(StringBuilder::new()),
+            label: StringBuilder::new(),
+            properties: StringBuilder::new(),
+            created_at: TimestampMillisecondBuilder::new().with_timezone("UTC"),
+            updated_at: TimestampMillisecondBuilder::new().with_timezone("UTC"),
+        }
+    }
+
+    pub fn append_brand(&mut self, brand_id: &BrandId, brand: &Brand) {
+        self.id.append_value(brand_id).unwrap();
+        self.parent_id.append_null();
+        self.label.append_value(ObjectLabel::Brand);
+        self.name.append_value([Some("brands"), Some(&brand.name)]);
+        self.properties.append_null();
+        self.created_at
+            .append_value(chrono::Utc::now().timestamp_millis());
+        self.updated_at.append_null();
 
         for item in &brand.items {
             let item_name = format!("brands/{}/items/{}", brand.name, item.name);
             let item_id = MenuItemId::from_uri_ref(&item_name);
-            id.append_value(item_id).unwrap();
-            parent_id.append_value(brand_id).unwrap();
-            label.append_value(ObjectLabel::MenuItem);
-            name.append_value([
+            self.id.append_value(item_id).unwrap();
+            self.parent_id.append_value(brand_id).unwrap();
+            self.label.append_value(ObjectLabel::MenuItem);
+            self.name.append_value([
                 Some("brands"),
                 Some(&brand.name),
                 Some("items"),
                 Some(&item.name),
             ]);
-            properties.append_value(serde_json::to_string(&item).unwrap());
-            created_at.append_value(chrono::Utc::now().timestamp_millis());
-            updated_at.append_null();
+            self.properties
+                .append_value(serde_json::to_string(&item).unwrap());
+            self.created_at
+                .append_value(chrono::Utc::now().timestamp_millis());
+            self.updated_at.append_null();
         }
     }
 
-    let id = Arc::new(id.finish());
-    let parent_id = Arc::new(parent_id.finish());
-    let label = Arc::new(label.finish());
-    let name = Arc::new(name.finish());
-    let properties = Arc::new(properties.finish());
-    let created_at = Arc::new(created_at.finish());
-    let updated_at = Arc::new(updated_at.finish());
+    pub fn append_site(&mut self, site_id: SiteId, site: &Site) {
+        self.id.append_value(site_id).unwrap();
+        self.parent_id.append_null();
+        self.label.append_value(ObjectLabel::Site);
+        self.name.append_value([Some("sites"), Some(&site.name)]);
+        self.properties
+            .append_value(serde_json::to_string(&site).unwrap());
+        self.created_at
+            .append_value(chrono::Utc::now().timestamp_millis());
+        self.updated_at.append_null();
 
-    Ok(RecordBatch::try_new(
-        OBJECT_SCHEMA.clone(),
-        vec![
-            id, parent_id, label, name, properties, created_at, updated_at,
-        ],
-    )?)
+        for idx in 0..=5 {
+            let kitchen_name = format!("kitchen-{}", idx);
+            let kitchen_id =
+                KitchenId::from_uri_ref(format!("sites/{}/kitchens/{}", site.name, kitchen_name));
+            self.id.append_value(kitchen_id).unwrap();
+            self.parent_id.append_value(site_id).unwrap();
+            self.label.append_value(ObjectLabel::Kitchen);
+            self.name.append_value([
+                Some("sites"),
+                Some(&site.name),
+                Some("kitchens"),
+                Some(&kitchen_name),
+            ]);
+            self.properties.append_null();
+            self.created_at
+                .append_value(chrono::Utc::now().timestamp_millis());
+            self.updated_at.append_null();
+
+            for station in [
+                KitchenStation::Workstation,
+                KitchenStation::Oven,
+                KitchenStation::Stove,
+            ] {
+                let station_name = station.as_str_name().to_lowercase();
+                let station_id = StationId::from_uri_ref(format!(
+                    "sites/{}/kitchens/{}/stations/{}",
+                    site.name, kitchen_name, station_name
+                ));
+                self.id.append_value(station_id).unwrap();
+                self.parent_id.append_value(kitchen_id).unwrap();
+                self.label.append_value(ObjectLabel::Station);
+                self.name.append_value([
+                    Some("sites"),
+                    Some(&site.name),
+                    Some("kitchens"),
+                    Some(&kitchen_name),
+                    Some("stations"),
+                    Some(&station_name),
+                ]);
+
+                let station_props = Station {
+                    id: Some(station_id.to_string()),
+                    name: station_name.to_string(),
+                    station_type: station as i32,
+                };
+                self.properties
+                    .append_value(serde_json::to_string(&station_props).unwrap());
+
+                self.created_at
+                    .append_value(chrono::Utc::now().timestamp_millis());
+                self.updated_at.append_null();
+            }
+        }
+    }
+
+    pub fn finish(mut self) -> Result<RecordBatch> {
+        let id = Arc::new(self.id.finish());
+        let parent_id = Arc::new(self.parent_id.finish());
+        let label = Arc::new(self.label.finish());
+        let name = Arc::new(self.name.finish());
+        let properties = Arc::new(self.properties.finish());
+        let created_at = Arc::new(self.created_at.finish());
+        let updated_at = Arc::new(self.updated_at.finish());
+
+        Ok(RecordBatch::try_new(
+            OBJECT_SCHEMA.clone(),
+            vec![
+                id, parent_id, label, name, properties, created_at, updated_at,
+            ],
+        )?)
+    }
+}
+
+pub fn generate_objects(
+    brands: &HashMap<BrandId, Brand>,
+    sites: impl IntoIterator<Item = (SiteId, Site)>,
+) -> Result<RecordBatch> {
+    let mut builder = ObjectDataBuilder::new();
+
+    for (brand_id, brand) in brands.iter() {
+        builder.append_brand(brand_id, brand);
+    }
+
+    for (site_id, site) in sites {
+        builder.append_site(site_id, &site);
+    }
+
+    builder.finish()
 }
 
 pub fn generate_brands() -> Vec<Brand> {
@@ -158,8 +272,8 @@ pub fn generate_brands() -> Vec<Brand> {
 pub fn generate_site(
     name: impl ToString,
     brands: impl IntoIterator<Item = (BrandId, Brand)>,
-) -> Site {
-    let location_name = name.to_string();
+) -> SiteRunner {
+    let site_name = name.to_string();
 
     let counters: HashMap<BrandId, Counter<KitchenStation>> = brands
         .into_iter()
@@ -175,15 +289,15 @@ pub fn generate_site(
 
     // Generate 5-10 kitchens for this location
     let num_kitchens = rand::rng().random_range(5..=10);
-    let kitchens = generate_kitchens_for_site(&location_name, &counters, num_kitchens);
+    let kitchens = generate_kitchens_for_site(&site_name, &counters, num_kitchens);
 
     // Add kitchens to the location
-    let mut location = Site::new(format!("locations/{}", location_name));
+    let mut site = SiteRunner::new(format!("sites/{}", site_name));
     for kitchen in kitchens {
-        location.add_kitchen(kitchen);
+        site.add_kitchen(kitchen);
     }
 
-    location
+    site
 }
 
 pub fn generate_kitchens_for_site(

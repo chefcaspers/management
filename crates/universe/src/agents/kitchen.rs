@@ -27,14 +27,14 @@ enum StationStatus {
 /// has cutting board, knives, and other necessary tools - or some more complex station
 /// such as a freezer, stove, or oven.
 #[derive(Clone)]
-struct Station {
+struct StationRunner {
     id: StationId,
     name: String,
     station_type: KitchenStation,
     status: StationStatus,
 }
 
-impl Entity for Station {
+impl Entity for StationRunner {
     type Id = StationId;
 
     fn id(&self) -> &Self::Id {
@@ -46,10 +46,10 @@ impl Entity for Station {
     }
 }
 
-impl Station {
+impl StationRunner {
     pub fn new(name: impl ToString, station_type: KitchenStation) -> Self {
         let name = name.to_string();
-        Station {
+        StationRunner {
             id: StationId::from_uri_ref(&name),
             name,
             station_type,
@@ -103,7 +103,7 @@ impl std::ops::Add for KitchenStats {
 pub struct Kitchen {
     id: KitchenId,
     name: String,
-    stations: Vec<Station>,
+    stations: Vec<StationRunner>,
     queue: VecDeque<OrderLine>,
     in_progress: HashMap<OrderLineId, OrderProgress>,
     completed: Vec<(OrderId, OrderLineId)>,
@@ -223,7 +223,7 @@ impl Kitchen {
     }
 
     pub fn add_station(&mut self, name: impl ToString, station_type: KitchenStation) {
-        self.stations.push(Station::new(name, station_type));
+        self.stations.push(StationRunner::new(name, station_type));
     }
 
     pub fn add_accepted_brand(&mut self, brand_id: BrandId) {
@@ -279,14 +279,14 @@ impl Kitchen {
     }
 }
 
-fn take_station(assets: &[Station], asset_type: &i32) -> Option<usize> {
+fn take_station(assets: &[StationRunner], asset_type: &i32) -> Option<usize> {
     assets.iter().position(|asset| {
         matches!(asset.status, StationStatus::Available)
             && &(asset.station_type as i32) == asset_type
     })
 }
 
-fn release_station(assets: &mut Vec<Station>, asset_type: &i32, recipe_id: &OrderLineId) {
+fn release_station(assets: &mut Vec<StationRunner>, asset_type: &i32, recipe_id: &OrderLineId) {
     for asset in assets {
         if &(asset.station_type as i32) == asset_type {
             if let StationStatus::InUse(id) = &asset.status {
@@ -302,7 +302,7 @@ fn release_station(assets: &mut Vec<Station>, asset_type: &i32, recipe_id: &Orde
 #[cfg(test)]
 mod tests {
     use crate::{
-        agents::Site,
+        agents::SiteRunner,
         models::{Brand, Instruction, MenuItem},
     };
 
@@ -345,7 +345,7 @@ mod tests {
         kitchen.add_station("station-1".to_string(), KitchenStation::Workstation);
         kitchen.add_accepted_brand(brand.0);
 
-        let mut site = Site::new("some-site");
+        let mut site = SiteRunner::new("some-site");
         site.add_kitchen(kitchen);
 
         site.queue_order(Some((

@@ -55,6 +55,23 @@ const PACKAGE: &'static str = "caspers.core.v1";
 fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.Kitchen".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.Kitchen".into() }}
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Station {
+    /// Unique identifier for the station
+    #[prost(string, optional, tag="1")]
+    pub id: ::core::option::Option<::prost::alloc::string::String>,
+    /// Name of the station
+    #[prost(string, tag="2")]
+    pub name: ::prost::alloc::string::String,
+    /// Type of station
+    #[prost(enumeration="KitchenStation", tag="3")]
+    pub station_type: i32,
+}
+impl ::prost::Name for Station {
+const NAME: &'static str = "Station";
+const PACKAGE: &'static str = "caspers.core.v1";
+fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.Station".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.Station".into() }}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Ingredient {
     #[prost(string, tag="1")]
     pub id: ::prost::alloc::string::String,

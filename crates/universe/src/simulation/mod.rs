@@ -4,7 +4,7 @@ use chrono::{DateTime, Duration, Utc};
 use itertools::Itertools;
 
 use crate::KitchenStats;
-use crate::agents::Site;
+use crate::agents::SiteRunner;
 use crate::error::Result;
 use crate::idents::{SiteId, TypedId};
 
@@ -52,7 +52,7 @@ pub struct Simulation {
     state: State,
 
     /// all ghost kitchen sites.
-    sites: HashMap<SiteId, Site>,
+    sites: HashMap<SiteId, SiteRunner>,
 }
 
 impl Simulation {

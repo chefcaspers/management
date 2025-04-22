@@ -58,7 +58,7 @@ pub struct SiteStats {
     pub queue_length: usize,
 }
 
-pub struct Site {
+pub struct SiteRunner {
     id: SiteId,
     name: String,
 
@@ -75,7 +75,7 @@ pub struct Site {
     order_lines: HashMap<OrderLineId, OrderLine>,
 }
 
-impl Entity for Site {
+impl Entity for SiteRunner {
     type Id = SiteId;
 
     fn id(&self) -> &Self::Id {
@@ -87,7 +87,7 @@ impl Entity for Site {
     }
 }
 
-impl Simulatable for Site {
+impl Simulatable for SiteRunner {
     fn step(&mut self, ctx: &State) -> Result<()> {
         // Process order queue
         let mut router = OrderRouter::new(&mut self.kitchens);
@@ -109,10 +109,10 @@ impl Simulatable for Site {
     }
 }
 
-impl Site {
+impl SiteRunner {
     pub fn new(name: impl ToString) -> Self {
         let name = name.to_string();
-        Site {
+        SiteRunner {
             id: SiteId::from_uri_ref(&name),
             name,
             kitchens: HashMap::new(),

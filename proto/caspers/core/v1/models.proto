@@ -19,13 +19,13 @@ message Site {
   ];
 
   double latitude = 3 [
-    (buf.validate.field).double.gte = -90,
-    (buf.validate.field).double.lte = 90
+    (buf.validate.field).double.gte = -90.0,
+    (buf.validate.field).double.lte = 90.0
   ];
 
   double longitude = 4 [
-    (buf.validate.field).double.gte = -180,
-    (buf.validate.field).double.lte = 180
+    (buf.validate.field).double.gte = -180.0,
+    (buf.validate.field).double.lte = 180.0
   ];
 
   // City of the location
@@ -68,6 +68,29 @@ message Kitchen {
     (buf.validate.field).string.min_len = 3,
     (buf.validate.field).string.max_len = 255
   ];
+}
+
+enum KitchenStation {
+  KITCHEN_STATION_UNSPECIFIED = 0;
+  KITCHEN_STATION_WORKSTATION = 1;
+  KITCHEN_STATION_STOVE = 2;
+  KITCHEN_STATION_OVEN = 3;
+}
+
+message Station {
+  // Unique identifier for the station
+  optional string id = 1 [(buf.validate.field).string.uuid = true];
+
+  // Name of the station
+  string name = 2 [
+    (buf.validate.field).string.min_len = 3,
+    (buf.validate.field).string.max_len = 255
+  ];
+
+  // Type of station
+  KitchenStation station_type = 3 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
 }
 
 message Ingredient {
@@ -159,13 +182,6 @@ message MenuItem {
 message IngredientQuantity {
   string ingredient_ref = 1 [(buf.validate.field).string.uri_ref = true];
   string quantity = 2 [(buf.validate.field).string.min_len = 1];
-}
-
-enum KitchenStation {
-  KITCHEN_STATION_UNSPECIFIED = 0;
-  KITCHEN_STATION_WORKSTATION = 1;
-  KITCHEN_STATION_STOVE = 2;
-  KITCHEN_STATION_OVEN = 3;
 }
 
 // An instruction describes a step in the preparation of a menu item.
