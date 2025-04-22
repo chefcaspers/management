@@ -131,7 +131,7 @@ message MenuItem {
   ];
 
   // URL to an image representing the menu item
-  string image_url = 5 [(buf.validate.field).string.uri = true];
+  optional string image_url = 5 [(buf.validate.field).string.uri = true];
 
   // Ingredients required to prepare the menu item
   repeated IngredientQuantity ingredients = 6 [

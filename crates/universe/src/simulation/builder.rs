@@ -69,13 +69,13 @@ impl SimulationBuilder {
             .brands
             .into_iter()
             .map(|brand| {
-                let brand_id = uuid::Uuid::try_parse(&brand.id)?.into();
+                let brand_id = BrandId::from_uri_ref(format!("brands/{}", brand.name));
                 Ok::<_, Box<dyn std::error::Error>>((brand_id, brand))
             })
             .try_collect()?;
 
         let sites = Some(generate_site("site-1", brands.clone()))
-            .map(|site| (site.id().clone(), site))
+            .map(|site| (*site.id(), site))
             .into_iter()
             .collect();
 

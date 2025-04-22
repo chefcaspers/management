@@ -97,7 +97,7 @@ impl State {
         selected_items
     }
 
-    pub(crate) fn orders_for_location(
+    pub(crate) fn orders_for_site(
         &self,
         _location_id: &SiteId,
     ) -> impl Iterator<Item = Vec<(BrandId, MenuItemRef)>> {

@@ -282,6 +282,6 @@ fn lookup_index(batch: &RecordBatch) -> Result<IndexSet<PersonId>> {
         .column(0)
         .as_fixed_size_binary()
         .iter()
-        .filter_map(|data| data.and_then(|data| Some(PersonId(Uuid::from_slice(data).unwrap()))))
+        .filter_map(|data| data.map(|data| PersonId(Uuid::from_slice(data).unwrap())))
         .collect())
 }

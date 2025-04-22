@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, Duration, Utc};
 use itertools::Itertools;
 
+use crate::KitchenStats;
 use crate::agents::Site;
 use crate::error::Result;
 use crate::idents::{SiteId, TypedId};
@@ -56,9 +57,9 @@ pub struct Simulation {
 
 impl Simulation {
     /// Advance the simulation by one time step
-    fn step(&mut self) {
+    fn step(&mut self) -> Result<()> {
         for site in self.sites.values_mut() {
-            let orders = self.state.orders_for_location(site.id()).collect_vec();
+            let orders = self.state.orders_for_site(site.id()).collect_vec();
             for items in orders {
                 site.queue_order(
                     items.into_iter().map(|(order, item)| {
@@ -66,17 +67,27 @@ impl Simulation {
                     }),
                 );
             }
-            site.step(&self.state);
+            site.step(&self.state)?;
         }
         self.state.step();
+        Ok(())
     }
 
     /// Run the simulation for a specified number of steps
     pub fn run(&mut self, steps: usize) -> Result<()> {
         for _ in 0..steps {
-            self.step();
+            self.step()?;
         }
         Ok(())
+    }
+
+    fn snapshot(&self) {
+        let total_kitchen_stats: KitchenStats = self
+            .sites
+            .values()
+            .map(|site| site.total_kitchen_stats())
+            .fold(KitchenStats::default(), |acc, stats| acc + stats);
+        println!("{total_kitchen_stats:#?}");
     }
 }
 
@@ -93,7 +104,10 @@ mod tests {
         }
 
         let mut simulation = simulation.build()?;
-        simulation.run(10)?;
+        for _ in 0..5 {
+            simulation.run(10)?;
+            simulation.snapshot();
+        }
 
         Ok(())
     }

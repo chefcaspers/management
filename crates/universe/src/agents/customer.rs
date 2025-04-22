@@ -60,12 +60,9 @@ impl Entity for Customer {
 
 impl Simulatable for Customer {
     fn step(&mut self, ctx: &State) -> Result<()> {
-        match self.action(ctx) {
-            Some(CustomerActions::PlaceOrder) => {
-                self.hunger += 1.0;
-                self.state = CustomerState::Waiting(ctx.current_time());
-            }
-            _ => (),
+        if let Some(CustomerActions::PlaceOrder) = self.action(ctx) {
+            self.hunger += 1.0;
+            self.state = CustomerState::Waiting(ctx.current_time());
         };
         Ok(())
     }

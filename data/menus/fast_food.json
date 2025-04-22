@@ -2,22 +2,22 @@
   {
     "name": "Classic Burger",
     "description": "A classic burger with beef patty, lettuce, and other toppings",
-    "category": "Fast Food",
+    "price": 10.99,
     "ingredients": [
       {
-        "name": "ingredients/beef",
+        "ingredientRef": "ingredients/beef",
         "display_name": "Beef Patty",
         "description": "Delicious beef patty",
         "quantity": "130g"
       },
       {
-        "name": "ingredients/lettuce",
+        "ingredientRef": "ingredients/lettuce",
         "display_name": "Lettuce",
         "description": "Crunchy lettuce leaves",
         "quantity": "50g"
       },
       {
-        "name": "ingredients/bun",
+        "ingredientRef": "ingredients/bun",
         "display_name": "Burger Bun",
         "description": "Soft burger bun",
         "quantity": "1"
@@ -47,22 +47,22 @@
   {
     "name": "Egg Salad Sandwich",
     "description": "Creamy egg salad served between slices of bread.",
-    "category": "Fast Food",
+    "price": 8.99,
     "ingredients": [
       {
-        "name": "ingredients/egg",
+        "ingredientRef": "ingredients/egg",
         "display_name": "Egg",
         "description": "Boiled eggs",
         "quantity": "2"
       },
       {
-        "name": "ingredients/bread",
+        "ingredientRef": "ingredients/bread",
         "display_name": "Bread",
         "description": "Sliced sandwich bread",
         "quantity": "2 slices"
       },
       {
-        "name": "ingredients/lettuce",
+        "ingredientRef": "ingredients/lettuce",
         "display_name": "Lettuce",
         "description": "Crisp lettuce leaves",
         "quantity": "30g"

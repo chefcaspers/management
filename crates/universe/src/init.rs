@@ -12,7 +12,6 @@ use geoarrow::array::{PointArray, PointBuilder};
 use geoarrow_schema::Dimension;
 use rand::Rng;
 use rand::distr::{Distribution, Uniform};
-use uuid::Uuid;
 
 use crate::error::Result;
 use crate::idents::{BrandId, MenuItemId, PersonId};
@@ -27,7 +26,7 @@ static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
     let items: Vec<MenuItem> = serde_json::from_str(asian).unwrap();
     let brand_name = "asian".to_string();
     brands.push(Brand {
-        id: BrandId::from_uri_ref(&format!("brands/{}", brand_name)).to_string(),
+        id: Some(BrandId::from_uri_ref(&format!("brands/{}", brand_name)).to_string()),
         name: brand_name.clone(),
         description: "Asian cuisine".to_string(),
         category: "Asian".to_string(),
@@ -45,7 +44,7 @@ static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
     let items: Vec<MenuItem> = serde_json::from_str(mexican).unwrap();
     let brand_name = "mexican".to_string();
     brands.push(Brand {
-        id: BrandId::from_uri_ref(&format!("brands/{}", brand_name)).to_string(),
+        id: Some(BrandId::from_uri_ref(&format!("brands/{}", brand_name)).to_string()),
         name: brand_name.clone(),
         description: "Mexican cuisine".to_string(),
         category: "Mexican".to_string(),
@@ -63,7 +62,7 @@ static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
     let items: Vec<MenuItem> = serde_json::from_str(fast_food).unwrap();
     let brand_name = "fast-food".to_string();
     brands.push(Brand {
-        id: BrandId::from_uri_ref(&format!("brands/{}", brand_name)).to_string(),
+        id: Some(BrandId::from_uri_ref(&format!("brands/{}", brand_name)).to_string()),
         name: brand_name.clone(),
         description: "Fast food".to_string(),
         category: "Fast Food".to_string(),
@@ -164,13 +163,13 @@ pub fn generate_site(
 
     let counters: HashMap<BrandId, Counter<KitchenStation>> = brands
         .into_iter()
-        .map(|(_id, brand)| {
+        .map(|(id, brand)| {
             let stations = brand
                 .items
                 .iter()
                 .flat_map(|it| it.instructions.iter().map(|step| step.required_station()))
                 .collect();
-            (Uuid::try_parse(&brand.id).unwrap().into(), stations)
+            (id, stations)
         })
         .collect();
 
@@ -209,7 +208,7 @@ pub fn generate_kitchens_for_site(
 
         // Add the brands to the kitchen
         for brand_id in &selected_brands {
-            kitchen.add_accepted_brand(brand_id.clone());
+            kitchen.add_accepted_brand(*brand_id);
         }
 
         // Calculate the required stations for this kitchen based on selected brands
@@ -266,7 +265,7 @@ pub(crate) fn generate_population(
 
     for _ in 0..n_people {
         let id = PersonId::new();
-        ids.append_value(&id)?;
+        ids.append_value(id)?;
         first_names.append_value(gen_first_name.fake_with_rng::<String, _>(&mut rng));
         last_names.append_value(gen_last_name.fake_with_rng::<String, _>(&mut rng));
         emails.append_value(gen_email.fake_with_rng::<String, _>(&mut rng));

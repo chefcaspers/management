@@ -28,7 +28,7 @@ enum VendorDataError {
 
 pub(crate) struct VendorData {
     pub brands: RecordBatch,
-    recipes: RecordBatch,
+    // recipes: RecordBatch,
     brand_slices: HashMap<BrandId, (usize, usize)>,
     menu_items: Arc<DashMap<MenuItemId, MenuItem>>,
 }
@@ -47,9 +47,7 @@ impl VendorData {
         {
             if let Some(id) = brand_id {
                 let typed: BrandId = Uuid::from_slice(id)?.into();
-                if !brand_slices.contains_key(&typed) {
-                    brand_slices.insert(typed, Vec::new());
-                }
+                brand_slices.entry(typed).or_insert_with(Vec::new);
                 brand_slices.get_mut(&typed).unwrap().push(idx);
             }
         }
@@ -59,24 +57,23 @@ impl VendorData {
             .map(|(id, mut indices)| {
                 indices.sort();
                 // safety: we always push at least one item
-                (id, (indices.iter().min().unwrap().clone(), indices.len()))
+                (id, (*indices.iter().min().unwrap(), indices.len()))
             })
             .collect();
 
         Ok(Self {
             brands,
-            recipes: RecordBatch::new_empty(crate::simulation::schemas::BRAND_SCHEMA.clone()),
+            // recipes: RecordBatch::new_empty(crate::simulation::schemas::BRAND_SCHEMA.clone()),
             brand_slices,
             menu_items: Arc::new(DashMap::new()),
         })
     }
 
     pub(crate) fn brand(&self, brand_id: &BrandId) -> Result<BrandData> {
-        let (offset, length) = self
+        let (offset, length) = *self
             .brand_slices
             .get(brand_id)
-            .ok_or(VendorDataError::BrandNotFound)?
-            .clone();
+            .ok_or(VendorDataError::BrandNotFound)?;
         Ok(BrandData {
             data: self.brands.slice(offset, length),
             menu_items: HashMap::new(),
@@ -105,20 +102,18 @@ impl VendorData {
 
         for (index, item_ids) in ids.iter().zip(parent_ids.iter()).enumerate() {
             if let (Some(id), Some(parent_id)) = item_ids {
-                if AsRef::<[u8]>::as_ref(&item_id.0) == parent_id {
-                    if AsRef::<[u8]>::as_ref(&item_id.1) == id {
-                        let raw = self
-                            .brands
-                            .column_by_name("properties")
-                            .ok_or(VendorDataError::ColumnNotFound("properties"))?
-                            .as_string::<i32>();
-                        let value = raw.value(index);
-                        let item = serde_json::from_str(value)?;
-                        let properties: MenuItem = serde_json::from_str(item)?;
-                        self.menu_items
-                            .insert(item_id.1.clone(), properties.clone());
-                        return Ok(self.menu_items.get(&item_id.1).unwrap());
-                    }
+                if AsRef::<[u8]>::as_ref(&item_id.0) == parent_id
+                    && AsRef::<[u8]>::as_ref(&item_id.1) == id
+                {
+                    let raw = self
+                        .brands
+                        .column_by_name("properties")
+                        .ok_or(VendorDataError::ColumnNotFound("properties"))?
+                        .as_string::<i32>();
+                    let value = raw.value(index);
+                    let properties: MenuItem = serde_json::from_str(value)?;
+                    self.menu_items.insert(item_id.1, properties.clone());
+                    return Ok(self.menu_items.get(&item_id.1).unwrap());
                 }
             }
         }
@@ -130,39 +125,4 @@ impl VendorData {
 pub struct BrandData {
     data: RecordBatch,
     menu_items: HashMap<MenuItemId, MenuItem>,
-}
-
-#[cfg(test)]
-mod tests {
-    use std::collections::HashMap;
-
-    use arrow_cast::pretty::print_batches;
-    use itertools::Itertools;
-
-    use super::*;
-
-    #[test]
-    fn test_brand_slice() {
-        let brands: HashMap<BrandId, _> = crate::init::generate_brands()
-            .into_iter()
-            .map(|brand| {
-                let brand_id = uuid::Uuid::try_parse(&brand.id)?.into();
-                Ok::<_, Box<dyn std::error::Error>>((brand_id, brand))
-            })
-            .try_collect()
-            .unwrap();
-
-        let objects = crate::init::generate_objects(&brands).unwrap();
-
-        let data = VendorData::try_new(objects).unwrap();
-
-        for brand_id in brands.keys() {
-            let result = data.brand(brand_id).unwrap();
-            let batch = result.data.project(&[0, 1, 2, 3]).unwrap();
-            print_batches(&[batch]).unwrap();
-        }
-
-        let batch = data.brands.project(&[0, 1, 2, 3]).unwrap();
-        print_batches(&[batch]).unwrap();
-    }
 }

@@ -86,15 +86,15 @@ fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.Ingredient".
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Brand {
     #[prost(string, tag="1")]
-    pub id: ::prost::alloc::string::String,
-    #[prost(string, tag="2")]
     pub name: ::prost::alloc::string::String,
-    #[prost(string, tag="3")]
+    #[prost(string, tag="2")]
     pub description: ::prost::alloc::string::String,
-    #[prost(string, tag="4")]
+    #[prost(string, tag="3")]
     pub category: ::prost::alloc::string::String,
-    #[prost(message, repeated, tag="5")]
+    #[prost(message, repeated, tag="4")]
     pub items: ::prost::alloc::vec::Vec<MenuItem>,
+    #[prost(string, optional, tag="5")]
+    pub id: ::core::option::Option<::prost::alloc::string::String>,
 }
 impl ::prost::Name for Brand {
 const NAME: &'static str = "Brand";
@@ -119,8 +119,8 @@ pub struct MenuItem {
     #[prost(double, tag="4")]
     pub price: f64,
     /// URL to an image representing the menu item
-    #[prost(string, tag="5")]
-    pub image_url: ::prost::alloc::string::String,
+    #[prost(string, optional, tag="5")]
+    pub image_url: ::core::option::Option<::prost::alloc::string::String>,
     /// Ingredients required to prepare the menu item
     #[prost(message, repeated, tag="6")]
     pub ingredients: ::prost::alloc::vec::Vec<IngredientQuantity>,

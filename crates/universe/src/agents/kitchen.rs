@@ -1,5 +1,4 @@
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use tabled::Tabled;
@@ -29,7 +28,7 @@ enum StationStatus {
 /// such as a freezer, stove, or oven.
 #[derive(Clone)]
 struct Station {
-    pub(crate) id: StationId,
+    id: StationId,
     name: String,
     station_type: KitchenStation,
     status: StationStatus,
@@ -78,13 +77,13 @@ struct OrderProgress {
     status: OrderLineStatus,
 }
 
-#[derive(Clone, Debug, Tabled, Default)]
+#[derive(Clone, Debug, Tabled, Default, PartialEq, Eq)]
 pub struct KitchenStats {
-    queued: usize,
-    in_progress: usize,
-    completed: usize,
-    idle_assets: usize,
-    total_assets: usize,
+    pub queued: usize,
+    pub in_progress: usize,
+    pub completed: usize,
+    pub idle_stations: usize,
+    pub total_stations: usize,
 }
 
 impl std::ops::Add for KitchenStats {
@@ -95,8 +94,8 @@ impl std::ops::Add for KitchenStats {
             queued: self.queued + other.queued,
             in_progress: self.in_progress + other.in_progress,
             completed: self.completed + other.completed,
-            idle_assets: self.idle_assets + other.idle_assets,
-            total_assets: self.total_assets + other.total_assets,
+            idle_stations: self.idle_stations + other.idle_stations,
+            total_stations: self.total_stations + other.total_stations,
         }
     }
 }
@@ -108,7 +107,6 @@ pub struct Kitchen {
     queue: VecDeque<OrderLine>,
     in_progress: HashMap<OrderLineId, OrderProgress>,
     completed: Vec<(OrderId, OrderLineId)>,
-    simulation_time: Duration,
     accepted_brands: HashSet<BrandId>,
 }
 
@@ -126,9 +124,6 @@ impl Entity for Kitchen {
 
 impl Simulatable for Kitchen {
     fn step(&mut self, ctx: &State) -> Result<()> {
-        let time_step = ctx.time_step();
-        self.simulation_time += time_step;
-
         // Try to start new recipes if possible
         while self.start_order_line(ctx)? {}
 
@@ -219,7 +214,6 @@ impl Kitchen {
             queue: VecDeque::new(),
             in_progress: HashMap::new(),
             completed: Vec::new(),
-            simulation_time: Duration::from_secs(0),
             accepted_brands: HashSet::new(),
         }
     }
@@ -275,12 +269,12 @@ impl Kitchen {
             queued: self.queue.len(),
             in_progress: self.in_progress.len(),
             completed: self.completed.len(),
-            idle_assets: self
+            idle_stations: self
                 .stations
                 .iter()
                 .filter(|a| matches!(a.status, StationStatus::Available))
                 .count(),
-            total_assets: self.stations.len(),
+            total_stations: self.stations.len(),
         }
     }
 }
@@ -301,6 +295,92 @@ fn release_station(assets: &mut Vec<Station>, asset_type: &i32, recipe_id: &Orde
                     break;
                 }
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        agents::Site,
+        models::{Brand, Instruction, MenuItem},
+    };
+
+    use super::*;
+
+    fn dummy_brand() -> (BrandId, Brand) {
+        let id = BrandId::from_uri_ref("brands/dummy");
+        let brand = Brand {
+            id: Some(id.to_string()),
+            name: "dummy".to_string(),
+            description: "Dummy Brand Description".to_string(),
+            category: "dummy".to_string(),
+            items: vec![MenuItem {
+                id: MenuItemId::from_uri_ref("brands/dummy/items/dummy").to_string(),
+                name: "dummy".to_string(),
+                description: "Dummy Item Description".to_string(),
+                price: 10.0,
+                image_url: None,
+                ingredients: vec![],
+                instructions: vec![Instruction {
+                    step: "step".to_string(),
+                    description: "description".to_string(),
+                    required_station: KitchenStation::Workstation as i32,
+                    expected_duration: Some(pbjson_types::Duration {
+                        seconds: 110,
+                        nanos: 0,
+                    }),
+                }],
+            }],
+        };
+        (id, brand)
+    }
+
+    #[test]
+    fn test_kitchen_stats() {
+        let brand = dummy_brand();
+        let mut state = State::try_new(vec![brand.clone()]).unwrap();
+
+        let mut kitchen = Kitchen::new("some-kitchen");
+        kitchen.add_station("station-1".to_string(), KitchenStation::Workstation);
+        kitchen.add_accepted_brand(brand.0);
+
+        let mut site = Site::new("some-site");
+        site.add_kitchen(kitchen);
+
+        site.queue_order(Some((
+            brand.0,
+            uuid::Uuid::parse_str(&brand.1.items[0].id).unwrap().into(),
+        )));
+
+        let expected_stats = [
+            KitchenStats {
+                queued: 0,
+                in_progress: 0,
+                completed: 0,
+                idle_stations: 1,
+                total_stations: 1,
+            },
+            KitchenStats {
+                queued: 0,
+                in_progress: 1,
+                completed: 0,
+                idle_stations: 0,
+                total_stations: 1,
+            },
+            KitchenStats {
+                queued: 0,
+                in_progress: 0,
+                completed: 1,
+                idle_stations: 1,
+                total_stations: 1,
+            },
+        ];
+
+        for stats in expected_stats {
+            assert_eq!(site.kitchen_stats().next().unwrap(), stats);
+            site.step(&state).unwrap();
+            state.step();
         }
     }
 }

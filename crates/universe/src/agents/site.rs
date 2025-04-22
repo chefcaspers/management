@@ -2,6 +2,7 @@ use std::collections::{HashMap, VecDeque};
 
 use counter::Counter;
 use itertools::Itertools;
+use tabled::Tabled;
 
 use super::kitchen::{Kitchen, KitchenStats};
 use crate::idents::*;
@@ -52,9 +53,9 @@ impl<'a> OrderRouter<'a> {
     }
 }
 
-pub struct SiteState {
-    n_kitchens: usize,
-    n_kitchens_idle: usize,
+#[derive(Clone, Debug, Tabled, Default, PartialEq, Eq)]
+pub struct SiteStats {
+    pub queue_length: usize,
 }
 
 pub struct Site {
@@ -97,7 +98,7 @@ impl Simulatable for Site {
         }
 
         for kitchen in self.kitchens.values_mut() {
-            kitchen.step(ctx);
+            kitchen.step(ctx)?;
         }
 
         Ok(())
@@ -117,8 +118,14 @@ impl Site {
         }
     }
 
+    pub fn snapshot(&self) {
+        for kitchen in self.kitchens.values() {
+            println!("{:?}", kitchen.stats());
+        }
+    }
+
     pub fn add_kitchen(&mut self, kitchen: Kitchen) {
-        self.kitchens.insert(kitchen.id().clone(), kitchen);
+        self.kitchens.insert(*kitchen.id(), kitchen);
     }
 
     pub(crate) fn queue_order(&mut self, items: impl IntoIterator<Item = (BrandId, MenuItemId)>) {
@@ -141,17 +148,18 @@ impl Site {
         self.orders.insert(order.id, order);
     }
 
-    pub fn kitchen_stats(&self) -> Vec<KitchenStats> {
-        self.kitchens
-            .values()
-            .map(|kitchen| kitchen.stats())
-            .collect()
+    pub fn stats(&self) -> SiteStats {
+        SiteStats {
+            queue_length: self.order_queue.len(),
+        }
+    }
+
+    pub fn kitchen_stats(&self) -> impl Iterator<Item = KitchenStats> {
+        self.kitchens.values().map(|kitchen| kitchen.stats())
     }
 
     pub fn total_kitchen_stats(&self) -> KitchenStats {
-        self.kitchens
-            .values()
-            .map(|kitchen| kitchen.stats())
+        self.kitchen_stats()
             .fold(KitchenStats::default(), |acc, stats| acc + stats)
     }
 }

@@ -6,31 +6,31 @@
     "price": 15.99,
     "ingredients": [
       {
-        "name": "ingredients/beef",
+        "ingredientRef": "ingredients/beef",
         "display_name": "Beef",
         "description": "Thinly sliced flank steak",
         "quantity": "150g"
       },
       {
-        "name": "ingredients/broccoli",
+        "ingredientRef": "ingredients/broccoli",
         "display_name": "Broccoli",
         "description": "Fresh broccoli florets",
         "quantity": "100g"
       },
       {
-        "name": "ingredients/soy_sauce",
+        "ingredientRef": "ingredients/soy_sauce",
         "display_name": "Soy Sauce",
         "description": "Salty, fermented soy sauce",
         "quantity": "2 tbsp"
       },
       {
-        "name": "ingredients/garlic",
+        "ingredientRef": "ingredients/garlic",
         "display_name": "Garlic",
         "description": "Minced garlic cloves",
         "quantity": "2 cloves"
       },
       {
-        "name": "ingredients/rice",
+        "ingredientRef": "ingredients/rice",
         "display_name": "Steamed Rice",
         "description": "Cooked white rice",
         "quantity": "150g"
@@ -70,31 +70,31 @@
     "price": 15.99,
     "ingredients": [
       {
-        "name": "ingredients/rice",
+        "ingredientRef": "ingredients/rice",
         "display_name": "Cooked Rice",
         "description": "Day-old white rice",
         "quantity": "180g"
       },
       {
-        "name": "ingredients/egg",
+        "ingredientRef": "ingredients/egg",
         "display_name": "Egg",
         "description": "Beaten egg",
         "quantity": "1"
       },
       {
-        "name": "ingredients/soy_sauce",
+        "ingredientRef": "ingredients/soy_sauce",
         "display_name": "Soy Sauce",
         "description": "Salty, fermented soy sauce",
         "quantity": "1.5 tbsp"
       },
       {
-        "name": "ingredients/green_onion",
+        "ingredientRef": "ingredients/green_onion",
         "display_name": "Green Onion",
         "description": "Chopped green onions",
         "quantity": "2 stalks"
       },
       {
-        "name": "ingredients/garlic",
+        "ingredientRef": "ingredients/garlic",
         "display_name": "Garlic",
         "description": "Minced garlic cloves",
         "quantity": "1 clove"
