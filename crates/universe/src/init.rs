@@ -26,7 +26,7 @@ static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
     let items: Vec<MenuItem> = serde_json::from_str(asian).unwrap();
     let brand_name = "asian".to_string();
     brands.push(Brand {
-        id: Some(BrandId::from_uri_ref(&format!("brands/{}", brand_name)).to_string()),
+        id: Some(BrandId::from_uri_ref(format!("brands/{}", brand_name)).to_string()),
         name: brand_name.clone(),
         description: "Asian cuisine".to_string(),
         category: "Asian".to_string(),
@@ -44,7 +44,7 @@ static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
     let items: Vec<MenuItem> = serde_json::from_str(mexican).unwrap();
     let brand_name = "mexican".to_string();
     brands.push(Brand {
-        id: Some(BrandId::from_uri_ref(&format!("brands/{}", brand_name)).to_string()),
+        id: Some(BrandId::from_uri_ref(format!("brands/{}", brand_name)).to_string()),
         name: brand_name.clone(),
         description: "Mexican cuisine".to_string(),
         category: "Mexican".to_string(),
@@ -62,7 +62,7 @@ static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
     let items: Vec<MenuItem> = serde_json::from_str(fast_food).unwrap();
     let brand_name = "fast-food".to_string();
     brands.push(Brand {
-        id: Some(BrandId::from_uri_ref(&format!("brands/{}", brand_name)).to_string()),
+        id: Some(BrandId::from_uri_ref(format!("brands/{}", brand_name)).to_string()),
         name: brand_name.clone(),
         description: "Fast food".to_string(),
         category: "Fast Food".to_string(),

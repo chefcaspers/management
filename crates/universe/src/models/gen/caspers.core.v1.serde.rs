@@ -780,187 +780,6 @@ impl<'de> serde::Deserialize<'de> for KitchenStation {
         deserializer.deserialize_any(GeneratedVisitor)
     }
 }
-impl serde::Serialize for Location {
-    #[allow(deprecated)]
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeStruct;
-        let mut len = 0;
-        if !self.id.is_empty() {
-            len += 1;
-        }
-        if !self.name.is_empty() {
-            len += 1;
-        }
-        if !self.city.is_empty() {
-            len += 1;
-        }
-        if !self.state.is_empty() {
-            len += 1;
-        }
-        if !self.zip_code.is_empty() {
-            len += 1;
-        }
-        if !self.street.is_empty() {
-            len += 1;
-        }
-        let mut struct_ser = serializer.serialize_struct("caspers.core.v1.Location", len)?;
-        if !self.id.is_empty() {
-            struct_ser.serialize_field("id", &self.id)?;
-        }
-        if !self.name.is_empty() {
-            struct_ser.serialize_field("name", &self.name)?;
-        }
-        if !self.city.is_empty() {
-            struct_ser.serialize_field("city", &self.city)?;
-        }
-        if !self.state.is_empty() {
-            struct_ser.serialize_field("state", &self.state)?;
-        }
-        if !self.zip_code.is_empty() {
-            struct_ser.serialize_field("zipCode", &self.zip_code)?;
-        }
-        if !self.street.is_empty() {
-            struct_ser.serialize_field("street", &self.street)?;
-        }
-        struct_ser.end()
-    }
-}
-impl<'de> serde::Deserialize<'de> for Location {
-    #[allow(deprecated)]
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        const FIELDS: &[&str] = &[
-            "id",
-            "name",
-            "city",
-            "state",
-            "zip_code",
-            "zipCode",
-            "street",
-        ];
-
-        #[allow(clippy::enum_variant_names)]
-        enum GeneratedField {
-            Id,
-            Name,
-            City,
-            State,
-            ZipCode,
-            Street,
-            __SkipField__,
-        }
-        impl<'de> serde::Deserialize<'de> for GeneratedField {
-            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
-            where
-                D: serde::Deserializer<'de>,
-            {
-                struct GeneratedVisitor;
-
-                impl serde::de::Visitor<'_> for GeneratedVisitor {
-                    type Value = GeneratedField;
-
-                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                        write!(formatter, "expected one of: {:?}", &FIELDS)
-                    }
-
-                    #[allow(unused_variables)]
-                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
-                    where
-                        E: serde::de::Error,
-                    {
-                        match value {
-                            "id" => Ok(GeneratedField::Id),
-                            "name" => Ok(GeneratedField::Name),
-                            "city" => Ok(GeneratedField::City),
-                            "state" => Ok(GeneratedField::State),
-                            "zipCode" | "zip_code" => Ok(GeneratedField::ZipCode),
-                            "street" => Ok(GeneratedField::Street),
-                            _ => Ok(GeneratedField::__SkipField__),
-                        }
-                    }
-                }
-                deserializer.deserialize_identifier(GeneratedVisitor)
-            }
-        }
-        struct GeneratedVisitor;
-        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
-            type Value = Location;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                formatter.write_str("struct caspers.core.v1.Location")
-            }
-
-            fn visit_map<V>(self, mut map_: V) -> std::result::Result<Location, V::Error>
-                where
-                    V: serde::de::MapAccess<'de>,
-            {
-                let mut id__ = None;
-                let mut name__ = None;
-                let mut city__ = None;
-                let mut state__ = None;
-                let mut zip_code__ = None;
-                let mut street__ = None;
-                while let Some(k) = map_.next_key()? {
-                    match k {
-                        GeneratedField::Id => {
-                            if id__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("id"));
-                            }
-                            id__ = Some(map_.next_value()?);
-                        }
-                        GeneratedField::Name => {
-                            if name__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("name"));
-                            }
-                            name__ = Some(map_.next_value()?);
-                        }
-                        GeneratedField::City => {
-                            if city__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("city"));
-                            }
-                            city__ = Some(map_.next_value()?);
-                        }
-                        GeneratedField::State => {
-                            if state__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("state"));
-                            }
-                            state__ = Some(map_.next_value()?);
-                        }
-                        GeneratedField::ZipCode => {
-                            if zip_code__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("zipCode"));
-                            }
-                            zip_code__ = Some(map_.next_value()?);
-                        }
-                        GeneratedField::Street => {
-                            if street__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("street"));
-                            }
-                            street__ = Some(map_.next_value()?);
-                        }
-                        GeneratedField::__SkipField__ => {
-                            let _ = map_.next_value::<serde::de::IgnoredAny>()?;
-                        }
-                    }
-                }
-                Ok(Location {
-                    id: id__.unwrap_or_default(),
-                    name: name__.unwrap_or_default(),
-                    city: city__.unwrap_or_default(),
-                    state: state__.unwrap_or_default(),
-                    zip_code: zip_code__.unwrap_or_default(),
-                    street: street__.unwrap_or_default(),
-                })
-            }
-        }
-        deserializer.deserialize_struct("caspers.core.v1.Location", FIELDS, GeneratedVisitor)
-    }
-}
 impl serde::Serialize for MenuItem {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -1159,6 +978,156 @@ impl<'de> serde::Deserialize<'de> for MenuItem {
             }
         }
         deserializer.deserialize_struct("caspers.core.v1.MenuItem", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for Site {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.id.is_empty() {
+            len += 1;
+        }
+        if !self.name.is_empty() {
+            len += 1;
+        }
+        if self.latitude != 0. {
+            len += 1;
+        }
+        if self.longitude != 0. {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("caspers.core.v1.Site", len)?;
+        if !self.id.is_empty() {
+            struct_ser.serialize_field("id", &self.id)?;
+        }
+        if !self.name.is_empty() {
+            struct_ser.serialize_field("name", &self.name)?;
+        }
+        if self.latitude != 0. {
+            struct_ser.serialize_field("latitude", &self.latitude)?;
+        }
+        if self.longitude != 0. {
+            struct_ser.serialize_field("longitude", &self.longitude)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for Site {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "id",
+            "name",
+            "latitude",
+            "longitude",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Id,
+            Name,
+            Latitude,
+            Longitude,
+            __SkipField__,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "id" => Ok(GeneratedField::Id),
+                            "name" => Ok(GeneratedField::Name),
+                            "latitude" => Ok(GeneratedField::Latitude),
+                            "longitude" => Ok(GeneratedField::Longitude),
+                            _ => Ok(GeneratedField::__SkipField__),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = Site;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct caspers.core.v1.Site")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<Site, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut id__ = None;
+                let mut name__ = None;
+                let mut latitude__ = None;
+                let mut longitude__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Id => {
+                            if id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("id"));
+                            }
+                            id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Name => {
+                            if name__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("name"));
+                            }
+                            name__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Latitude => {
+                            if latitude__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("latitude"));
+                            }
+                            latitude__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::Longitude => {
+                            if longitude__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("longitude"));
+                            }
+                            longitude__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::__SkipField__ => {
+                            let _ = map_.next_value::<serde::de::IgnoredAny>()?;
+                        }
+                    }
+                }
+                Ok(Site {
+                    id: id__.unwrap_or_default(),
+                    name: name__.unwrap_or_default(),
+                    latitude: latitude__.unwrap_or_default(),
+                    longitude: longitude__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("caspers.core.v1.Site", FIELDS, GeneratedVisitor)
     }
 }
 impl serde::Serialize for Vendor {

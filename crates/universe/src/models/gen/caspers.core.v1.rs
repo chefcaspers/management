@@ -5,30 +5,22 @@
 /// Multiple kitchens are located within each location.
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Location {
+pub struct Site {
     /// Unique identifier for the location
     #[prost(string, tag="1")]
     pub id: ::prost::alloc::string::String,
     /// Name of the location
     #[prost(string, tag="2")]
     pub name: ::prost::alloc::string::String,
-    /// City of the location
-    #[prost(string, tag="3")]
-    pub city: ::prost::alloc::string::String,
-    /// State of the location
-    #[prost(string, tag="4")]
-    pub state: ::prost::alloc::string::String,
-    /// Zip code of the location
-    #[prost(string, tag="5")]
-    pub zip_code: ::prost::alloc::string::String,
-    /// Street address of the location
-    #[prost(string, tag="6")]
-    pub street: ::prost::alloc::string::String,
+    #[prost(double, tag="3")]
+    pub latitude: f64,
+    #[prost(double, tag="4")]
+    pub longitude: f64,
 }
-impl ::prost::Name for Location {
-const NAME: &'static str = "Location";
+impl ::prost::Name for Site {
+const NAME: &'static str = "Site";
 const PACKAGE: &'static str = "caspers.core.v1";
-fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.Location".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.Location".into() }}
+fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.Site".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.Site".into() }}
 /// A company that owns and operates brands and kitchens
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]

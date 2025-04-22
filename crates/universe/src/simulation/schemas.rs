@@ -26,7 +26,7 @@ pub static OBJECT_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
     ]))
 });
 
-pub static LOCATION_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
+pub static SITE_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
     Arc::new(Schema::new(vec![
         Field::new("id", DataType::Utf8, false),
         Field::new("name", DataType::Utf8, false),

@@ -61,12 +61,16 @@ pub struct SiteStats {
 pub struct Site {
     id: SiteId,
     name: String,
+
     /// Kitchens available at this location.
     kitchens: HashMap<KitchenId, Kitchen>,
+
     /// Orders currently being processed at this location.
     orders: HashMap<OrderId, Order>,
+
     /// Orders waiting to be processed at this location.
     order_queue: VecDeque<OrderId>,
+
     /// Order lines currently being processed at this location.
     order_lines: HashMap<OrderLineId, OrderLine>,
 }
