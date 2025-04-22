@@ -4,7 +4,7 @@ use counter::Counter;
 use itertools::Itertools;
 use tabled::Tabled;
 
-use super::kitchen::{Kitchen, KitchenStats};
+use super::kitchen::{KitchenRunner, KitchenStats};
 use crate::idents::*;
 use crate::{Entity, Simulatable, State, error::Result};
 
@@ -22,13 +22,13 @@ pub struct OrderLine {
 }
 
 struct OrderRouter<'a> {
-    kitchens: &'a mut HashMap<KitchenId, Kitchen>,
+    kitchens: &'a mut HashMap<KitchenId, KitchenRunner>,
     brand_to_kitchens: HashMap<BrandId, Vec<KitchenId>>,
     submit_counter: Counter<BrandId>,
 }
 
 impl<'a> OrderRouter<'a> {
-    fn new(kitchens: &'a mut HashMap<KitchenId, Kitchen>) -> Self {
+    fn new(kitchens: &'a mut HashMap<KitchenId, KitchenRunner>) -> Self {
         let brand_to_kitchens = kitchens
             .iter()
             .flat_map(|(id, kitchen)| kitchen.accepted_brands().iter().map(|brand| (*brand, *id)))
@@ -63,7 +63,7 @@ pub struct SiteRunner {
     name: String,
 
     /// Kitchens available at this location.
-    kitchens: HashMap<KitchenId, Kitchen>,
+    kitchens: HashMap<KitchenId, KitchenRunner>,
 
     /// Orders currently being processed at this location.
     orders: HashMap<OrderId, Order>,
@@ -110,26 +110,32 @@ impl Simulatable for SiteRunner {
 }
 
 impl SiteRunner {
-    pub fn new(name: impl ToString) -> Self {
-        let name = name.to_string();
-        SiteRunner {
-            id: SiteId::from_uri_ref(&name),
-            name,
-            kitchens: HashMap::new(),
+    pub fn try_new(id: SiteId, state: &State) -> Result<Self> {
+        let kitchens = state
+            .vendors
+            .kitchens(&id)?
+            .map_ok(|(id, brands)| {
+                Ok::<_, Box<dyn std::error::Error>>((
+                    id,
+                    KitchenRunner::try_new(id, brands, state)?,
+                ))
+            })
+            .flatten()
+            .try_collect()?;
+        Ok(SiteRunner {
+            id,
+            name: "DUMMY".to_string(),
+            kitchens,
             orders: HashMap::new(),
             order_queue: VecDeque::new(),
             order_lines: HashMap::new(),
-        }
+        })
     }
 
     pub fn snapshot(&self) {
         for kitchen in self.kitchens.values() {
             println!("{:?}", kitchen.stats());
         }
-    }
-
-    pub fn add_kitchen(&mut self, kitchen: Kitchen) {
-        self.kitchens.insert(*kitchen.id(), kitchen);
     }
 
     pub(crate) fn queue_order(&mut self, items: impl IntoIterator<Item = (BrandId, MenuItemId)>) {

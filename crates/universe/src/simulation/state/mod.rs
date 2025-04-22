@@ -39,7 +39,10 @@ pub struct State {
 }
 
 impl State {
-    pub(crate) fn try_new(brands: impl IntoIterator<Item = (BrandId, Brand)>) -> Result<Self> {
+    pub(crate) fn try_new(
+        brands: impl IntoIterator<Item = (BrandId, Brand)>,
+        sites: impl IntoIterator<Item = (SiteId, Site)>,
+    ) -> Result<Self> {
         let brands: HashMap<_, _> = brands.into_iter().collect();
         let items: HashMap<_, _> = brands
             .iter()
@@ -54,21 +57,6 @@ impl State {
 
         let n_people = rand::rng().random_range(100..1000);
         let population = PopulationData::from_site((0., 0.), (1., 1.), n_people)?;
-
-        let sites = [("london", (51.518898098201326, -0.13381370382489707))]
-            .into_iter()
-            .map(|(name, loc)| {
-                (
-                    SiteId::from_uri_ref(&format!("sites/{}", name)),
-                    Site {
-                        id: SiteId::from_uri_ref(&format!("sites/{}", name)).to_string(),
-                        name: name.to_string(),
-                        latitude: loc.0,
-                        longitude: loc.1,
-                    },
-                )
-            })
-            .collect_vec();
 
         let vendors = crate::init::generate_objects(&brands, sites)?;
 

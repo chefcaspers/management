@@ -93,6 +93,8 @@ impl Simulation {
 
 #[cfg(test)]
 mod tests {
+    use arrow_cast::pretty::print_batches;
+
     use super::*;
 
     #[test_log::test]
@@ -103,11 +105,23 @@ mod tests {
             simulation.with_brand(brand);
         }
 
+        for (name, (lat, long)) in [("london", (51.518898098201326, -0.13381370382489707))] {
+            simulation.with_site(name, lat, long);
+        }
+
         let mut simulation = simulation.build()?;
         for _ in 0..5 {
             simulation.run(10)?;
             simulation.snapshot();
         }
+
+        print_batches(&[simulation
+            .state
+            .vendors
+            .brands
+            .project(&[0, 1, 2, 3])
+            .unwrap()])
+        .unwrap();
 
         Ok(())
     }

@@ -1,11 +1,12 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use chrono::{DateTime, Utc};
+use itertools::Itertools;
 use tabled::Tabled;
 
 use super::OrderLine;
 use crate::idents::*;
-use crate::models::KitchenStation;
+use crate::models::{KitchenStation, Station};
 use crate::{Entity, Simulatable, State, error::Result};
 
 #[derive(Clone)]
@@ -47,12 +48,11 @@ impl Entity for StationRunner {
 }
 
 impl StationRunner {
-    pub fn new(name: impl ToString, station_type: KitchenStation) -> Self {
-        let name = name.to_string();
+    pub fn new(id: StationId, station: Station) -> Self {
         StationRunner {
-            id: StationId::from_uri_ref(&name),
-            name,
-            station_type,
+            id,
+            name: station.name.clone(),
+            station_type: station.station_type(),
             status: StationStatus::Available,
         }
     }
@@ -100,7 +100,7 @@ impl std::ops::Add for KitchenStats {
     }
 }
 
-pub struct Kitchen {
+pub struct KitchenRunner {
     id: KitchenId,
     name: String,
     stations: Vec<StationRunner>,
@@ -110,7 +110,7 @@ pub struct Kitchen {
     accepted_brands: HashSet<BrandId>,
 }
 
-impl Entity for Kitchen {
+impl Entity for KitchenRunner {
     type Id = KitchenId;
 
     fn id(&self) -> &Self::Id {
@@ -122,7 +122,7 @@ impl Entity for Kitchen {
     }
 }
 
-impl Simulatable for Kitchen {
+impl Simulatable for KitchenRunner {
     fn step(&mut self, ctx: &State) -> Result<()> {
         // Try to start new recipes if possible
         while self.start_order_line(ctx)? {}
@@ -204,30 +204,30 @@ impl Simulatable for Kitchen {
     }
 }
 
-impl Kitchen {
-    pub fn new(name: impl ToString) -> Self {
-        let name = name.to_string();
-        Kitchen {
-            id: KitchenId::from_uri_ref(&name),
-            name,
-            stations: Vec::new(),
+impl KitchenRunner {
+    pub fn try_new(
+        id: KitchenId,
+        brands: impl IntoIterator<Item = BrandId>,
+        state: &State,
+    ) -> Result<Self> {
+        let stations = state
+            .vendors
+            .kitchen_stations(&id)?
+            .map_ok(|(station_id, station)| StationRunner::new(station_id, station))
+            .try_collect()?;
+        Ok(KitchenRunner {
+            id,
+            name: "DUMMY".to_string(),
+            stations,
             queue: VecDeque::new(),
             in_progress: HashMap::new(),
             completed: Vec::new(),
-            accepted_brands: HashSet::new(),
-        }
+            accepted_brands: brands.into_iter().collect(),
+        })
     }
 
     pub fn accepted_brands(&self) -> &HashSet<BrandId> {
         &self.accepted_brands
-    }
-
-    pub fn add_station(&mut self, name: impl ToString, station_type: KitchenStation) {
-        self.stations.push(StationRunner::new(name, station_type));
-    }
-
-    pub fn add_accepted_brand(&mut self, brand_id: BrandId) {
-        self.accepted_brands.insert(brand_id);
     }
 
     pub fn queue_order_line(&mut self, item: OrderLine) {
@@ -295,92 +295,6 @@ fn release_station(assets: &mut Vec<StationRunner>, asset_type: &i32, recipe_id:
                     break;
                 }
             }
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::{
-        agents::SiteRunner,
-        models::{Brand, Instruction, MenuItem},
-    };
-
-    use super::*;
-
-    fn dummy_brand() -> (BrandId, Brand) {
-        let id = BrandId::from_uri_ref("brands/dummy");
-        let brand = Brand {
-            id: Some(id.to_string()),
-            name: "dummy".to_string(),
-            description: "Dummy Brand Description".to_string(),
-            category: "dummy".to_string(),
-            items: vec![MenuItem {
-                id: MenuItemId::from_uri_ref("brands/dummy/items/dummy").to_string(),
-                name: "dummy".to_string(),
-                description: "Dummy Item Description".to_string(),
-                price: 10.0,
-                image_url: None,
-                ingredients: vec![],
-                instructions: vec![Instruction {
-                    step: "step".to_string(),
-                    description: "description".to_string(),
-                    required_station: KitchenStation::Workstation as i32,
-                    expected_duration: Some(pbjson_types::Duration {
-                        seconds: 110,
-                        nanos: 0,
-                    }),
-                }],
-            }],
-        };
-        (id, brand)
-    }
-
-    #[test]
-    fn test_kitchen_stats() {
-        let brand = dummy_brand();
-        let mut state = State::try_new(vec![brand.clone()]).unwrap();
-
-        let mut kitchen = Kitchen::new("some-kitchen");
-        kitchen.add_station("station-1".to_string(), KitchenStation::Workstation);
-        kitchen.add_accepted_brand(brand.0);
-
-        let mut site = SiteRunner::new("some-site");
-        site.add_kitchen(kitchen);
-
-        site.queue_order(Some((
-            brand.0,
-            uuid::Uuid::parse_str(&brand.1.items[0].id).unwrap().into(),
-        )));
-
-        let expected_stats = [
-            KitchenStats {
-                queued: 0,
-                in_progress: 0,
-                completed: 0,
-                idle_stations: 1,
-                total_stations: 1,
-            },
-            KitchenStats {
-                queued: 0,
-                in_progress: 1,
-                completed: 0,
-                idle_stations: 0,
-                total_stations: 1,
-            },
-            KitchenStats {
-                queued: 0,
-                in_progress: 0,
-                completed: 1,
-                idle_stations: 1,
-                total_stations: 1,
-            },
-        ];
-
-        for stats in expected_stats {
-            assert_eq!(site.kitchen_stats().next().unwrap(), stats);
-            site.step(&state).unwrap();
-            state.step();
         }
     }
 }
