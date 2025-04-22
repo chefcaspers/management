@@ -22,6 +22,7 @@ counter = { version = "0.6.0" }
 dashmap = { version = "6" }
 futures = { version = "0.3" }
 rand = { version = "0.9", features = ["std", "std_rng"] }
+h3o = { version = "0.8.0", features = ["geo"] }
 
 arrow-arith = { workspace = true }
 arrow-array = { workspace = true, features = ["chrono-tz"] }
@@ -50,6 +51,7 @@ geoarrow-schema = { workspace = true }
 clap = { version = "4.5.37", features = ["derive"] }
 tabled = { version = "0.18.0", features = ["std"] }
 geo = "0.30"
+geo-types = "*"
 fake = { version = "4", features = ["derive"] }
 indexmap = { version = "2.9.0" }
 

@@ -11,6 +11,7 @@ use uuid::Uuid;
 
 use crate::error::Result;
 use crate::idents::*;
+use crate::init::PopulationDataBuilder;
 use crate::models::{Brand, MenuItem, MenuItemRef, Site};
 
 mod population;
@@ -41,7 +42,7 @@ pub struct State {
 impl State {
     pub(crate) fn try_new(
         brands: impl IntoIterator<Item = (BrandId, Brand)>,
-        sites: impl IntoIterator<Item = (SiteId, Site)>,
+        sites: Vec<(SiteId, Site)>,
     ) -> Result<Self> {
         let brands: HashMap<_, _> = brands.into_iter().collect();
         let items: HashMap<_, _> = brands
@@ -55,8 +56,11 @@ impl State {
             })
             .try_collect()?;
 
-        let n_people = rand::rng().random_range(100..1000);
-        let population = PopulationData::from_site((0., 0.), (1., 1.), n_people)?;
+        let mut builder = PopulationDataBuilder::new();
+        for (_site_id, site) in &sites {
+            let n_people = rand::rng().random_range(100..1000);
+            builder.add_site(site, n_people)?;
+        }
 
         let vendors = crate::init::generate_objects(&brands, sites)?;
 
@@ -67,7 +71,7 @@ impl State {
             items: Arc::new(items),
             time_step: Duration::from_secs(60),
             time: Utc::now(),
-            population,
+            population: builder.finish()?,
             vendors: VendorData::try_new(vendors)?,
         })
     }

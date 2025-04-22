@@ -6,15 +6,18 @@ use arrow_array::builder::{
     FixedSizeBinaryBuilder, ListBuilder, StringBuilder, TimestampMillisecondBuilder,
 };
 use fake::Fake;
-use geo::Point;
-use geoarrow::array::{PointArray, PointBuilder};
+use geo::{BoundingRect, LineString, Point, Polygon};
+use geoarrow::array::PointBuilder;
 use geoarrow_schema::Dimension;
+use h3o::{LatLng, Resolution};
 use rand::distr::{Distribution, Uniform};
+use rand::rngs::ThreadRng;
 
 use crate::error::Result;
 use crate::idents::{BrandId, KitchenId, MenuItemId, PersonId, SiteId, StationId};
 use crate::models::{Brand, KitchenStation, MenuItem, Site, Station};
 use crate::simulation::schemas::{OBJECT_SCHEMA, POPULATION_SCHEMA};
+use crate::state::PopulationData;
 
 static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
     let mut brands = Vec::new();
@@ -266,59 +269,84 @@ pub fn generate_brands() -> Vec<Brand> {
     BRANDS.clone().as_ref().clone()
 }
 
-pub(crate) fn generate_population(
-    (minx, miny): (f64, f64),
-    (maxx, maxy): (f64, f64),
-    n_people: usize,
-) -> Result<(RecordBatch, PointArray)> {
-    // 16 bytes to store raw uuids
-    let mut ids = FixedSizeBinaryBuilder::with_capacity(n_people, 16);
-    let mut first_names = StringBuilder::new();
-    let mut last_names = StringBuilder::new();
-    let mut emails = StringBuilder::new();
-    let mut cc_numbers = StringBuilder::new();
+pub struct PopulationDataBuilder {
+    ids: FixedSizeBinaryBuilder,
+    first_names: StringBuilder,
+    last_names: StringBuilder,
+    emails: StringBuilder,
+    cc_numbers: StringBuilder,
 
-    let mut rng = rand::rng();
+    positions: PointBuilder,
 
-    let gen_first_name = fake::faker::name::en::FirstName();
-    let gen_last_name = fake::faker::name::en::LastName();
-    let gen_email = fake::faker::internet::en::SafeEmail();
-    let gen_cc = fake::faker::creditcard::en::CreditCardNumber();
+    rng: ThreadRng,
+}
 
-    for _ in 0..n_people {
-        let id = PersonId::new();
-        ids.append_value(id)?;
-        first_names.append_value(gen_first_name.fake_with_rng::<String, _>(&mut rng));
-        last_names.append_value(gen_last_name.fake_with_rng::<String, _>(&mut rng));
-        emails.append_value(gen_email.fake_with_rng::<String, _>(&mut rng));
-        cc_numbers.append_value(gen_cc.fake_with_rng::<String, _>(&mut rng));
+impl PopulationDataBuilder {
+    pub fn new() -> Self {
+        Self {
+            ids: FixedSizeBinaryBuilder::new(16),
+            first_names: StringBuilder::new(),
+            last_names: StringBuilder::new(),
+            emails: StringBuilder::new(),
+            cc_numbers: StringBuilder::new(),
+            positions: PointBuilder::new(Dimension::XY),
+            rng: rand::rng(),
+        }
     }
 
-    let ids = Arc::new(ids.finish());
-    let first_names = Arc::new(first_names.finish());
-    let last_names = Arc::new(last_names.finish());
-    let emails = Arc::new(emails.finish());
-    let cc_numbers = Arc::new(cc_numbers.finish());
+    pub fn add_site(&mut self, site: &Site, n_people: usize) -> Result<()> {
+        let gen_first_name = fake::faker::name::en::FirstName();
+        let gen_last_name = fake::faker::name::en::LastName();
+        let gen_email = fake::faker::internet::en::SafeEmail();
+        let gen_cc = fake::faker::creditcard::en::CreditCardNumber();
 
-    let people = RecordBatch::try_new(
-        POPULATION_SCHEMA.clone(),
-        vec![ids, first_names, last_names, emails, cc_numbers],
-    )?;
+        for _ in 0..n_people {
+            let id = PersonId::new();
+            self.ids.append_value(id)?;
+            self.first_names
+                .append_value(gen_first_name.fake_with_rng::<String, _>(&mut self.rng));
+            self.last_names
+                .append_value(gen_last_name.fake_with_rng::<String, _>(&mut self.rng));
+            self.emails
+                .append_value(gen_email.fake_with_rng::<String, _>(&mut self.rng));
+            self.cc_numbers
+                .append_value(gen_cc.fake_with_rng::<String, _>(&mut self.rng));
+        }
 
-    let x_range = Uniform::new(minx, maxx)?;
-    let y_range = Uniform::new(miny, maxy)?;
-    let positions = x_range
-        .sample_iter(rand::rng())
-        .take(n_people)
-        .zip(y_range.sample_iter(rand::rng()).take(n_people))
-        .fold(
-            PointBuilder::with_capacity(Dimension::XY, n_people),
-            |mut builder, (x, y)| {
-                builder.push_point(Some(&Point::new(x, y)));
-                builder
-            },
-        )
-        .finish();
+        let latlng = LatLng::new(site.latitude, site.longitude)?;
+        let cell_index = latlng.to_cell(Resolution::Six);
+        let boundary: LineString = cell_index.boundary().into_iter().cloned().collect();
+        let polygon = Polygon::new(boundary, Vec::new());
 
-    Ok((people, positions))
+        let bounding_rect = polygon.bounding_rect().unwrap();
+        let (maxx, maxy) = bounding_rect.max().x_y();
+        let (minx, miny) = bounding_rect.min().x_y();
+
+        let x_range = Uniform::new(minx, maxx)?;
+        let y_range = Uniform::new(miny, maxy)?;
+        x_range
+            .sample_iter(rand::rng())
+            .take(n_people)
+            .zip(y_range.sample_iter(rand::rng()).take(n_people))
+            .for_each(|(x, y)| {
+                self.positions.push_point(Some(&Point::new(x, y)));
+            });
+
+        Ok(())
+    }
+
+    pub fn finish(mut self) -> Result<PopulationData> {
+        let ids = Arc::new(self.ids.finish());
+        let first_names = Arc::new(self.first_names.finish());
+        let last_names = Arc::new(self.last_names.finish());
+        let emails = Arc::new(self.emails.finish());
+        let cc_numbers = Arc::new(self.cc_numbers.finish());
+
+        let people = RecordBatch::try_new(
+            POPULATION_SCHEMA.clone(),
+            vec![ids, first_names, last_names, emails, cc_numbers],
+        )?;
+
+        PopulationData::try_new(people, self.positions.finish())
+    }
 }

@@ -1,6 +1,5 @@
 use arrow_array::{RecordBatch, cast::AsArray};
-use geo::Centroid;
-use geo::{Geometry, Point};
+use geo::{Centroid, Geometry, Point};
 use geoarrow::array::{PointArray, PolygonArray};
 use geoarrow::trait_::{ArrayAccessor, NativeScalar};
 use geoarrow::{ArrayBase, array::PointBuilder, scalar::Point as ArrowPoint};
@@ -200,7 +199,7 @@ impl std::fmt::Debug for Person<'_> {
 // for small local distances, an euclidianian distance of 0.0009 corresponds to ~1km
 
 impl PopulationData {
-    fn try_new(people: RecordBatch, positions: PointArray) -> Result<Self> {
+    pub(crate) fn try_new(people: RecordBatch, positions: PointArray) -> Result<Self> {
         if people.num_rows() != positions.len() {
             return Err("people and positions data must have the same length".into());
         }
@@ -211,16 +210,6 @@ impl PopulationData {
             positions,
             lookup_index,
         })
-    }
-
-    pub fn from_site(
-        (minx, miny): (f64, f64),
-        (maxx, maxy): (f64, f64),
-        n_people: usize,
-    ) -> Result<Self> {
-        let (people, positions) =
-            crate::init::generate_population((minx, miny), (maxx, maxy), n_people)?;
-        Self::try_new(people, positions)
     }
 
     pub(crate) fn slice(&self, offset: usize, length: usize) -> Self {

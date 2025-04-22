@@ -73,6 +73,9 @@ pub struct SiteRunner {
 
     /// Order lines currently being processed at this location.
     order_lines: HashMap<OrderLineId, OrderLine>,
+
+    /// Completed orders at this location.
+    completed_order_lines: HashMap<OrderId, Vec<OrderLineId>>,
 }
 
 impl Entity for SiteRunner {
@@ -103,6 +106,12 @@ impl Simulatable for SiteRunner {
 
         for kitchen in self.kitchens.values_mut() {
             kitchen.step(ctx)?;
+            for (order_id, line_id) in kitchen.take_completed() {
+                self.completed_order_lines
+                    .entry(order_id)
+                    .or_default()
+                    .push(line_id);
+            }
         }
 
         Ok(())
@@ -129,6 +138,7 @@ impl SiteRunner {
             orders: HashMap::new(),
             order_queue: VecDeque::new(),
             order_lines: HashMap::new(),
+            completed_order_lines: HashMap::new(),
         })
     }
 
@@ -171,5 +181,27 @@ impl SiteRunner {
     pub fn total_kitchen_stats(&self) -> KitchenStats {
         self.kitchen_stats()
             .fold(KitchenStats::default(), |acc, stats| acc + stats)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use geo::{BoundingRect, Contains, Point};
+    use geo_types::{LineString, Polygon};
+    use h3o::{LatLng, Resolution};
+
+    #[test]
+    fn test_queue_order() {
+        let latlng = LatLng::new(0.0, 0.0).unwrap();
+        let cell_index = latlng.to_cell(Resolution::Six);
+
+        let boundary: LineString = cell_index.boundary().into_iter().cloned().collect();
+
+        let polygon: Polygon = Polygon::new(boundary, Vec::new());
+        polygon.contains(&Point::new(0., 0.));
+
+        println!("{:#?}", polygon);
     }
 }

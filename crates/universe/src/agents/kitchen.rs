@@ -277,6 +277,10 @@ impl KitchenRunner {
             total_stations: self.stations.len(),
         }
     }
+
+    pub fn take_completed(&mut self) -> Vec<(OrderId, OrderLineId)> {
+        std::mem::take(&mut self.completed)
+    }
 }
 
 fn take_station(assets: &[StationRunner], asset_type: &i32) -> Option<usize> {
