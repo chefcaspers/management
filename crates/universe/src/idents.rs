@@ -15,6 +15,8 @@
 //! [`Uuid`]: uuid::Uuid
 use uuid::Uuid;
 
+use crate::error::Error;
+
 pub trait TypedId:
     Clone + PartialEq + Eq + AsRef<Uuid> + AsRef<[u8]> + ToString + From<Uuid>
 {
@@ -28,6 +30,14 @@ macro_rules! impl_id_type {
         impl From<Uuid> for $type {
             fn from(id: Uuid) -> Self {
                 $type(id)
+            }
+        }
+
+        impl TryFrom<&[u8]> for $type {
+            type Error = Error;
+
+            fn try_from(id: &[u8]) -> Result<Self, Self::Error> {
+                Ok($type(Uuid::from_slice(id).map_err(|e| Error::generic(e))?))
             }
         }
 

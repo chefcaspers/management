@@ -2,20 +2,17 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use arrow_array::{
-    RecordBatch,
-    builder::{FixedSizeBinaryBuilder, StringBuilder, StructBuilder},
-    cast::AsArray,
-};
+use arrow_array::{RecordBatch, cast::AsArray};
 use chrono::{DateTime, Utc};
 use dashmap::mapref::one::Ref;
 use datafusion::prelude::*;
+use h3o::{LatLng, Resolution};
 use itertools::Itertools;
 use rand::Rng;
 use tokio::runtime::Runtime;
 use uuid::Uuid;
 
-use super::schemas::ORDER_LINE_SCHEMA;
+use super::schemas::{OrderData, OrderDataBuilder};
 use crate::error::Result;
 use crate::idents::*;
 use crate::init::PopulationDataBuilder;
@@ -25,7 +22,7 @@ mod objects;
 mod population;
 
 pub(crate) use objects::{ObjectData, ObjectLabel};
-pub(crate) use population::PopulationData;
+pub(crate) use population::{Person, PopulationData};
 
 #[derive(Debug, thiserror::Error)]
 enum StateError {
@@ -136,7 +133,7 @@ impl State {
         count: Option<usize>,
         rng: &mut rand::rngs::ThreadRng,
     ) -> Vec<(BrandId, MenuItemRef)> {
-        let count = count.unwrap_or_else(|| rng.random_range(1..11));
+        let count = count.unwrap_or_else(|| rng.random_range(1..6));
         let mut selected_items = Vec::with_capacity(count);
         for _ in 0..count {
             let item_index = rng.random_range(0..self.item_ids.len());
@@ -156,6 +153,21 @@ impl State {
         [0..order_count]
             .map(|_| self.sample_menu_items(Some(3), &mut rng))
             .into_iter()
+    }
+
+    pub(crate) fn orders_for_site_batch(&self, site_id: &SiteId) -> Result<OrderData> {
+        let site = self.objects.site(site_id)?;
+        let props = site.properties()?;
+        let lat_lng = LatLng::new(props.latitude, props.longitude)?;
+
+        self.population
+            // NB: resolution 6 corresponds to a cell size of approximately 36 km2
+            .people_in_cell(lat_lng.to_cell(Resolution::Six))
+            .filter_map(|person| person.create_order(self).map(|items| (person, items)))
+            .fold(OrderDataBuilder::new(), |builder, (person, items)| {
+                builder.add_order(&person, &items)
+            })
+            .finish()
     }
 
     pub fn time_step(&self) -> Duration {

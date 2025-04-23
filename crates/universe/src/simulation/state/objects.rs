@@ -9,13 +9,18 @@ use itertools::Itertools;
 use uuid::Uuid;
 
 use crate::error::Result;
-use crate::idents::{BrandId, KitchenId, MenuItemId, SiteId, StationId, TypedId};
+use crate::idents::{BrandId, KitchenId, MenuItemId, SiteId, StationId};
 use crate::models::{MenuItem, Site, Station};
 
 use super::EntityView;
 
+// TODO: object indices for frequently accessed objects
+
 #[derive(Debug, thiserror::Error)]
 enum VendorDataError {
+    #[error("Not found")]
+    NotFound,
+
     #[error("Brand not found")]
     BrandNotFound,
 
@@ -183,6 +188,19 @@ impl ObjectData {
                     })
                 })
             }))
+    }
+
+    pub(crate) fn site(&self, site_id: &SiteId) -> Result<SiteView<'_>> {
+        self.iter_ids()?
+            .enumerate()
+            .find(|(_, (id, _, label))| {
+                *label == Some(ObjectLabel::Site.as_ref()) && *id == Some(site_id.as_ref())
+            })
+            .map(|(index, _)| SiteView {
+                data: self,
+                valid_index: index,
+            })
+            .ok_or(VendorDataError::NotFound.into())
     }
 
     pub(crate) fn kitchens(

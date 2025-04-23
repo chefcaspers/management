@@ -1,6 +1,6 @@
 use arrow_array::{RecordBatch, cast::AsArray};
 use geo::{Centroid, Geometry, Point};
-use geo_traits::{CoordTrait, PointTrait};
+use geo_traits::PointTrait;
 use geoarrow::array::PointArray;
 use geoarrow::trait_::{ArrayAccessor, NativeScalar};
 use geoarrow::{ArrayBase, array::PointBuilder, scalar::Point as ArrowPoint};
@@ -8,12 +8,14 @@ use geoarrow_schema::Dimension;
 use h3o::{CellIndex, LatLng, Resolution};
 use indexmap::IndexSet;
 use itertools::Itertools;
+use rand::Rng;
 use uuid::Uuid;
 
-use crate::SiteRunner;
 use crate::error::Result;
-use crate::idents::PersonId;
+use crate::idents::{BrandId, MenuItemId, PersonId};
 use crate::simulation::Entity;
+
+use super::State;
 
 // A specific place or areas
 pub trait Location: Entity {
@@ -21,12 +23,6 @@ pub trait Location: Entity {
 
     fn centroid(&self) -> Point {
         self.location().centroid().unwrap()
-    }
-}
-
-impl Location for SiteRunner {
-    fn location(&self) -> &Geometry {
-        todo!()
     }
 }
 
@@ -236,7 +232,7 @@ impl<'a> Person<'a> {
 
     pub fn cell(&self, resolution: Resolution) -> Result<CellIndex> {
         let coords = self.position().coord().unwrap();
-        let lat_lng = LatLng::new(coords.x(), coords.y())?;
+        let lat_lng: LatLng = coords.to_geo().try_into()?;
         Ok(lat_lng.to_cell(resolution))
     }
 
@@ -274,6 +270,20 @@ impl<'a> Person<'a> {
             .column(4)
             .as_string::<i32>()
             .value(self.valid_index)
+    }
+
+    pub fn create_order(&self, state: &State) -> Option<Vec<(BrandId, MenuItemId)>> {
+        let mut rng = rand::rng();
+        // TODO: compute probability from person state
+        rng.random_bool(1.0 / 20.0).then(|| {
+            state
+                .sample_menu_items(None, &mut rng)
+                .into_iter()
+                .map(|(brand_id, menu_item)| {
+                    (brand_id, Uuid::parse_str(&menu_item.id).unwrap().into())
+                })
+                .collect()
+        })
     }
 }
 

@@ -7,7 +7,8 @@ use tabled::Tabled;
 use super::OrderLine;
 use crate::idents::*;
 use crate::models::{KitchenStation, Station};
-use crate::{Entity, Simulatable, State, error::Result};
+use crate::simulation::schemas::OrderData;
+use crate::{Entity, State, error::Result};
 
 #[derive(Clone)]
 enum StationStatus {
@@ -122,10 +123,10 @@ impl Entity for KitchenRunner {
     }
 }
 
-impl Simulatable for KitchenRunner {
-    fn step(&mut self, ctx: &State) -> Result<()> {
+impl KitchenRunner {
+    pub(crate) fn step(&mut self, ctx: &State, orders: &OrderData) -> Result<()> {
         // Try to start new recipes if possible
-        while self.start_order_line(ctx)? {}
+        while self.start_order_line(ctx, orders)? {}
 
         // Process in-progress recipes
         let mut completed_recipe_ids = Vec::new();
@@ -234,7 +235,7 @@ impl KitchenRunner {
         self.queue.push_back(item);
     }
 
-    fn start_order_line(&mut self, ctx: &State) -> Result<bool> {
+    fn start_order_line(&mut self, ctx: &State, orders: &OrderData) -> Result<bool> {
         if let Some(order_line) = self.queue.pop_front() {
             let menu_item = ctx.menu_item(&order_line.item)?;
             // Check if we can start the first step

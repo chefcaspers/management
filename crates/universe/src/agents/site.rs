@@ -6,6 +6,7 @@ use tabled::Tabled;
 
 use super::kitchen::{KitchenRunner, KitchenStats};
 use crate::idents::*;
+use crate::simulation::schemas::OrderData;
 use crate::{Entity, Simulatable, State, error::Result};
 
 #[derive(Clone)]
@@ -62,9 +63,12 @@ pub struct SiteRunner {
     id: SiteId,
     name: String,
 
+    order_data: OrderData,
+
     /// Kitchens available at this location.
     kitchens: HashMap<KitchenId, KitchenRunner>,
 
+    // order_data: RecordBatch,
     /// Orders currently being processed at this location.
     orders: HashMap<OrderId, Order>,
 
@@ -92,6 +96,15 @@ impl Entity for SiteRunner {
 
 impl Simulatable for SiteRunner {
     fn step(&mut self, ctx: &State) -> Result<()> {
+        let order_data = ctx.orders_for_site_batch(&self.id)?;
+        self.order_data = self.order_data.merge(order_data)?;
+
+        // println!(
+        //     "{} -> {}",
+        //     self.order_data.num_orders(),
+        //     self.order_data.num_lines()
+        // );
+
         // Process order queue
         let mut router = OrderRouter::new(&mut self.kitchens);
         while let Some(order_id) = self.order_queue.pop_front() {
@@ -105,7 +118,7 @@ impl Simulatable for SiteRunner {
         }
 
         for kitchen in self.kitchens.values_mut() {
-            kitchen.step(ctx)?;
+            kitchen.step(ctx, &self.order_data)?;
             for (order_id, line_id) in kitchen.take_completed() {
                 self.completed_order_lines
                     .entry(order_id)
@@ -131,9 +144,14 @@ impl SiteRunner {
             })
             .flatten()
             .try_collect()?;
+
+        let order_data = state.orders_for_site_batch(&id)?;
+        // let site = state.object_data().site(&id)?;
+
         Ok(SiteRunner {
             id,
             name: "DUMMY".to_string(),
+            order_data,
             kitchens,
             orders: HashMap::new(),
             order_queue: VecDeque::new(),
