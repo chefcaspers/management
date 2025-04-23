@@ -9,9 +9,10 @@ use itertools::Itertools;
 use uuid::Uuid;
 
 use crate::error::Result;
-use crate::idents::{BrandId, KitchenId, MenuItemId, SiteId, StationId};
-use crate::init::ObjectLabel;
-use crate::models::{MenuItem, Station};
+use crate::idents::{BrandId, KitchenId, MenuItemId, SiteId, StationId, TypedId};
+use crate::models::{MenuItem, Site, Station};
+
+use super::EntityView;
 
 #[derive(Debug, thiserror::Error)]
 enum VendorDataError {
@@ -26,6 +27,32 @@ enum VendorDataError {
 
     #[error("Column not found")]
     ColumnNotFound(&'static str),
+}
+
+pub enum ObjectLabel {
+    Site,
+    Kitchen,
+    Station,
+    Brand,
+    MenuItem,
+    Instruction,
+    Ingredient,
+    IngredientUse,
+}
+
+impl AsRef<str> for ObjectLabel {
+    fn as_ref(&self) -> &str {
+        match self {
+            ObjectLabel::Site => "site",
+            ObjectLabel::Kitchen => "kitchen",
+            ObjectLabel::Station => "station",
+            ObjectLabel::Brand => "brand",
+            ObjectLabel::MenuItem => "menu_item",
+            ObjectLabel::Instruction => "instruction",
+            ObjectLabel::Ingredient => "ingredient",
+            ObjectLabel::IngredientUse => "ingredient_use",
+        }
+    }
 }
 
 pub struct ObjectData {
@@ -144,13 +171,18 @@ impl ObjectData {
         Err(VendorDataError::MenuItemNotFound.into())
     }
 
-    pub(crate) fn sites(&self) -> Result<impl Iterator<Item = SiteId>> {
-        Ok(self.iter_ids()?.filter_map(|(id, _parent_id, label)| {
-            id.and_then(|id| {
-                (label == Some(ObjectLabel::Site.as_ref()))
-                    .then(|| uuid::Uuid::from_slice(id).unwrap().into())
-            })
-        }))
+    pub(crate) fn sites(&self) -> Result<impl Iterator<Item = SiteView<'_>>> {
+        Ok(self
+            .iter_ids()?
+            .enumerate()
+            .filter_map(|(index, (id, _parent_id, label))| {
+                id.and_then(|_| {
+                    (label == Some(ObjectLabel::Site.as_ref())).then(|| SiteView {
+                        data: self,
+                        valid_index: index,
+                    })
+                })
+            }))
     }
 
     pub(crate) fn kitchens(
@@ -198,6 +230,27 @@ impl ObjectData {
                 })
             },
         ))
+    }
+}
+
+pub struct SiteView<'a> {
+    /// Reference to global object data
+    data: &'a ObjectData,
+
+    /// Index of the valid row in the data for the given site.
+    valid_index: usize,
+}
+
+impl EntityView for SiteView<'_> {
+    type Id = SiteId;
+    type Properties = Site;
+
+    fn data(&self) -> &ObjectData {
+        &self.data
+    }
+
+    fn valid_index(&self) -> usize {
+        self.valid_index
     }
 }
 

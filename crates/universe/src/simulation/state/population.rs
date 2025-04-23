@@ -1,9 +1,11 @@
 use arrow_array::{RecordBatch, cast::AsArray};
 use geo::{Centroid, Geometry, Point};
-use geoarrow::array::{PointArray, PolygonArray};
+use geo_traits::{CoordTrait, PointTrait};
+use geoarrow::array::PointArray;
 use geoarrow::trait_::{ArrayAccessor, NativeScalar};
 use geoarrow::{ArrayBase, array::PointBuilder, scalar::Point as ArrowPoint};
 use geoarrow_schema::Dimension;
+use h3o::{CellIndex, LatLng, Resolution};
 use indexmap::IndexSet;
 use itertools::Itertools;
 use uuid::Uuid;
@@ -195,6 +197,12 @@ impl PopulationData {
             .map(|person_id| Person::new(person_id, self, idx))
     }
 
+    pub fn people_in_cell(&self, cell_index: CellIndex) -> impl Iterator<Item = Person<'_>> {
+        self.iter().filter_map(move |person| {
+            (person.cell(cell_index.resolution()).ok()? == cell_index).then(|| person)
+        })
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = Person<'_>> {
         self.lookup_index
             .iter()
@@ -224,6 +232,12 @@ impl<'a> Person<'a> {
 
     pub fn position(&self) -> ArrowPoint {
         self.data.positions.value(self.valid_index)
+    }
+
+    pub fn cell(&self, resolution: Resolution) -> Result<CellIndex> {
+        let coords = self.position().coord().unwrap();
+        let lat_lng = LatLng::new(coords.x(), coords.y())?;
+        Ok(lat_lng.to_cell(resolution))
     }
 
     pub fn first_name(&self) -> &str {

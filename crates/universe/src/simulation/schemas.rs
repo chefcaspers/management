@@ -48,6 +48,7 @@ pub static ORDER_LINE_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
     SchemaRef::new(Schema::new(vec![
         Field::new("id", DataType::FixedSizeBinary(16), false),
         Field::new("order_id", DataType::FixedSizeBinary(16), false),
+        Field::new("brand_id", DataType::FixedSizeBinary(16), false),
         Field::new("menu_item_id", DataType::FixedSizeBinary(16), false),
         Field::new("status", DataType::Utf8, false),
     ]))

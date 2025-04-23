@@ -121,7 +121,7 @@ impl Simulatable for SiteRunner {
 impl SiteRunner {
     pub fn try_new(id: SiteId, state: &State) -> Result<Self> {
         let kitchens = state
-            .objects
+            .object_data()
             .kitchens(&id)?
             .map_ok(|(id, brands)| {
                 Ok::<_, Box<dyn std::error::Error>>((

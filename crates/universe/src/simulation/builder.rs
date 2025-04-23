@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, Duration, Utc};
 use itertools::Itertools;
 
-use super::{Simulation, SimulationConfig, State};
+use super::{Simulation, SimulationConfig, State, state::EntityView};
 use crate::SiteRunner;
 use crate::error::Result;
 use crate::idents::{BrandId, SiteId};
@@ -111,9 +111,14 @@ impl SimulationBuilder {
         let state = State::try_new(brands, sites)?;
 
         let site_runners = state
-            .objects
+            .object_data()
             .sites()?
-            .map(|id| Ok::<_, Box<dyn std::error::Error>>((id, SiteRunner::try_new(id, &state)?)))
+            .map(|site| {
+                Ok::<_, Box<dyn std::error::Error>>((
+                    site.id(),
+                    SiteRunner::try_new(site.id(), &state)?,
+                ))
+            })
             .try_collect()?;
 
         Ok(Simulation {

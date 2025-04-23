@@ -55,6 +55,7 @@ geo = "0.30"
 geo-types = "*"
 fake = { version = "4", features = ["derive"] }
 indexmap = { version = "2.9.0" }
+geo-traits = "0.2"
 
 [dev-dependencies]
 arrow = { workspace = true }

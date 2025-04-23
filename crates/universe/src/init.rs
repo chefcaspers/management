@@ -17,7 +17,7 @@ use crate::error::Result;
 use crate::idents::{BrandId, KitchenId, MenuItemId, PersonId, SiteId, StationId};
 use crate::models::{Brand, KitchenStation, MenuItem, Site, Station};
 use crate::simulation::schemas::{OBJECT_SCHEMA, POPULATION_SCHEMA};
-use crate::state::PopulationData;
+use crate::state::{ObjectLabel, PopulationData};
 
 static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
     let mut brands = Vec::new();
@@ -78,32 +78,6 @@ static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
 
     Arc::new(brands)
 });
-
-pub enum ObjectLabel {
-    Site,
-    Kitchen,
-    Station,
-    Brand,
-    MenuItem,
-    Instruction,
-    Ingredient,
-    IngredientUse,
-}
-
-impl AsRef<str> for ObjectLabel {
-    fn as_ref(&self) -> &str {
-        match self {
-            ObjectLabel::Site => "site",
-            ObjectLabel::Kitchen => "kitchen",
-            ObjectLabel::Station => "station",
-            ObjectLabel::Brand => "brand",
-            ObjectLabel::MenuItem => "menu_item",
-            ObjectLabel::Instruction => "instruction",
-            ObjectLabel::Ingredient => "ingredient",
-            ObjectLabel::IngredientUse => "ingredient_use",
-        }
-    }
-}
 
 pub struct ObjectDataBuilder {
     id: FixedSizeBinaryBuilder,

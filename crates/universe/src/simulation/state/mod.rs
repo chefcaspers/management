@@ -2,7 +2,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use arrow_array::RecordBatch;
+use arrow_array::{
+    RecordBatch,
+    builder::{FixedSizeBinaryBuilder, StringBuilder, StructBuilder},
+    cast::AsArray,
+};
 use chrono::{DateTime, Utc};
 use dashmap::mapref::one::Ref;
 use datafusion::prelude::*;
@@ -11,6 +15,7 @@ use rand::Rng;
 use tokio::runtime::Runtime;
 use uuid::Uuid;
 
+use super::schemas::ORDER_LINE_SCHEMA;
 use crate::error::Result;
 use crate::idents::*;
 use crate::init::PopulationDataBuilder;
@@ -19,8 +24,19 @@ use crate::models::{Brand, MenuItem, MenuItemRef, Site};
 mod objects;
 mod population;
 
-pub(crate) use objects::ObjectData;
+pub(crate) use objects::{ObjectData, ObjectLabel};
 pub(crate) use population::PopulationData;
+
+#[derive(Debug, thiserror::Error)]
+enum StateError {
+    // object not found
+    #[error("Object not found")]
+    ObjectNotFound,
+
+    // inconsistent data
+    #[error("Inconsistent data")]
+    InconsistentData,
+}
 
 // TODO:
 //   - order data by labels and track slices for fast lookups.
@@ -43,10 +59,10 @@ pub struct State {
     time_step: Duration,
 
     /// Population data
-    pub(crate) population: PopulationData,
+    population: PopulationData,
 
     /// Vendor data
-    pub(crate) objects: ObjectData,
+    objects: ObjectData,
 }
 
 impl State {
@@ -103,6 +119,10 @@ impl State {
         &self.objects.objects()
     }
 
+    pub fn object_data(&self) -> &ObjectData {
+        &self.objects
+    }
+
     pub fn menu_item(&self, id: &(BrandId, MenuItemId)) -> Result<Ref<'_, MenuItemId, MenuItem>> {
         self.objects.menu_item(id)
     }
@@ -129,7 +149,7 @@ impl State {
 
     pub(crate) fn orders_for_site(
         &self,
-        _location_id: &SiteId,
+        _site_id: &SiteId,
     ) -> impl Iterator<Item = Vec<(BrandId, MenuItemRef)>> {
         let mut rng = rand::rng();
         let order_count = rng.random_range(1..11);
@@ -152,5 +172,38 @@ impl State {
 
     pub fn step(&mut self) {
         self.time += self.time_step;
+    }
+}
+
+pub trait EntityView {
+    type Id: TypedId;
+    type Properties: serde::de::DeserializeOwned;
+
+    fn data(&self) -> &ObjectData;
+
+    fn valid_index(&self) -> usize;
+
+    fn id(&self) -> Self::Id {
+        Uuid::from_slice(
+            self.data()
+                .objects()
+                .column_by_name("id")
+                .expect("object data schema should be validated")
+                .as_fixed_size_binary()
+                .value(self.valid_index()),
+        )
+        .unwrap()
+        .into()
+    }
+
+    fn properties(&self) -> Result<Self::Properties> {
+        let raw = self
+            .data()
+            .objects()
+            .column_by_name("properties")
+            .ok_or(StateError::InconsistentData)?
+            .as_string::<i32>()
+            .value(self.valid_index());
+        Ok(serde_json::from_str(raw)?)
     }
 }
