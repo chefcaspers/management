@@ -1,13 +1,10 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::Duration;
 
 use arrow_array::{RecordBatch, cast::AsArray};
 use chrono::{DateTime, Utc};
-use dashmap::mapref::one::Ref;
 use datafusion::prelude::*;
 use h3o::{LatLng, Resolution};
-use itertools::Itertools;
 use rand::Rng;
 use tokio::runtime::Runtime;
 use uuid::Uuid;
@@ -16,7 +13,7 @@ use super::schemas::{OrderData, OrderDataBuilder};
 use crate::error::Result;
 use crate::idents::*;
 use crate::init::PopulationDataBuilder;
-use crate::models::{Brand, MenuItem, MenuItemRef, Site};
+use crate::models::{Brand, Site};
 
 mod objects;
 mod population;
@@ -45,10 +42,6 @@ pub struct State {
     /// Async runtime to handle datafusion tasks
     rt: Runtime,
 
-    brands: Arc<HashMap<BrandId, Brand>>,
-    items: Arc<HashMap<(BrandId, MenuItemId), MenuItemRef>>,
-    item_ids: Vec<(BrandId, MenuItemId)>,
-
     /// Current simulation time
     time: DateTime<Utc>,
 
@@ -67,24 +60,13 @@ impl State {
         brands: impl IntoIterator<Item = (BrandId, Brand)>,
         sites: Vec<(SiteId, Site)>,
     ) -> Result<Self> {
-        let brands: HashMap<_, _> = brands.into_iter().collect();
-        let items: HashMap<_, _> = brands
-            .iter()
-            .flat_map(|(brand_id, brand)| brand.items.iter().map(|it| (*brand_id, it)))
-            .map(|(brand_id, item)| {
-                Ok::<_, Box<dyn std::error::Error>>((
-                    (brand_id, Uuid::try_parse(&item.id)?.into()),
-                    Arc::new(item.clone()),
-                ))
-            })
-            .try_collect()?;
-
         let mut builder = PopulationDataBuilder::new();
         for (_site_id, site) in &sites {
             let n_people = rand::rng().random_range(100..1000);
             builder.add_site(site, n_people)?;
         }
 
+        let brands: HashMap<_, _> = brands.into_iter().collect();
         let vendors = crate::init::generate_objects(&brands, sites)?;
 
         let rt = tokio::runtime::Builder::new_current_thread()
@@ -94,9 +76,6 @@ impl State {
         Ok(State {
             ctx: SessionContext::new(),
             rt,
-            brands: Arc::new(brands),
-            item_ids: items.keys().cloned().collect(),
-            items: Arc::new(items),
             time_step: Duration::from_secs(60),
             time: Utc::now(),
             population: builder.finish()?,
@@ -106,6 +85,10 @@ impl State {
 
     pub fn ctx(&self) -> &SessionContext {
         &self.ctx
+    }
+
+    pub fn rt(&self) -> &Runtime {
+        &self.rt
     }
 
     pub fn people(&self) -> &RecordBatch {
@@ -118,41 +101,6 @@ impl State {
 
     pub fn object_data(&self) -> &ObjectData {
         &self.objects
-    }
-
-    pub fn menu_item(&self, id: &(BrandId, MenuItemId)) -> Result<Ref<'_, MenuItemId, MenuItem>> {
-        self.objects.menu_item(id)
-    }
-
-    pub fn menu_items(&self) -> Arc<HashMap<(BrandId, MenuItemId), MenuItemRef>> {
-        self.items.clone()
-    }
-
-    fn sample_menu_items(
-        &self,
-        count: Option<usize>,
-        rng: &mut rand::rngs::ThreadRng,
-    ) -> Vec<(BrandId, MenuItemRef)> {
-        let count = count.unwrap_or_else(|| rng.random_range(1..6));
-        let mut selected_items = Vec::with_capacity(count);
-        for _ in 0..count {
-            let item_index = rng.random_range(0..self.item_ids.len());
-            if let Some(item) = self.items.get(&self.item_ids[item_index]) {
-                selected_items.push((self.item_ids[item_index].0, item.clone()));
-            }
-        }
-        selected_items
-    }
-
-    pub(crate) fn orders_for_site(
-        &self,
-        _site_id: &SiteId,
-    ) -> impl Iterator<Item = Vec<(BrandId, MenuItemRef)>> {
-        let mut rng = rand::rng();
-        let order_count = rng.random_range(1..11);
-        [0..order_count]
-            .map(|_| self.sample_menu_items(Some(3), &mut rng))
-            .into_iter()
     }
 
     pub(crate) fn orders_for_site_batch(&self, site_id: &SiteId) -> Result<OrderData> {

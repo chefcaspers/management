@@ -5,7 +5,9 @@ use arrow_array::RecordBatch;
 use arrow_array::cast::AsArray;
 use dashmap::DashMap;
 use dashmap::mapref::one::Ref;
+use indexmap::IndexMap;
 use itertools::Itertools;
+use rand::Rng as _;
 use uuid::Uuid;
 
 use crate::error::Result;
@@ -68,6 +70,8 @@ pub struct ObjectData {
 
     // kitchen_slices: HashMap<KitchenId, (usize, usize)>,
     menu_items: Arc<DashMap<MenuItemId, MenuItem>>,
+
+    menu_item_idx: IndexMap<MenuItemId, usize>,
 }
 
 impl ObjectData {
@@ -97,11 +101,27 @@ impl ObjectData {
             })
             .collect();
 
-        Ok(Self {
+        let data = Self {
             objects,
             brand_slices,
             menu_items: Arc::new(DashMap::new()),
-        })
+            menu_item_idx: Default::default(),
+        };
+        data.update_indices()
+    }
+
+    fn update_indices(mut self) -> Result<Self> {
+        let menu_item_idx = self
+            .iter_ids()?
+            .enumerate()
+            .filter_map(|(idx, (id, _parent_id, label))| {
+                (label == Some(ObjectLabel::MenuItem.as_ref()))
+                    .then(|| id.and_then(|id| Some((id.try_into().ok()?, idx))))
+            })
+            .flatten()
+            .collect();
+        self.menu_item_idx = menu_item_idx;
+        Ok(self)
     }
 
     pub fn objects(&self) -> &RecordBatch {
@@ -147,33 +167,37 @@ impl ObjectData {
             .map(|((id, parent_id), label)| (id, parent_id, label)))
     }
 
-    pub(crate) fn menu_item(
-        &self,
-        item_id: &(BrandId, MenuItemId),
-    ) -> Result<Ref<'_, MenuItemId, MenuItem>> {
-        if let Some(item) = self.menu_items.get(&item_id.1) {
+    /// Get the parsed properties for a menu item
+    pub(crate) fn menu_item(&self, item_id: &MenuItemId) -> Result<Ref<'_, MenuItemId, MenuItem>> {
+        if let Some(item) = self.menu_items.get(item_id) {
             return Ok(item);
         }
+        let view = self
+            .menu_item_data(item_id)
+            .ok_or_else(|| VendorDataError::MenuItemNotFound)?;
+        let properties = view.properties()?;
+        self.menu_items.insert(*item_id, properties.clone());
+        return Ok(self.menu_items.get(item_id).unwrap());
+    }
 
-        for (index, item_ids) in self.iter_ids()?.enumerate() {
-            if let (Some(id), Some(parent_id), _) = item_ids {
-                if AsRef::<[u8]>::as_ref(&item_id.0) == parent_id
-                    && AsRef::<[u8]>::as_ref(&item_id.1) == id
-                {
-                    let raw = self
-                        .objects
-                        .column_by_name("properties")
-                        .ok_or(VendorDataError::ColumnNotFound("properties"))?
-                        .as_string::<i32>();
-                    let value = raw.value(index);
-                    let properties: MenuItem = serde_json::from_str(value)?;
-                    self.menu_items.insert(item_id.1, properties.clone());
-                    return Ok(self.menu_items.get(&item_id.1).unwrap());
-                }
-            }
+    pub(crate) fn menu_item_data(&self, item_id: &MenuItemId) -> Option<MenuItemView<'_>> {
+        let (id, idx) = self.menu_item_idx.get_key_value(item_id)?;
+        Some(MenuItemView::new(id, self, *idx))
+    }
+
+    pub fn sample_menu_items(
+        &self,
+        count: Option<usize>,
+        rng: &mut rand::rngs::ThreadRng,
+    ) -> Vec<MenuItemView<'_>> {
+        let count = count.unwrap_or_else(|| rng.random_range(1..6));
+        let mut selected_items = Vec::with_capacity(count);
+        for _ in 0..count {
+            let item_index = rng.random_range(0..self.menu_item_idx.len());
+            let (id, idx) = self.menu_item_idx.get_index(item_index).unwrap();
+            selected_items.push(MenuItemView::new(id, self, *idx));
         }
-
-        Err(VendorDataError::MenuItemNotFound.into())
+        selected_items
     }
 
     pub(crate) fn sites(&self) -> Result<impl Iterator<Item = SiteView<'_>>> {
@@ -248,6 +272,48 @@ impl ObjectData {
                 })
             },
         ))
+    }
+}
+
+pub struct MenuItemView<'a> {
+    id: &'a MenuItemId,
+
+    /// Reference to global object data
+    data: &'a ObjectData,
+
+    /// Index of the valid row in the data for the given site.
+    valid_index: usize,
+}
+
+impl EntityView for MenuItemView<'_> {
+    type Id = MenuItemId;
+    type Properties = MenuItem;
+
+    fn data(&self) -> &ObjectData {
+        &self.data
+    }
+
+    fn valid_index(&self) -> usize {
+        self.valid_index
+    }
+}
+
+impl<'a> MenuItemView<'a> {
+    pub fn new(id: &'a MenuItemId, data: &'a ObjectData, valid_index: usize) -> Self {
+        Self {
+            id,
+            data,
+            valid_index,
+        }
+    }
+
+    pub fn brand_id(&self) -> &[u8] {
+        self.data
+            .objects()
+            .column_by_name("parent_id")
+            .unwrap()
+            .as_fixed_size_binary()
+            .value(self.valid_index)
     }
 }
 

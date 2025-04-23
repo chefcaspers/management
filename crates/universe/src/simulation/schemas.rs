@@ -361,9 +361,9 @@ impl<'a> OrderLineView<'a> {
         get_id(&self.data.lines, "brand_id", line_id)
     }
 
-    pub fn nemu_item_id(&self) -> &[u8] {
+    pub fn menu_item_id(&self) -> &[u8] {
         let line_id = self.data.lines_index.get_index_of(self.line_id).unwrap();
-        get_id(&self.data.lines, "nemu_item_id", line_id)
+        get_id(&self.data.lines, "menu_item_id", line_id)
     }
 
     pub fn status(&self) -> &str {

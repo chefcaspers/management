@@ -7,7 +7,6 @@ use tabled::Tabled;
 use super::OrderLine;
 use crate::idents::*;
 use crate::models::{KitchenStation, Station};
-use crate::simulation::schemas::OrderData;
 use crate::{Entity, State, error::Result};
 
 #[derive(Clone)]
@@ -78,29 +77,6 @@ struct OrderProgress {
     status: OrderLineStatus,
 }
 
-#[derive(Clone, Debug, Tabled, Default, PartialEq, Eq)]
-pub struct KitchenStats {
-    pub queued: usize,
-    pub in_progress: usize,
-    pub completed: usize,
-    pub idle_stations: usize,
-    pub total_stations: usize,
-}
-
-impl std::ops::Add for KitchenStats {
-    type Output = KitchenStats;
-
-    fn add(self, other: KitchenStats) -> KitchenStats {
-        KitchenStats {
-            queued: self.queued + other.queued,
-            in_progress: self.in_progress + other.in_progress,
-            completed: self.completed + other.completed,
-            idle_stations: self.idle_stations + other.idle_stations,
-            total_stations: self.total_stations + other.total_stations,
-        }
-    }
-}
-
 pub struct KitchenRunner {
     id: KitchenId,
     name: String,
@@ -124,16 +100,16 @@ impl Entity for KitchenRunner {
 }
 
 impl KitchenRunner {
-    pub(crate) fn step(&mut self, ctx: &State, orders: &OrderData) -> Result<()> {
+    pub(crate) fn step(&mut self, ctx: &State) -> Result<()> {
         // Try to start new recipes if possible
-        while self.start_order_line(ctx, orders)? {}
+        while self.start_order_line(ctx)? {}
 
         // Process in-progress recipes
         let mut completed_recipe_ids = Vec::new();
         let mut to_update = Vec::new();
 
         for (order_line_id, progress) in self.in_progress.iter() {
-            let menu_item = ctx.menu_item(&progress.order_line.item)?;
+            let menu_item = ctx.object_data().menu_item(&progress.order_line.item.1)?;
             match &progress.status {
                 OrderLineStatus::InProgress(instruction_idx, stated_time) => {
                     let expected_duration = menu_item.instructions[*instruction_idx]
@@ -235,9 +211,9 @@ impl KitchenRunner {
         self.queue.push_back(item);
     }
 
-    fn start_order_line(&mut self, ctx: &State, orders: &OrderData) -> Result<bool> {
+    fn start_order_line(&mut self, ctx: &State) -> Result<bool> {
         if let Some(order_line) = self.queue.pop_front() {
-            let menu_item = ctx.menu_item(&order_line.item)?;
+            let menu_item = ctx.object_data().menu_item(&order_line.item.1)?;
             // Check if we can start the first step
             let step = &menu_item.instructions[0];
             if let Some(asset_idx) = take_station(&self.stations, &step.required_station) {
@@ -300,6 +276,29 @@ fn release_station(assets: &mut Vec<StationRunner>, asset_type: &i32, recipe_id:
                     break;
                 }
             }
+        }
+    }
+}
+
+#[derive(Clone, Debug, Tabled, Default, PartialEq, Eq)]
+pub struct KitchenStats {
+    pub queued: usize,
+    pub in_progress: usize,
+    pub completed: usize,
+    pub idle_stations: usize,
+    pub total_stations: usize,
+}
+
+impl std::ops::Add for KitchenStats {
+    type Output = KitchenStats;
+
+    fn add(self, other: KitchenStats) -> KitchenStats {
+        KitchenStats {
+            queued: self.queued + other.queued,
+            in_progress: self.in_progress + other.in_progress,
+            completed: self.completed + other.completed,
+            idle_stations: self.idle_stations + other.idle_stations,
+            total_stations: self.total_stations + other.total_stations,
         }
     }
 }

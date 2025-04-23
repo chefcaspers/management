@@ -59,12 +59,6 @@ impl Simulation {
     /// Advance the simulation by one time step
     fn step(&mut self) -> Result<()> {
         for site in self.sites.values_mut() {
-            let orders = self.state.orders_for_site(site.id()).collect_vec();
-            for items in orders {
-                site.queue_order(items.into_iter().map(|(brand_id, item)| {
-                    (brand_id, uuid::Uuid::parse_str(&item.id).unwrap().into())
-                }));
-            }
             site.step(&self.state)?;
         }
         self.state.step();
@@ -117,7 +111,7 @@ mod tests {
             simulation.snapshot();
         }
 
-        print_batches(&[simulation.state().objects().project(&[2, 4]).unwrap()]).unwrap();
+        // print_batches(&[simulation.state().objects().project(&[2, 4]).unwrap()]).unwrap();
 
         // print_batches(&[simulation.state().people().clone()]).unwrap();
 

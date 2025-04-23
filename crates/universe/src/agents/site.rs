@@ -10,12 +10,6 @@ use crate::simulation::schemas::OrderData;
 use crate::{Entity, Simulatable, State, error::Result};
 
 #[derive(Clone)]
-pub struct Order {
-    pub(crate) id: OrderId,
-    pub(crate) lines: Vec<OrderLineId>,
-}
-
-#[derive(Clone)]
 pub struct OrderLine {
     pub(crate) id: OrderLineId,
     pub(crate) order_id: OrderId,
@@ -68,10 +62,6 @@ pub struct SiteRunner {
     /// Kitchens available at this location.
     kitchens: HashMap<KitchenId, KitchenRunner>,
 
-    // order_data: RecordBatch,
-    /// Orders currently being processed at this location.
-    orders: HashMap<OrderId, Order>,
-
     /// Orders waiting to be processed at this location.
     order_queue: VecDeque<OrderId>,
 
@@ -97,6 +87,7 @@ impl Entity for SiteRunner {
 impl Simulatable for SiteRunner {
     fn step(&mut self, ctx: &State) -> Result<()> {
         let order_data = ctx.orders_for_site_batch(&self.id)?;
+        self.queue_order_data(&order_data)?;
         self.order_data = self.order_data.merge(order_data)?;
 
         // println!(
@@ -108,9 +99,9 @@ impl Simulatable for SiteRunner {
         // Process order queue
         let mut router = OrderRouter::new(&mut self.kitchens);
         while let Some(order_id) = self.order_queue.pop_front() {
-            if let Some(order) = self.orders.get(&order_id) {
-                for line_id in &order.lines {
-                    if let Some(line) = self.order_lines.get(line_id) {
+            if let Some(order) = self.order_data.order(&order_id) {
+                for line in order.lines() {
+                    if let Some(line) = self.order_lines.get(line.id()) {
                         router.route_order_line(line.clone());
                     }
                 }
@@ -118,7 +109,7 @@ impl Simulatable for SiteRunner {
         }
 
         for kitchen in self.kitchens.values_mut() {
-            kitchen.step(ctx, &self.order_data)?;
+            kitchen.step(ctx)?;
             for (order_id, line_id) in kitchen.take_completed() {
                 self.completed_order_lines
                     .entry(order_id)
@@ -153,7 +144,7 @@ impl SiteRunner {
             name: "DUMMY".to_string(),
             order_data,
             kitchens,
-            orders: HashMap::new(),
+            // orders: HashMap::new(),
             order_queue: VecDeque::new(),
             order_lines: HashMap::new(),
             completed_order_lines: HashMap::new(),
@@ -166,24 +157,22 @@ impl SiteRunner {
         }
     }
 
-    pub(crate) fn queue_order(&mut self, items: impl IntoIterator<Item = (BrandId, MenuItemId)>) {
-        let mut order = Order {
-            id: OrderId::new(),
-            lines: Vec::new(),
-        };
-
-        for item in items {
-            let line = OrderLine {
-                id: OrderLineId::new(),
-                order_id: order.id,
-                item,
-            };
-            order.lines.push(line.id);
-            self.order_lines.insert(line.id, line);
+    fn queue_order_data(&mut self, data: &OrderData) -> Result<()> {
+        for order in data.orders() {
+            for line in order.lines() {
+                self.order_lines.insert(
+                    *line.id(),
+                    OrderLine {
+                        id: *line.id(),
+                        order_id: *line.order_id(),
+                        item: (line.brand_id().try_into()?, line.menu_item_id().try_into()?),
+                    },
+                );
+            }
+            self.order_queue.push_back(*order.id());
         }
 
-        self.order_queue.push_back(order.id);
-        self.orders.insert(order.id, order);
+        Ok(())
     }
 
     pub fn stats(&self) -> SiteStats {

@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use crate::error::Result;
 use crate::idents::{BrandId, MenuItemId, PersonId};
-use crate::simulation::Entity;
+use crate::simulation::{Entity, state::EntityView};
 
 use super::State;
 
@@ -277,11 +277,10 @@ impl<'a> Person<'a> {
         // TODO: compute probability from person state
         rng.random_bool(1.0 / 20.0).then(|| {
             state
+                .object_data()
                 .sample_menu_items(None, &mut rng)
                 .into_iter()
-                .map(|(brand_id, menu_item)| {
-                    (brand_id, Uuid::parse_str(&menu_item.id).unwrap().into())
-                })
+                .map(|menu_item| (menu_item.brand_id().try_into().unwrap(), menu_item.id()))
                 .collect()
         })
     }
