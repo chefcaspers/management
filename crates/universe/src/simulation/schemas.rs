@@ -1,13 +1,14 @@
 use std::sync::{Arc, LazyLock};
 
 use arrow_array::{
-    RecordBatch,
+    RecordBatch, StringArray,
     builder::{FixedSizeBinaryBuilder, StringBuilder},
     cast::AsArray,
 };
 use arrow_ord::partition::partition;
 use arrow_schema::{ArrowError, DataType, Field, Schema, SchemaRef, TimeUnit};
 use arrow_select::concat::concat_batches;
+use counter::Counter;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use strum::{Display, EnumString};
@@ -174,6 +175,7 @@ pub static ORDER_LINE_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
         Field::new("order_id", DataType::FixedSizeBinary(16), false),
         Field::new("brand_id", DataType::FixedSizeBinary(16), false),
         Field::new("menu_item_id", DataType::FixedSizeBinary(16), false),
+        // status column MUST be the last column - or update the order data update method.
         Field::new("status", DataType::Utf8, false),
     ]))
 });
@@ -208,6 +210,25 @@ impl OrderDataBuilder {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct OrderDataStats {
+    total_orders: usize,
+    total_lines: usize,
+    status: Counter<OrderStatus>,
+}
+
+impl std::ops::Add for OrderDataStats {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
+        OrderDataStats {
+            total_orders: self.total_orders + other.total_orders,
+            total_lines: self.total_lines + other.total_lines,
+            status: self.status + other.status,
+        }
+    }
+}
+
 pub struct OrderData {
     orders: RecordBatch,
     lines: RecordBatch,
@@ -220,14 +241,23 @@ pub struct OrderData {
 
 impl OrderData {
     fn try_new(orders: RecordBatch, lines: RecordBatch) -> Result<Self> {
-        if orders.num_rows() == 0 || lines.num_rows() == 0 {
-            return Err(Error::invalid_data("expected non-empty orders and lines").into());
-        }
         if orders.schema().as_ref() != ORDER_SCHEMA.as_ref() {
             return Err(Error::invalid_data("expected orders to have schema").into());
         }
         if lines.schema().as_ref() != ORDER_LINE_SCHEMA.as_ref() {
             return Err(Error::invalid_data("expected lines to have schema").into());
+        }
+        if orders.num_rows() == 0 && lines.num_rows() > 0 {
+            return Err(Error::invalid_data("non-empty lines for empty orders").into());
+        }
+
+        if orders.num_rows() == 0 && lines.num_rows() == 0 {
+            return Ok(Self {
+                orders,
+                lines,
+                index: IndexMap::new(),
+                lines_index: IndexSet::new(),
+            });
         }
 
         let Some((order_id_idx, _)) = lines.schema().column_with_name("order_id") else {
@@ -279,6 +309,21 @@ impl OrderData {
         self.lines.num_rows()
     }
 
+    pub fn stats(&self) -> OrderDataStats {
+        let mut stats = Counter::new();
+        for order in self.orders() {
+            for line in order.lines() {
+                let status = line.status().parse().unwrap();
+                stats[&status] += 1;
+            }
+        }
+        OrderDataStats {
+            total_orders: self.num_orders(),
+            total_lines: self.num_lines(),
+            status: stats,
+        }
+    }
+
     pub fn order(&self, order_id: &OrderId) -> Option<OrderView<'_>> {
         let Some((id, _)) = self.index.get_key_value(order_id) else {
             return None;
@@ -298,6 +343,41 @@ impl OrderData {
         let orders = concat_batches(&ORDER_SCHEMA, &[self.orders.clone(), other.orders])?;
         let lines = concat_batches(&ORDER_LINE_SCHEMA, &[self.lines.clone(), other.lines])?;
         Self::try_new(orders, lines)
+    }
+
+    pub(crate) fn update_order_line_status(
+        &mut self,
+        updates: impl IntoIterator<Item = (OrderLineId, OrderLineStatus)>,
+    ) -> Result<()> {
+        let mut current = self
+            .lines
+            .column_by_name("status")
+            .unwrap()
+            .as_string::<i32>()
+            .iter()
+            .filter_map(|s| s.map(|s| s.to_string()))
+            .collect_vec();
+        if current.len() != self.lines.num_rows() {
+            return Err(Error::invalid_data("order line status mismatch").into());
+        }
+        for (id, status) in updates {
+            let Some(idx) = self.lines_index.get_index_of(&id) else {
+                return Err(Error::invalid_data("order line not found").into());
+            };
+            current[idx] = status.to_string();
+        }
+        // TODO: we assume the status column is always the last column in the schema.
+        let new_array = Arc::new(StringArray::from(current));
+        let mut arrays = self
+            .lines
+            .columns()
+            .into_iter()
+            .cloned()
+            .take(self.lines.num_columns() - 1)
+            .collect_vec();
+        arrays.push(new_array);
+        self.lines = RecordBatch::try_new(ORDER_LINE_SCHEMA.clone(), arrays)?;
+        Ok(())
     }
 }
 

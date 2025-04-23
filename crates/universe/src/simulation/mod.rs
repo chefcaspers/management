@@ -1,17 +1,19 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Duration, Utc};
-use itertools::Itertools;
 
+use self::schemas::OrderDataStats;
 use crate::KitchenStats;
 use crate::agents::SiteRunner;
 use crate::error::Result;
 use crate::idents::{SiteId, TypedId};
 
 pub use self::builder::SimulationBuilder;
+pub use self::events::*;
 pub use self::state::State;
 
 mod builder;
+mod events;
 mod execution;
 pub mod schemas;
 pub mod state;
@@ -22,9 +24,6 @@ pub trait Entity: Send + Sync + 'static {
 
     /// Unique identifier for the entity
     fn id(&self) -> &Self::Id;
-
-    /// Human-readable name of the entity
-    fn name(&self) -> &str;
 }
 
 /// Trait for entities that need to be updated each simulation step
@@ -33,7 +32,8 @@ pub trait Simulatable: Entity {
     fn step(&mut self, context: &state::State) -> Result<()>;
 }
 
-struct SimulationConfig {
+/// Configuration for the simulation engine
+pub struct SimulationConfig {
     /// all ghost kitchen sites.
     simulation_start: DateTime<Utc>,
 
@@ -41,13 +41,20 @@ struct SimulationConfig {
     time_increment: Duration,
 }
 
+impl Default for SimulationConfig {
+    fn default() -> Self {
+        SimulationConfig {
+            simulation_start: Utc::now(),
+            time_increment: Duration::seconds(60),
+        }
+    }
+}
+
 /// The main simulation engine
 ///
 /// Single entry point to run simulations.
 /// THis will drive progress in all entities and make sure results are reported.
 pub struct Simulation {
-    config: SimulationConfig,
-
     /// Global simulation state
     state: State,
 
@@ -79,6 +86,12 @@ impl Simulation {
             .values()
             .map(|site| site.total_kitchen_stats())
             .fold(KitchenStats::default(), |acc, stats| acc + stats);
+        let order_data_stats = self
+            .sites
+            .values()
+            .map(|site| site.order_data().stats())
+            .fold(OrderDataStats::default(), |acc, stats| acc + stats);
+        println!("{order_data_stats:#?}");
         println!("{total_kitchen_stats:#?}");
     }
 

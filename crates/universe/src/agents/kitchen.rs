@@ -30,7 +30,6 @@ enum StationStatus {
 #[derive(Clone)]
 struct StationRunner {
     id: StationId,
-    name: String,
     station_type: KitchenStation,
     status: StationStatus,
 }
@@ -41,17 +40,12 @@ impl Entity for StationRunner {
     fn id(&self) -> &Self::Id {
         &self.id
     }
-
-    fn name(&self) -> &str {
-        &self.name
-    }
 }
 
 impl StationRunner {
     pub fn new(id: StationId, station: Station) -> Self {
         StationRunner {
             id,
-            name: station.name.clone(),
             station_type: station.station_type(),
             status: StationStatus::Available,
         }
@@ -79,7 +73,6 @@ struct OrderProgress {
 
 pub struct KitchenRunner {
     id: KitchenId,
-    name: String,
     stations: Vec<StationRunner>,
     queue: VecDeque<OrderLine>,
     in_progress: HashMap<OrderLineId, OrderProgress>,
@@ -92,10 +85,6 @@ impl Entity for KitchenRunner {
 
     fn id(&self) -> &Self::Id {
         &self.id
-    }
-
-    fn name(&self) -> &str {
-        &self.name
     }
 }
 
@@ -194,7 +183,6 @@ impl KitchenRunner {
             .try_collect()?;
         Ok(KitchenRunner {
             id,
-            name: "DUMMY".to_string(),
             stations,
             queue: VecDeque::new(),
             in_progress: HashMap::new(),

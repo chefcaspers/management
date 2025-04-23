@@ -9,6 +9,7 @@ use rand::Rng;
 use tokio::runtime::Runtime;
 use uuid::Uuid;
 
+use super::SimulationConfig;
 use super::schemas::{OrderData, OrderDataBuilder};
 use crate::error::Result;
 use crate::idents::*;
@@ -36,6 +37,8 @@ enum StateError {
 //   - order data by labels and track slices for fast lookups.
 
 pub struct State {
+    config: SimulationConfig,
+
     /// Datafusion session context
     ctx: SessionContext,
 
@@ -59,6 +62,7 @@ impl State {
     pub(crate) fn try_new(
         brands: impl IntoIterator<Item = (BrandId, Brand)>,
         sites: Vec<(SiteId, Site)>,
+        config: Option<SimulationConfig>,
     ) -> Result<Self> {
         let mut builder = PopulationDataBuilder::new();
         for (_site_id, site) in &sites {
@@ -73,13 +77,15 @@ impl State {
             .enable_all()
             .build()?;
 
+        let config = config.unwrap_or_default();
         Ok(State {
             ctx: SessionContext::new(),
             rt,
-            time_step: Duration::from_secs(60),
+            time_step: Duration::from_secs(config.time_increment.num_seconds() as u64),
             time: Utc::now(),
             population: builder.finish()?,
             objects: ObjectData::try_new(vendors)?,
+            config,
         })
     }
 
@@ -95,15 +101,11 @@ impl State {
         &self.population.people()
     }
 
-    pub fn objects(&self) -> &RecordBatch {
-        &self.objects.objects()
-    }
-
     pub fn object_data(&self) -> &ObjectData {
         &self.objects
     }
 
-    pub(crate) fn orders_for_site_batch(&self, site_id: &SiteId) -> Result<OrderData> {
+    pub(crate) fn orders_for_site(&self, site_id: &SiteId) -> Result<OrderData> {
         let site = self.objects.site(site_id)?;
         let props = site.properties()?;
         let lat_lng = LatLng::new(props.latitude, props.longitude)?;

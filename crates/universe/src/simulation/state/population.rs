@@ -275,7 +275,7 @@ impl<'a> Person<'a> {
     pub fn create_order(&self, state: &State) -> Option<Vec<(BrandId, MenuItemId)>> {
         let mut rng = rand::rng();
         // TODO: compute probability from person state
-        rng.random_bool(1.0 / 20.0).then(|| {
+        rng.random_bool(1.0 / 50.0).then(|| {
             state
                 .object_data()
                 .sample_menu_items(None, &mut rng)

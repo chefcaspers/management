@@ -6,7 +6,7 @@ use tabled::Tabled;
 
 use super::kitchen::{KitchenRunner, KitchenStats};
 use crate::idents::*;
-use crate::simulation::schemas::OrderData;
+use crate::simulation::schemas::{OrderData, OrderLineStatus};
 use crate::{Entity, Simulatable, State, error::Result};
 
 #[derive(Clone)]
@@ -53,23 +53,29 @@ pub struct SiteStats {
     pub queue_length: usize,
 }
 
+impl std::ops::Add for SiteStats {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
+        Self {
+            queue_length: self.queue_length + other.queue_length,
+        }
+    }
+}
+
 pub struct SiteRunner {
     id: SiteId,
-    name: String,
-
-    order_data: OrderData,
 
     /// Kitchens available at this location.
     kitchens: HashMap<KitchenId, KitchenRunner>,
+
+    order_data: OrderData,
 
     /// Orders waiting to be processed at this location.
     order_queue: VecDeque<OrderId>,
 
     /// Order lines currently being processed at this location.
     order_lines: HashMap<OrderLineId, OrderLine>,
-
-    /// Completed orders at this location.
-    completed_order_lines: HashMap<OrderId, Vec<OrderLineId>>,
 }
 
 impl Entity for SiteRunner {
@@ -78,23 +84,13 @@ impl Entity for SiteRunner {
     fn id(&self) -> &Self::Id {
         &self.id
     }
-
-    fn name(&self) -> &str {
-        &self.name
-    }
 }
 
 impl Simulatable for SiteRunner {
     fn step(&mut self, ctx: &State) -> Result<()> {
-        let order_data = ctx.orders_for_site_batch(&self.id)?;
+        let order_data = ctx.orders_for_site(&self.id)?;
         self.queue_order_data(&order_data)?;
         self.order_data = self.order_data.merge(order_data)?;
-
-        // println!(
-        //     "{} -> {}",
-        //     self.order_data.num_orders(),
-        //     self.order_data.num_lines()
-        // );
 
         // Process order queue
         let mut router = OrderRouter::new(&mut self.kitchens);
@@ -108,15 +104,16 @@ impl Simulatable for SiteRunner {
             }
         }
 
+        let mut completed_orders = Vec::new();
         for kitchen in self.kitchens.values_mut() {
             kitchen.step(ctx)?;
-            for (order_id, line_id) in kitchen.take_completed() {
-                self.completed_order_lines
-                    .entry(order_id)
-                    .or_default()
-                    .push(line_id);
-            }
+            completed_orders.extend(kitchen.take_completed());
         }
+
+        let updates = completed_orders
+            .iter()
+            .map(|(_, line_id)| (line_id.clone(), OrderLineStatus::Ready));
+        self.order_data.update_order_line_status(updates)?;
 
         Ok(())
     }
@@ -136,22 +133,24 @@ impl SiteRunner {
             .flatten()
             .try_collect()?;
 
-        let order_data = state.orders_for_site_batch(&id)?;
+        let order_data = state.orders_for_site(&id)?;
         // let site = state.object_data().site(&id)?;
 
         Ok(SiteRunner {
             id,
-            name: "DUMMY".to_string(),
             order_data,
             kitchens,
-            // orders: HashMap::new(),
             order_queue: VecDeque::new(),
             order_lines: HashMap::new(),
-            completed_order_lines: HashMap::new(),
         })
     }
 
+    pub fn order_data(&self) -> &OrderData {
+        &self.order_data
+    }
+
     pub fn snapshot(&self) {
+        println!("{:?}", self.stats());
         for kitchen in self.kitchens.values() {
             println!("{:?}", kitchen.stats());
         }

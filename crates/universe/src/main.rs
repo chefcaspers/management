@@ -1,12 +1,6 @@
 use chrono::{DateTime, Utc};
 use clap::Parser;
-use tabled::{
-    Table, Tabled,
-    settings::{
-        Color, Height, Style,
-        object::{Columns, Rows},
-    },
-};
+use tabled::Tabled;
 
 use caspers_universe::KitchenStats;
 

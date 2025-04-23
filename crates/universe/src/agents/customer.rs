@@ -17,16 +17,14 @@ enum CustomerState {
 
 pub struct Customer {
     id: PersonId,
-    name: String,
     hunger: f64,
     state: CustomerState,
 }
 
 impl Customer {
-    pub fn new(name: impl Into<String>) -> Self {
+    pub fn new() -> Self {
         Customer {
             id: PersonId::new(),
-            name: name.into(),
             hunger: 0.0,
             state: CustomerState::Idle,
         }
@@ -51,10 +49,6 @@ impl Entity for Customer {
 
     fn id(&self) -> &PersonId {
         &self.id
-    }
-
-    fn name(&self) -> &str {
-        self.name.as_str()
     }
 }
 

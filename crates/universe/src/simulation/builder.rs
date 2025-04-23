@@ -108,7 +108,11 @@ impl SimulationBuilder {
             })
             .collect_vec();
 
-        let state = State::try_new(brands, sites)?;
+        let config = SimulationConfig {
+            simulation_start: self.start_time,
+            time_increment: self.time_increment,
+        };
+        let state = State::try_new(brands, sites, Some(config))?;
 
         let site_runners = state
             .object_data()
@@ -122,10 +126,6 @@ impl SimulationBuilder {
             .try_collect()?;
 
         Ok(Simulation {
-            config: SimulationConfig {
-                simulation_start: self.start_time,
-                time_increment: self.time_increment,
-            },
             state,
             sites: site_runners,
         })
