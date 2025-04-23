@@ -211,7 +211,7 @@ impl KitchenRunner {
         state: &State,
     ) -> Result<Self> {
         let stations = state
-            .vendors
+            .objects
             .kitchen_stations(&id)?
             .map_ok(|(station_id, station)| StationRunner::new(station_id, station))
             .try_collect()?;

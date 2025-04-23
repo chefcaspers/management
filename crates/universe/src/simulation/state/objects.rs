@@ -28,10 +28,9 @@ enum VendorDataError {
     ColumnNotFound(&'static str),
 }
 
-pub(crate) struct VendorData {
-    pub brands: RecordBatch,
-    // recipes: RecordBatch,
-    //
+pub struct ObjectData {
+    objects: RecordBatch,
+
     // Map of brand_id to (offset, length) slice in the objects record batch
     brand_slices: HashMap<BrandId, (usize, usize)>,
 
@@ -39,12 +38,12 @@ pub(crate) struct VendorData {
     menu_items: Arc<DashMap<MenuItemId, MenuItem>>,
 }
 
-impl VendorData {
+impl ObjectData {
     /// Record batch MUST be sorted by parent_id.
-    pub fn try_new(brands: RecordBatch) -> Result<Self> {
+    pub fn try_new(objects: RecordBatch) -> Result<Self> {
         let mut brand_slices = HashMap::new();
 
-        for (idx, brand_id) in brands
+        for (idx, brand_id) in objects
             .column_by_name("parent_id")
             .unwrap()
             .as_fixed_size_binary()
@@ -53,8 +52,7 @@ impl VendorData {
         {
             if let Some(id) = brand_id {
                 let typed: BrandId = Uuid::from_slice(id)?.into();
-                brand_slices.entry(typed).or_insert_with(Vec::new);
-                brand_slices.get_mut(&typed).unwrap().push(idx);
+                brand_slices.entry(typed).or_insert_with(Vec::new).push(idx);
             }
         }
 
@@ -68,11 +66,14 @@ impl VendorData {
             .collect();
 
         Ok(Self {
-            brands,
-            // recipes: RecordBatch::new_empty(crate::simulation::schemas::BRAND_SCHEMA.clone()),
+            objects,
             brand_slices,
             menu_items: Arc::new(DashMap::new()),
         })
+    }
+
+    pub fn objects(&self) -> &RecordBatch {
+        &self.objects
     }
 
     pub(crate) fn brand(&self, brand_id: &BrandId) -> Result<BrandData> {
@@ -81,7 +82,7 @@ impl VendorData {
             .get(brand_id)
             .ok_or(VendorDataError::BrandNotFound)?;
         Ok(BrandData {
-            data: self.brands.slice(offset, length),
+            data: self.objects.slice(offset, length),
             menu_items: HashMap::new(),
         })
     }
@@ -90,19 +91,19 @@ impl VendorData {
         &self,
     ) -> Result<impl Iterator<Item = (Option<&[u8]>, Option<&[u8]>, Option<&str>)>> {
         let ids = self
-            .brands
+            .objects
             .column_by_name("id")
             .ok_or(VendorDataError::ColumnNotFound("id"))?
             .as_fixed_size_binary();
 
         let parent_ids = self
-            .brands
+            .objects
             .column_by_name("parent_id")
             .ok_or(VendorDataError::ColumnNotFound("parent_id"))?
             .as_fixed_size_binary();
 
         let labels = self
-            .brands
+            .objects
             .column_by_name("label")
             .ok_or(VendorDataError::ColumnNotFound("label"))?
             .as_string::<i32>();
@@ -128,7 +129,7 @@ impl VendorData {
                     && AsRef::<[u8]>::as_ref(&item_id.1) == id
                 {
                     let raw = self
-                        .brands
+                        .objects
                         .column_by_name("properties")
                         .ok_or(VendorDataError::ColumnNotFound("properties"))?
                         .as_string::<i32>();
@@ -177,7 +178,7 @@ impl VendorData {
         kitchen_id: &KitchenId,
     ) -> Result<impl Iterator<Item = Result<(StationId, Station)>>> {
         let properties = self
-            .brands
+            .objects
             .column_by_name("properties")
             .ok_or(VendorDataError::ColumnNotFound("properties"))?
             .as_string::<i32>();

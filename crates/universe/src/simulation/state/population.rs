@@ -101,14 +101,93 @@ impl<T: Into<JourneyLeg>> FromIterator<T> for Journey {
     }
 }
 
+/// Population data.
+///
+/// Holds information for all people in the simulation.
 pub struct PopulationData {
     people: RecordBatch,
-    homes: Option<PolygonArray>,
+
     positions: PointArray,
+
+    /// Lookup index for people.
+    ///
+    /// An [`IndexSet`] tracks the insertion order of [`PersonId`]s.
+    /// as such we can use the "position" of a person in the [`IndexSet`] to
+    /// efficiently lookup their [`Person`] data as it corresponds to
+    /// the index value within the [`people`] array.
     lookup_index: IndexSet<PersonId>,
 }
 
 impl PopulationData {
+    pub(crate) fn try_new(people: RecordBatch, positions: PointArray) -> Result<Self> {
+        if people.num_rows() != positions.len() {
+            return Err("people and positions data must have the same length".into());
+        }
+        let lookup_index = lookup_index(&people)?;
+        Ok(PopulationData {
+            people,
+            positions,
+            lookup_index,
+        })
+    }
+
+    pub fn people(&self) -> &RecordBatch {
+        &self.people
+    }
+
+    pub(crate) fn slice(&self, offset: usize, length: usize) -> Self {
+        let people = self.people.slice(offset, length);
+        // let homes = self.homes.slice(offset, length);
+        let positions = self.positions.slice(offset, length);
+        // safety: we apply the same offset to both arrays so they are aligned
+        Self::try_new(people, positions).unwrap()
+    }
+
+    // fn home_at(&self, index: usize) -> Option<ArrowPolygon> {
+    //     if index >= self.homes.len() {
+    //         None
+    //     } else {
+    //         self.homes.get(index)
+    //     }
+    // }
+
+    fn position_at(&self, index: usize) -> Option<ArrowPoint> {
+        if index >= self.positions.len() {
+            None
+        } else {
+            self.positions.get(index)
+        }
+    }
+
+    fn apply_offsets(
+        &mut self,
+        offsets: impl IntoIterator<Item = Option<(f64, f64)>>,
+    ) -> Result<()> {
+        let offsets = offsets.into_iter().collect_vec();
+        if offsets.len() != self.positions.len() {
+            return Err("Population data must have the same length".into());
+        }
+        let mut builder = PointBuilder::with_capacity(Dimension::XY, self.positions.len());
+        for (curr, maybe_offset) in self.positions.iter().zip(offsets.iter()) {
+            match (maybe_offset, curr) {
+                (Some(offset), Some(point)) => {
+                    let curr_pos = point.to_geo().x_y();
+                    builder.push_point(Some(&Point::new(
+                        curr_pos.0 + offset.0,
+                        curr_pos.1 + offset.1,
+                    )));
+                }
+                (None, curr) => {
+                    builder.push_point(curr.as_ref());
+                }
+                (Some(_), None) => return Err("Offset provided for a missing position".into()),
+            }
+        }
+
+        self.positions = builder.finish();
+        Ok(())
+    }
+
     pub fn person(&self, id: &PersonId) -> Option<Person<'_>> {
         let idx = self.lookup_index.get_index_of(id)?;
         self.lookup_index
@@ -197,74 +276,6 @@ impl std::fmt::Debug for Person<'_> {
 }
 
 // for small local distances, an euclidianian distance of 0.0009 corresponds to ~1km
-
-impl PopulationData {
-    pub(crate) fn try_new(people: RecordBatch, positions: PointArray) -> Result<Self> {
-        if people.num_rows() != positions.len() {
-            return Err("people and positions data must have the same length".into());
-        }
-        let lookup_index = lookup_index(&people)?;
-        Ok(PopulationData {
-            people,
-            homes: None,
-            positions,
-            lookup_index,
-        })
-    }
-
-    pub(crate) fn slice(&self, offset: usize, length: usize) -> Self {
-        let people = self.people.slice(offset, length);
-        // let homes = self.homes.slice(offset, length);
-        let positions = self.positions.slice(offset, length);
-        // safety: the data is already validated in the constructor
-        Self::try_new(people, positions).unwrap()
-    }
-
-    // fn home_at(&self, index: usize) -> Option<ArrowPolygon> {
-    //     if index >= self.homes.len() {
-    //         None
-    //     } else {
-    //         self.homes.get(index)
-    //     }
-    // }
-
-    fn position_at(&self, index: usize) -> Option<ArrowPoint> {
-        if index >= self.positions.len() {
-            None
-        } else {
-            self.positions.get(index)
-        }
-    }
-
-    fn apply_offsets(
-        &mut self,
-        offsets: impl IntoIterator<Item = Option<(f64, f64)>>,
-    ) -> Result<()> {
-        let offsets = offsets.into_iter().collect_vec();
-        if offsets.len() != self.positions.len() {
-            return Err("Population data must have the same length".into());
-        }
-        let mut builder = PointBuilder::with_capacity(Dimension::XY, self.positions.len());
-        for (curr, maybe_offset) in self.positions.iter().zip(offsets.iter()) {
-            match (maybe_offset, curr) {
-                (Some(offset), Some(point)) => {
-                    let curr_pos = point.to_geo().x_y();
-                    builder.push_point(Some(&Point::new(
-                        curr_pos.0 + offset.0,
-                        curr_pos.1 + offset.1,
-                    )));
-                }
-                (None, curr) => {
-                    builder.push_point(curr.as_ref());
-                }
-                (Some(_), None) => return Err("Offset provided for a missing position".into()),
-            }
-        }
-
-        self.positions = builder.finish();
-        Ok(())
-    }
-}
 
 fn lookup_index(batch: &RecordBatch) -> Result<IndexSet<PersonId>> {
     Ok(batch

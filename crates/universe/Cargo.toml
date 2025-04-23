@@ -23,6 +23,7 @@ dashmap = { version = "6" }
 futures = { version = "0.3" }
 rand = { version = "0.9", features = ["std", "std_rng"] }
 h3o = { version = "0.8.0", features = ["geo"] }
+tokio = { version = "1", features = ["full"] }
 
 arrow-arith = { workspace = true }
 arrow-array = { workspace = true, features = ["chrono-tz"] }

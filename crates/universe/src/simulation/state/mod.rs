@@ -2,11 +2,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use arrow_array::RecordBatch;
 use chrono::{DateTime, Utc};
 use dashmap::mapref::one::Ref;
 use datafusion::prelude::*;
 use itertools::Itertools;
 use rand::Rng;
+use tokio::runtime::Runtime;
 use uuid::Uuid;
 
 use crate::error::Result;
@@ -14,14 +16,22 @@ use crate::idents::*;
 use crate::init::PopulationDataBuilder;
 use crate::models::{Brand, MenuItem, MenuItemRef, Site};
 
+mod objects;
 mod population;
-mod vendors;
 
+pub(crate) use objects::ObjectData;
 pub(crate) use population::PopulationData;
-pub(crate) use vendors::VendorData;
+
+// TODO:
+//   - order data by labels and track slices for fast lookups.
 
 pub struct State {
+    /// Datafusion session context
     ctx: SessionContext,
+
+    /// Async runtime to handle datafusion tasks
+    rt: Runtime,
+
     brands: Arc<HashMap<BrandId, Brand>>,
     items: Arc<HashMap<(BrandId, MenuItemId), MenuItemRef>>,
     item_ids: Vec<(BrandId, MenuItemId)>,
@@ -33,10 +43,10 @@ pub struct State {
     time_step: Duration,
 
     /// Population data
-    population: PopulationData,
+    pub(crate) population: PopulationData,
 
     /// Vendor data
-    vendors: VendorData,
+    pub(crate) objects: ObjectData,
 }
 
 impl State {
@@ -64,15 +74,20 @@ impl State {
 
         let vendors = crate::init::generate_objects(&brands, sites)?;
 
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+
         Ok(State {
             ctx: SessionContext::new(),
+            rt,
             brands: Arc::new(brands),
             item_ids: items.keys().cloned().collect(),
             items: Arc::new(items),
             time_step: Duration::from_secs(60),
             time: Utc::now(),
             population: builder.finish()?,
-            vendors: VendorData::try_new(vendors)?,
+            objects: ObjectData::try_new(vendors)?,
         })
     }
 
@@ -80,8 +95,16 @@ impl State {
         &self.ctx
     }
 
+    pub fn people(&self) -> &RecordBatch {
+        &self.population.people()
+    }
+
+    pub fn objects(&self) -> &RecordBatch {
+        &self.objects.objects()
+    }
+
     pub fn menu_item(&self, id: &(BrandId, MenuItemId)) -> Result<Ref<'_, MenuItemId, MenuItem>> {
-        self.vendors.menu_item(id)
+        self.objects.menu_item(id)
     }
 
     pub fn menu_items(&self) -> Arc<HashMap<(BrandId, MenuItemId), MenuItemRef>> {

@@ -89,6 +89,10 @@ impl Simulation {
             .fold(KitchenStats::default(), |acc, stats| acc + stats);
         println!("{total_kitchen_stats:#?}");
     }
+
+    pub fn state(&self) -> &State {
+        &self.state
+    }
 }
 
 #[cfg(test)]
@@ -115,13 +119,9 @@ mod tests {
             simulation.snapshot();
         }
 
-        print_batches(&[simulation
-            .state
-            .vendors
-            .brands
-            .project(&[0, 1, 2, 3])
-            .unwrap()])
-        .unwrap();
+        print_batches(&[simulation.state().objects().clone()]).unwrap();
+
+        print_batches(&[simulation.state().people().clone()]).unwrap();
 
         Ok(())
     }
