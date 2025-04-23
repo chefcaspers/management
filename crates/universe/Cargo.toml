@@ -51,8 +51,8 @@ geoarrow-geoparquet = { workspace = true }
 geoarrow-schema = { workspace = true }
 clap = { version = "4.5.37", features = ["derive"] }
 tabled = { version = "0.18.0", features = ["std"] }
-geo = "0.30"
-geo-types = "*"
+geo = { version = "0.30", features = ["serde"] }
+geo-types = { version = "*", features = ["serde"] }
 fake = { version = "4", features = ["derive"] }
 indexmap = { version = "2.9.0" }
 geo-traits = "0.2"

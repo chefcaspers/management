@@ -2,13 +2,14 @@ use std::sync::{Arc, LazyLock};
 
 use arrow_array::{
     RecordBatch, StringArray,
-    builder::{FixedSizeBinaryBuilder, StringBuilder},
+    builder::{FixedSizeBinaryBuilder, FixedSizeListBuilder, Float64Builder, StringBuilder},
     cast::AsArray,
 };
 use arrow_ord::partition::partition;
 use arrow_schema::{ArrowError, DataType, Field, Schema, SchemaRef, TimeUnit};
 use arrow_select::concat::concat_batches;
 use counter::Counter;
+use h3o::LatLng;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use strum::{Display, EnumString};
@@ -55,6 +56,19 @@ pub static POPULATION_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
     ]))
 });
 
+static ORDER_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
+    SchemaRef::new(Schema::new(vec![
+        Field::new("id", DataType::FixedSizeBinary(16), false),
+        Field::new("customer_id", DataType::FixedSizeBinary(16), false),
+        Field::new_fixed_size_list(
+            "destination",
+            Field::new("item", DataType::Float64, false),
+            2,
+            false,
+        ),
+    ]))
+});
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumString, Display)]
 #[strum(serialize_all = "snake_case")]
 pub enum OrderStatus {
@@ -67,7 +81,7 @@ pub enum OrderStatus {
 struct OrderBuilder {
     ids: FixedSizeBinaryBuilder,
     customer_ids: FixedSizeBinaryBuilder,
-    delivery_addresses: StringBuilder,
+    destination: FixedSizeListBuilder<Float64Builder>,
 }
 
 impl OrderBuilder {
@@ -75,19 +89,22 @@ impl OrderBuilder {
         Self {
             ids: FixedSizeBinaryBuilder::new(16),
             customer_ids: FixedSizeBinaryBuilder::new(16),
-            delivery_addresses: StringBuilder::new(),
+            destination: FixedSizeListBuilder::new(Float64Builder::new(), 2)
+                .with_field(Field::new("item", DataType::Float64, false)),
         }
     }
 
     pub fn add_order(
         &mut self,
         customer_id: impl AsRef<[u8]>,
-        delivery_address: impl AsRef<str>,
+        destination: LatLng,
     ) -> Result<OrderId, ArrowError> {
         let id = OrderId::new();
         self.ids.append_value(id)?;
         self.customer_ids.append_value(customer_id)?;
-        self.delivery_addresses.append_value(delivery_address);
+        self.destination.values().append_value(destination.lat());
+        self.destination.values().append_value(destination.lng());
+        self.destination.append(true);
         Ok(id)
     }
 
@@ -97,19 +114,11 @@ impl OrderBuilder {
             vec![
                 Arc::new(self.ids.finish()),
                 Arc::new(self.customer_ids.finish()),
-                Arc::new(self.delivery_addresses.finish()),
+                Arc::new(self.destination.finish()),
             ],
         )?)
     }
 }
-
-pub static ORDER_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
-    SchemaRef::new(Schema::new(vec![
-        Field::new("id", DataType::FixedSizeBinary(16), false),
-        Field::new("customer_id", DataType::FixedSizeBinary(16), false),
-        Field::new("delivery_address", DataType::Utf8, false),
-    ]))
-});
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumString, Display)]
 #[strum(serialize_all = "snake_case")]
@@ -193,8 +202,13 @@ impl OrderDataBuilder {
         }
     }
 
-    pub fn add_order(mut self, person: &Person, order: &[(BrandId, MenuItemId)]) -> Self {
-        let order_id = self.orders.add_order(person.id(), "").unwrap();
+    pub fn add_order(
+        mut self,
+        person: &Person,
+        destination: LatLng,
+        order: &[(BrandId, MenuItemId)],
+    ) -> Self {
+        let order_id = self.orders.add_order(person.id(), destination).unwrap();
         for (brand_id, menu_item_id) in order {
             self.lines
                 .add_line(&order_id, brand_id, menu_item_id)

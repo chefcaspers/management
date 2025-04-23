@@ -13,6 +13,7 @@
 //! UUID v7 for these cases.
 //!
 //! [`Uuid`]: uuid::Uuid
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::error::Error;
@@ -61,7 +62,8 @@ macro_rules! impl_id_type {
     };
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct SiteId(Uuid);
 
 impl SiteId {
@@ -75,7 +77,8 @@ impl SiteId {
 
 impl_id_type!(SiteId);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct KitchenId(Uuid);
 
 impl KitchenId {
@@ -86,7 +89,8 @@ impl KitchenId {
 
 impl_id_type!(KitchenId);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct StationId(Uuid);
 
 impl StationId {
@@ -97,7 +101,8 @@ impl StationId {
 
 impl_id_type!(StationId);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct OrderId(Uuid);
 
 impl OrderId {
@@ -108,7 +113,8 @@ impl OrderId {
 
 impl_id_type!(OrderId);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct OrderLineId(Uuid);
 
 impl OrderLineId {
@@ -119,7 +125,8 @@ impl OrderLineId {
 
 impl_id_type!(OrderLineId);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct BrandId(Uuid);
 
 impl BrandId {
@@ -130,7 +137,8 @@ impl BrandId {
 
 impl_id_type!(BrandId);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct MenuItemId(Uuid);
 
 impl MenuItemId {
@@ -141,7 +149,8 @@ impl MenuItemId {
 
 impl_id_type!(MenuItemId);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct PersonId(pub(crate) Uuid);
 
 impl PersonId {

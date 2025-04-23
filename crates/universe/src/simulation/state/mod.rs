@@ -4,6 +4,8 @@ use std::time::Duration;
 use arrow_array::{RecordBatch, cast::AsArray};
 use chrono::{DateTime, Utc};
 use datafusion::prelude::*;
+use geo_traits::PointTrait;
+use geoarrow::trait_::NativeScalar;
 use h3o::{LatLng, Resolution};
 use rand::Rng;
 use tokio::runtime::Runtime;
@@ -16,11 +18,12 @@ use crate::idents::*;
 use crate::init::PopulationDataBuilder;
 use crate::models::{Brand, Site};
 
+mod movement;
 mod objects;
 mod population;
 
 pub(crate) use objects::{ObjectData, ObjectLabel};
-pub(crate) use population::{Person, PopulationData};
+pub(crate) use population::{Person, PersonState, PopulationData};
 
 #[derive(Debug, thiserror::Error)]
 enum StateError {
@@ -82,7 +85,7 @@ impl State {
             ctx: SessionContext::new(),
             rt,
             time_step: Duration::from_secs(config.time_increment.num_seconds() as u64),
-            time: Utc::now(),
+            time: config.simulation_start,
             population: builder.finish()?,
             objects: ObjectData::try_new(vendors)?,
             config,
@@ -112,10 +115,20 @@ impl State {
 
         self.population
             // NB: resolution 6 corresponds to a cell size of approximately 36 km2
-            .people_in_cell(lat_lng.to_cell(Resolution::Six))
+            .idle_people_in_cell(lat_lng.to_cell(Resolution::Six))
             .filter_map(|person| person.create_order(self).map(|items| (person, items)))
             .fold(OrderDataBuilder::new(), |builder, (person, items)| {
-                builder.add_order(&person, &items)
+                builder.add_order(
+                    &person,
+                    person
+                        .position()
+                        .coord()
+                        .unwrap()
+                        .to_geo()
+                        .try_into()
+                        .unwrap(),
+                    &items,
+                )
             })
             .finish()
     }

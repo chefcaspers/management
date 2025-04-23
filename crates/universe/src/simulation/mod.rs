@@ -29,7 +29,7 @@ pub trait Entity: Send + Sync + 'static {
 /// Trait for entities that need to be updated each simulation step
 pub trait Simulatable: Entity {
     /// Update the entity state based on the current simulation context
-    fn step(&mut self, context: &state::State) -> Result<()>;
+    fn step(&mut self, context: &state::State) -> Result<Vec<Event>>;
 }
 
 /// Configuration for the simulation engine

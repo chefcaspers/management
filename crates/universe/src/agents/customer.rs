@@ -1,5 +1,6 @@
 use chrono::{DateTime, Timelike, Utc};
 
+use crate::Event;
 use crate::idents::PersonId;
 use crate::{Entity, Simulatable, State, error::Result};
 
@@ -53,11 +54,11 @@ impl Entity for Customer {
 }
 
 impl Simulatable for Customer {
-    fn step(&mut self, ctx: &State) -> Result<()> {
+    fn step(&mut self, ctx: &State) -> Result<Vec<Event>> {
         if let Some(CustomerActions::PlaceOrder) = self.action(ctx) {
             self.hunger += 1.0;
             self.state = CustomerState::Waiting(ctx.current_time());
         };
-        Ok(())
+        Ok(vec![])
     }
 }

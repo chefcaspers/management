@@ -1,103 +1,24 @@
 use arrow_array::{RecordBatch, cast::AsArray};
-use geo::{Centroid, Geometry, Point};
+use chrono::{DateTime, Utc};
+use geo::Point;
 use geo_traits::PointTrait;
 use geoarrow::array::PointArray;
 use geoarrow::trait_::{ArrayAccessor, NativeScalar};
 use geoarrow::{ArrayBase, array::PointBuilder, scalar::Point as ArrowPoint};
 use geoarrow_schema::Dimension;
 use h3o::{CellIndex, LatLng, Resolution};
-use indexmap::IndexSet;
+use indexmap::IndexMap;
 use itertools::Itertools;
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::error::Result;
-use crate::idents::{BrandId, MenuItemId, PersonId};
-use crate::simulation::{Entity, state::EntityView};
+use crate::idents::{BrandId, MenuItemId, OrderId, PersonId};
+use crate::simulation::state::EntityView;
 
 use super::State;
-
-// A specific place or areas
-pub trait Location: Entity {
-    fn location(&self) -> &Geometry;
-
-    fn centroid(&self) -> Point {
-        self.location().centroid().unwrap()
-    }
-}
-
-pub trait Movable: Entity {
-    fn position(&self) -> ArrowPoint;
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum Transport {
-    Foot,
-    Bicycle,
-    Car,
-    Bus,
-    Train,
-    Plane,
-    Ship,
-}
-
-impl Transport {
-    /// Returns the default velocity of the transport in km/h.
-    fn default_velocity_km_h(&self) -> f64 {
-        match self {
-            Transport::Foot => 5.0,
-            Transport::Bicycle => 15.0,
-            Transport::Car => 60.0,
-            Transport::Bus => 30.0,
-            Transport::Train => 100.0,
-            Transport::Plane => 800.0,
-            Transport::Ship => 20.0,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct JourneyLeg {
-    destination: Point,
-    transport: Transport,
-}
-
-impl<T: Into<Point>> From<(Transport, T)> for JourneyLeg {
-    fn from(value: (Transport, T)) -> Self {
-        JourneyLeg {
-            destination: value.1.into(),
-            transport: value.0,
-        }
-    }
-}
-
-impl<T: Into<Point>> From<(T, Transport)> for JourneyLeg {
-    fn from(value: (T, Transport)) -> Self {
-        JourneyLeg {
-            destination: value.0.into(),
-            transport: value.1,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct Journey {
-    legs: Vec<JourneyLeg>,
-}
-
-impl Journey {
-    fn add_leg(&mut self, leg: JourneyLeg) {
-        self.legs.push(leg);
-    }
-}
-
-impl<T: Into<JourneyLeg>> FromIterator<T> for Journey {
-    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
-        Journey {
-            legs: iter.into_iter().map(Into::into).collect(),
-        }
-    }
-}
+use super::movement::Journey;
 
 /// Population data.
 ///
@@ -113,7 +34,7 @@ pub struct PopulationData {
     /// as such we can use the "position" of a person in the [`IndexSet`] to
     /// efficiently lookup their [`Person`] data as it corresponds to
     /// the index value within the [`people`] array.
-    lookup_index: IndexSet<PersonId>,
+    lookup_index: IndexMap<PersonId, PersonState>,
 }
 
 impl PopulationData {
@@ -187,15 +108,18 @@ impl PopulationData {
     }
 
     pub fn person(&self, id: &PersonId) -> Option<Person<'_>> {
-        let idx = self.lookup_index.get_index_of(id)?;
         self.lookup_index
-            .get(id)
-            .map(|person_id| Person::new(person_id, self, idx))
+            .get_full(id)
+            .map(|(idx, person_id, _)| Person::new(person_id, self, idx))
     }
 
-    pub fn people_in_cell(&self, cell_index: CellIndex) -> impl Iterator<Item = Person<'_>> {
+    pub(crate) fn idle_people_in_cell(
+        &self,
+        cell_index: CellIndex,
+    ) -> impl Iterator<Item = Person<'_>> {
         self.iter().filter_map(move |person| {
-            (person.cell(cell_index.resolution()).ok()? == cell_index).then(|| person)
+            (person.is_idle() && person.cell(cell_index.resolution()).ok()? == cell_index)
+                .then(|| person)
         })
     }
 
@@ -203,8 +127,27 @@ impl PopulationData {
         self.lookup_index
             .iter()
             .enumerate()
-            .map(|(valid_index, id)| Person::new(id, self, valid_index))
+            .map(|(valid_index, (id, _))| Person::new(id, self, valid_index))
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum PersonStatus {
+    Idle,
+    AwaitingOrder(OrderId),
+    Eating(DateTime<Utc>),
+    Moving(Journey),
+}
+
+impl Default for PersonStatus {
+    fn default() -> Self {
+        PersonStatus::Idle
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct PersonState {
+    status: PersonStatus,
 }
 
 pub struct Person<'a> {
@@ -272,8 +215,25 @@ impl<'a> Person<'a> {
             .value(self.valid_index)
     }
 
-    pub fn create_order(&self, state: &State) -> Option<Vec<(BrandId, MenuItemId)>> {
+    pub fn state(&self) -> &PersonState {
+        self.data
+            .lookup_index
+            .get(self.id())
+            .expect("Person state should be initialized for all people")
+    }
+
+    pub fn is_idle(&self) -> bool {
+        matches!(self.state().status, PersonStatus::Idle)
+    }
+
+    pub(crate) fn create_order(&self, state: &State) -> Option<Vec<(BrandId, MenuItemId)>> {
         let mut rng = rand::rng();
+
+        // Do not create an order if the person is not idle
+        if !self.is_idle() {
+            return None;
+        }
+
         // TODO: compute probability from person state
         rng.random_bool(1.0 / 50.0).then(|| {
             state
@@ -298,13 +258,18 @@ impl std::fmt::Debug for Person<'_> {
     }
 }
 
-// for small local distances, an euclidianian distance of 0.0009 corresponds to ~1km
-
-fn lookup_index(batch: &RecordBatch) -> Result<IndexSet<PersonId>> {
+fn lookup_index(batch: &RecordBatch) -> Result<IndexMap<PersonId, PersonState>> {
     Ok(batch
         .column(0)
         .as_fixed_size_binary()
         .iter()
-        .filter_map(|data| data.map(|data| PersonId(Uuid::from_slice(data).unwrap())))
+        .filter_map(|data| {
+            data.map(|data| {
+                (
+                    PersonId(Uuid::from_slice(data).unwrap()),
+                    Default::default(),
+                )
+            })
+        })
         .collect())
 }

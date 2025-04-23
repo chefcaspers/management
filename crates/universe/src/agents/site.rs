@@ -5,9 +5,9 @@ use itertools::Itertools;
 use tabled::Tabled;
 
 use super::kitchen::{KitchenRunner, KitchenStats};
-use crate::idents::*;
 use crate::simulation::schemas::{OrderData, OrderLineStatus};
 use crate::{Entity, Simulatable, State, error::Result};
+use crate::{Event, idents::*};
 
 #[derive(Clone)]
 pub struct OrderLine {
@@ -87,7 +87,7 @@ impl Entity for SiteRunner {
 }
 
 impl Simulatable for SiteRunner {
-    fn step(&mut self, ctx: &State) -> Result<()> {
+    fn step(&mut self, ctx: &State) -> Result<Vec<Event>> {
         let order_data = ctx.orders_for_site(&self.id)?;
         self.queue_order_data(&order_data)?;
         self.order_data = self.order_data.merge(order_data)?;
@@ -115,7 +115,7 @@ impl Simulatable for SiteRunner {
             .map(|(_, line_id)| (line_id.clone(), OrderLineStatus::Ready));
         self.order_data.update_order_line_status(updates)?;
 
-        Ok(())
+        Ok(vec![])
     }
 }
 
