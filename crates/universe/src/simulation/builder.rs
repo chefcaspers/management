@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, Duration, Utc};
 use itertools::Itertools;
+use url::Url;
 
 use super::{Simulation, SimulationConfig, State, state::EntityView};
 use crate::SiteRunner;
@@ -31,6 +32,12 @@ pub struct SimulationBuilder {
 
     /// Start time for the simulation
     start_time: DateTime<Utc>,
+
+    /// location to store simulation results
+    result_storage_location: Option<Url>,
+
+    /// Interval at which to take snapshots of the simulation state
+    snapshot_interval: Option<Duration>,
 }
 
 impl Default for SimulationBuilder {
@@ -41,6 +48,8 @@ impl Default for SimulationBuilder {
             population_size: 1000,
             time_increment: Duration::seconds(60),
             start_time: Utc::now(),
+            result_storage_location: None,
+            snapshot_interval: None,
         }
     }
 }
@@ -81,6 +90,20 @@ impl SimulationBuilder {
         self
     }
 
+    /// Set the result storage location for the simulation
+    pub fn with_result_storage_location(
+        &mut self,
+        result_storage_location: impl Into<Url>,
+    ) -> &mut Self {
+        self.result_storage_location = Some(result_storage_location.into());
+        self
+    }
+
+    pub fn with_snapshot_interval(&mut self, snapshot_interval: Duration) -> &mut Self {
+        self.snapshot_interval = Some(snapshot_interval);
+        self
+    }
+
     /// Build the simulation with the given initial conditions
     pub fn build(self) -> Result<Simulation> {
         let brands: HashMap<BrandId, _> = self
@@ -111,6 +134,8 @@ impl SimulationBuilder {
         let config = SimulationConfig {
             simulation_start: self.start_time,
             time_increment: self.time_increment,
+            result_storage_location: self.result_storage_location,
+            snapshot_interval: self.snapshot_interval,
         };
         let state = State::try_new(brands, sites, Some(config))?;
 
@@ -126,6 +151,7 @@ impl SimulationBuilder {
             .try_collect()?;
 
         Ok(Simulation {
+            last_snapshot_time: state.current_time(),
             state,
             sites: site_runners,
         })

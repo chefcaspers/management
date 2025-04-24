@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use arrow_array::{RecordBatch, cast::AsArray};
 use chrono::{DateTime, Utc};
+use datafusion::dataframe::DataFrameWriteOptions;
 use datafusion::prelude::*;
 use geo_traits::PointTrait;
 use geoarrow::trait_::NativeScalar;
@@ -92,12 +93,16 @@ impl State {
         })
     }
 
-    pub fn ctx(&self) -> &SessionContext {
+    pub(crate) fn ctx(&self) -> &SessionContext {
         &self.ctx
     }
 
-    pub fn rt(&self) -> &Runtime {
+    pub(crate) fn rt(&self) -> &Runtime {
         &self.rt
+    }
+
+    pub(crate) fn config(&self) -> &SimulationConfig {
+        &self.config
     }
 
     pub fn people(&self) -> &RecordBatch {
@@ -141,12 +146,40 @@ impl State {
         self.time
     }
 
-    pub fn next_time(&self) -> DateTime<Utc> {
+    pub(crate) fn next_time(&self) -> DateTime<Utc> {
         self.time + self.time_step
     }
 
-    pub fn step(&mut self) {
+    pub(crate) fn step(&mut self) {
         self.time += self.time_step;
+    }
+
+    pub(crate) fn snapshot(&self, base_path: &url::Url) -> Result<()> {
+        let people_path = base_path
+            .join(&format!(
+                "people/{}.parquet",
+                self.current_time().timestamp()
+            ))
+            .unwrap();
+
+        let objects_path = base_path
+            .join(&format!(
+                "objects/{}.parquet",
+                self.current_time().timestamp()
+            ))
+            .unwrap();
+
+        self.rt().block_on(async {
+            let df = self.ctx().read_batch(self.population.people().clone())?;
+            df.write_parquet(people_path.as_str(), DataFrameWriteOptions::new(), None)
+                .await?;
+
+            let df = self.ctx().read_batch(self.objects.objects().clone())?;
+            df.write_parquet(objects_path.as_str(), DataFrameWriteOptions::new(), None)
+                .await?;
+
+            Ok::<_, Box<dyn std::error::Error>>(())
+        })
     }
 }
 

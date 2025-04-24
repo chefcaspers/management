@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Duration, Utc};
+use url::Url;
 
-use self::schemas::OrderDataStats;
-use crate::KitchenStats;
 use crate::agents::SiteRunner;
 use crate::error::Result;
 use crate::idents::{SiteId, TypedId};
@@ -33,12 +32,17 @@ pub trait Simulatable: Entity {
 }
 
 /// Configuration for the simulation engine
-pub struct SimulationConfig {
+pub(crate) struct SimulationConfig {
     /// all ghost kitchen sites.
     simulation_start: DateTime<Utc>,
 
     /// time increment for simulation steps
     time_increment: Duration,
+
+    /// location to store simulation results
+    result_storage_location: Option<Url>,
+
+    snapshot_interval: Option<Duration>,
 }
 
 impl Default for SimulationConfig {
@@ -46,6 +50,8 @@ impl Default for SimulationConfig {
         SimulationConfig {
             simulation_start: Utc::now(),
             time_increment: Duration::seconds(60),
+            result_storage_location: None,
+            snapshot_interval: None,
         }
     }
 }
@@ -60,6 +66,8 @@ pub struct Simulation {
 
     /// all ghost kitchen sites.
     sites: HashMap<SiteId, SiteRunner>,
+
+    last_snapshot_time: DateTime<Utc>,
 }
 
 impl Simulation {
@@ -69,6 +77,17 @@ impl Simulation {
             site.step(&self.state)?;
         }
         self.state.step();
+        if let (Some(base_url), Some(interval)) = (
+            self.state().config().result_storage_location.as_ref(),
+            self.state().config().snapshot_interval,
+        ) {
+            if (self.state.current_time() - self.last_snapshot_time).num_seconds()
+                > interval.num_seconds()
+            {
+                self.state().snapshot(base_url)?;
+                self.last_snapshot_time = self.state.current_time();
+            }
+        }
         Ok(())
     }
 
@@ -80,21 +99,6 @@ impl Simulation {
         Ok(())
     }
 
-    fn snapshot(&self) {
-        let total_kitchen_stats: KitchenStats = self
-            .sites
-            .values()
-            .map(|site| site.total_kitchen_stats())
-            .fold(KitchenStats::default(), |acc, stats| acc + stats);
-        let order_data_stats = self
-            .sites
-            .values()
-            .map(|site| site.order_data().stats())
-            .fold(OrderDataStats::default(), |acc, stats| acc + stats);
-        println!("{order_data_stats:#?}");
-        println!("{total_kitchen_stats:#?}");
-    }
-
     pub fn state(&self) -> &State {
         &self.state
     }
@@ -102,13 +106,15 @@ impl Simulation {
 
 #[cfg(test)]
 mod tests {
-    use arrow_cast::pretty::print_batches;
-
     use super::*;
 
     #[test_log::test]
     fn test_inner_simulation() -> Result<(), Box<dyn std::error::Error>> {
+        let path = Url::parse("file:///Users/robert.pack/code/management/notebooks/data/")?;
         let mut simulation = SimulationBuilder::new();
+        simulation
+            .with_result_storage_location(path)
+            .with_snapshot_interval(Duration::minutes(30));
 
         for brand in crate::init::generate_brands() {
             simulation.with_brand(brand);
@@ -119,14 +125,7 @@ mod tests {
         }
 
         let mut simulation = simulation.build()?;
-        for _ in 0..5 {
-            simulation.run(10)?;
-            simulation.snapshot();
-        }
-
-        // print_batches(&[simulation.state().objects().project(&[2, 4]).unwrap()]).unwrap();
-
-        // print_batches(&[simulation.state().people().clone()]).unwrap();
+        simulation.run(100)?;
 
         Ok(())
     }
