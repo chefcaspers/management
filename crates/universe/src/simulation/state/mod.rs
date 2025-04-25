@@ -24,14 +24,10 @@ mod objects;
 mod population;
 
 pub(crate) use objects::{ObjectData, ObjectLabel};
-pub(crate) use population::{Person, PersonState, PopulationData};
+pub(crate) use population::{Person, PopulationData};
 
 #[derive(Debug, thiserror::Error)]
 enum StateError {
-    // object not found
-    #[error("Object not found")]
-    ObjectNotFound,
-
     // inconsistent data
     #[error("Inconsistent data")]
     InconsistentData,

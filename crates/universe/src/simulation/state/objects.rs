@@ -23,12 +23,6 @@ enum VendorDataError {
     #[error("Not found")]
     NotFound,
 
-    #[error("Brand not found")]
-    BrandNotFound,
-
-    #[error("Menu item not found")]
-    MenuItemNotFound,
-
     #[error("Inconsistent data")]
     InconsistentData,
 
@@ -42,9 +36,6 @@ pub enum ObjectLabel {
     Station,
     Brand,
     MenuItem,
-    Instruction,
-    Ingredient,
-    IngredientUse,
 }
 
 impl AsRef<str> for ObjectLabel {
@@ -55,9 +46,6 @@ impl AsRef<str> for ObjectLabel {
             ObjectLabel::Station => "station",
             ObjectLabel::Brand => "brand",
             ObjectLabel::MenuItem => "menu_item",
-            ObjectLabel::Instruction => "instruction",
-            ObjectLabel::Ingredient => "ingredient",
-            ObjectLabel::IngredientUse => "ingredient_use",
         }
     }
 }
@@ -132,7 +120,7 @@ impl ObjectData {
         let (offset, length) = *self
             .brand_slices
             .get(brand_id)
-            .ok_or(VendorDataError::BrandNotFound)?;
+            .ok_or(VendorDataError::NotFound)?;
         Ok(BrandData {
             data: self.objects.slice(offset, length),
             menu_items: HashMap::new(),
@@ -174,7 +162,7 @@ impl ObjectData {
         }
         let view = self
             .menu_item_data(item_id)
-            .ok_or_else(|| VendorDataError::MenuItemNotFound)?;
+            .ok_or_else(|| VendorDataError::NotFound)?;
         let properties = view.properties()?;
         self.menu_items.insert(*item_id, properties.clone());
         return Ok(self.menu_items.get(item_id).unwrap());

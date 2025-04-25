@@ -33,7 +33,10 @@ arrow-ipc = { workspace = true }
 arrow-json = { workspace = true }
 arrow-ord = { workspace = true }
 arrow-row = { workspace = true }
-arrow-schema = { workspace = true, features = ["serde"] }
+arrow-schema = { workspace = true, features = [
+    "serde",
+    "canonical_extension_types",
+] }
 arrow-select = { workspace = true }
 
 datafusion = { workspace = true }
@@ -57,6 +60,8 @@ fake = { version = "4", features = ["derive"] }
 indexmap = { version = "2.9.0" }
 geo-traits = "0.2"
 strum = { version = "0.27", features = ["derive"] }
+fast_paths = "1.0.0"
+bincode = { version = "2", features = ["serde"] }
 
 [dev-dependencies]
 arrow = { workspace = true }
