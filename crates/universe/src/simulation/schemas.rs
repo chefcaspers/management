@@ -1,5 +1,6 @@
 use std::sync::{Arc, LazyLock};
 
+use arrow_array::types::Float64Type;
 use arrow_array::{
     RecordBatch, StringArray,
     builder::{FixedSizeBinaryBuilder, FixedSizeListBuilder, Float64Builder, StringBuilder},
@@ -12,7 +13,7 @@ use counter::Counter;
 use h3o::LatLng;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
-use strum::{Display, EnumString};
+use strum::{AsRefStr, Display, EnumString};
 
 use crate::idents::{OrderId, OrderLineId};
 use crate::{
@@ -57,32 +58,58 @@ pub static POPULATION_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
     ]))
 });
 
+pub(crate) static ORDER_DESTINATION_IDX: usize = 2;
+pub(crate) static ORDER_STATUS_IDX: usize = 3;
 static ORDER_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
-    SchemaRef::new(Schema::new(vec![
-        Field::new("id", DataType::FixedSizeBinary(16), false),
-        Field::new("customer_id", DataType::FixedSizeBinary(16), false),
-        Field::new_fixed_size_list(
-            "destination",
-            Field::new("item", DataType::Float64, false),
-            2,
-            false,
-        ),
-    ]))
+    let mut fields = Vec::with_capacity(4);
+    fields.push(Field::new("id", DataType::FixedSizeBinary(16), false));
+    fields.push(Field::new(
+        "customer_id",
+        DataType::FixedSizeBinary(16),
+        false,
+    ));
+    fields.push(Field::new_fixed_size_list(
+        "destination",
+        Field::new("item", DataType::Float64, false),
+        2,
+        false,
+    ));
+    fields.push(Field::new("status", DataType::Utf8, false));
+    SchemaRef::new(Schema::new(fields))
 });
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumString, Display)]
+#[test]
+fn test_order_schema() {
+    let schema = ORDER_SCHEMA.clone();
+
+    let destination = schema.field(ORDER_DESTINATION_IDX);
+    assert_eq!(destination.name(), "destination");
+
+    let status = schema.field(ORDER_STATUS_IDX);
+    assert_eq!(status.name(), "status");
+    assert_eq!(status.data_type(), &DataType::Utf8);
+    assert!(schema.fields().len() == ORDER_STATUS_IDX + 1);
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, EnumString, Display, AsRefStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum OrderStatus {
     Submitted,
     Processing,
     Ready,
+    PickedUp,
     Delivered,
+
+    /// Catch-all for unknown statuses to avoid panics
+    #[strum(default)]
+    Unknown(String),
 }
 
 struct OrderBuilder {
     ids: FixedSizeBinaryBuilder,
     customer_ids: FixedSizeBinaryBuilder,
     destination: FixedSizeListBuilder<Float64Builder>,
+    statuses: StringBuilder,
 }
 
 impl OrderBuilder {
@@ -92,6 +119,7 @@ impl OrderBuilder {
             customer_ids: FixedSizeBinaryBuilder::new(16),
             destination: FixedSizeListBuilder::new(Float64Builder::new(), 2)
                 .with_field(Field::new("item", DataType::Float64, false)),
+            statuses: StringBuilder::new(),
         }
     }
 
@@ -106,6 +134,7 @@ impl OrderBuilder {
         self.destination.values().append_value(destination.lat());
         self.destination.values().append_value(destination.lng());
         self.destination.append(true);
+        self.statuses.append_value(OrderStatus::Submitted.as_ref());
         Ok(id)
     }
 
@@ -116,12 +145,13 @@ impl OrderBuilder {
                 Arc::new(self.ids.finish()),
                 Arc::new(self.customer_ids.finish()),
                 Arc::new(self.destination.finish()),
+                Arc::new(self.statuses.finish()),
             ],
         )?)
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumString, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumString, Display, AsRefStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum OrderLineStatus {
     Submitted,
@@ -340,14 +370,20 @@ impl OrderData {
     }
 
     pub fn order(&self, order_id: &OrderId) -> Option<OrderView<'_>> {
-        let Some((id, _)) = self.index.get_key_value(order_id) else {
-            return None;
-        };
-        Some(OrderView::new(id, self))
+        self.index
+            .get_key_value(order_id)
+            .map(|(id, (idx, _))| OrderView::new(id, self, *idx))
     }
 
     pub fn orders(&self) -> impl Iterator<Item = OrderView<'_>> {
-        self.index.iter().map(|(id, _)| OrderView::new(id, self))
+        self.index
+            .iter()
+            .map(|(id, (idx, _))| OrderView::new(id, self, *idx))
+    }
+
+    pub fn orders_with_status(&self, status: &OrderStatus) -> impl Iterator<Item = OrderView<'_>> {
+        self.orders()
+            .filter(|order| order.status() == status.as_ref())
     }
 
     pub fn into_parts(self) -> (RecordBatch, RecordBatch) {
@@ -360,7 +396,7 @@ impl OrderData {
         Self::try_new(orders, lines)
     }
 
-    pub(crate) fn update_order_line_status(
+    pub(crate) fn update_statuses(
         &mut self,
         updates: impl IntoIterator<Item = (OrderLineId, OrderLineStatus)>,
     ) -> Result<()> {
@@ -392,6 +428,21 @@ impl OrderData {
             .collect_vec();
         arrays.push(new_array);
         self.lines = RecordBatch::try_new(ORDER_LINE_SCHEMA.clone(), arrays)?;
+
+        let statuses = self
+            .orders()
+            .map(|order| order.compute_status().to_string());
+        let status_arr = Arc::new(StringArray::from(statuses.collect_vec()));
+        let mut arrays = self
+            .orders
+            .columns()
+            .into_iter()
+            .cloned()
+            .take(self.orders.num_columns() - 1)
+            .collect_vec();
+        arrays.push(status_arr);
+        self.orders = RecordBatch::try_new(ORDER_SCHEMA.clone(), arrays)?;
+
         Ok(())
     }
 }
@@ -399,15 +450,46 @@ impl OrderData {
 pub struct OrderView<'a> {
     order_id: &'a OrderId,
     data: &'a OrderData,
+    valid_index: usize,
 }
 
 impl<'a> OrderView<'a> {
-    fn new(order_id: &'a OrderId, data: &'a OrderData) -> Self {
-        Self { order_id, data }
+    fn new(order_id: &'a OrderId, data: &'a OrderData, valid_index: usize) -> Self {
+        Self {
+            order_id,
+            data,
+            valid_index,
+        }
     }
 
     pub fn id(&self) -> &OrderId {
         self.order_id
+    }
+
+    pub fn status(&self) -> &str {
+        self.data
+            .orders
+            .column(ORDER_STATUS_IDX)
+            .as_string::<i32>()
+            .value(self.valid_index)
+    }
+
+    fn compute_status(&self) -> OrderStatus {
+        let status = self
+            .status()
+            .parse()
+            .unwrap_or(OrderStatus::Unknown(self.status().to_string()));
+        match status {
+            OrderStatus::Submitted => self
+                .is_processing()
+                .then(|| OrderStatus::Processing)
+                .unwrap_or(status),
+            OrderStatus::Processing => self
+                .is_ready()
+                .then(|| OrderStatus::Ready)
+                .unwrap_or(status),
+            _ => status,
+        }
     }
 
     pub fn lines(&self) -> impl Iterator<Item = OrderLineView<'_>> {
@@ -420,11 +502,33 @@ impl<'a> OrderView<'a> {
             .map(|line_id| OrderLineView::new(self.order_id, line_id, self.data))
     }
 
+    pub fn is_processing(&self) -> bool {
+        self.lines()
+            .any(|line| line.status() == OrderLineStatus::Processing.as_ref())
+    }
+
+    pub fn is_ready(&self) -> bool {
+        self.lines()
+            .all(|line| line.status() == OrderLineStatus::Ready.as_ref())
+    }
+
     pub fn line(&self, line_id: &OrderLineId) -> Option<OrderLineView<'_>> {
         let (_order_idx, (offset, len)) = self.data.index.get(self.order_id)?;
         let (line_idx, line_id) = self.data.lines_index.get_full(line_id)?;
         (line_idx >= *offset && line_idx < *offset + *len)
             .then(|| OrderLineView::new(self.order_id, line_id, self.data))
+    }
+
+    pub fn destination(&self) -> Result<LatLng> {
+        let (order_idx, _) = self.data.index.get(self.order_id).unwrap();
+        let pos = self
+            .data
+            .orders
+            .column(ORDER_DESTINATION_IDX)
+            .as_fixed_size_list()
+            .value(*order_idx);
+        let vals = pos.as_primitive::<Float64Type>();
+        Ok(LatLng::new(vals.value(0), vals.value(1))?)
     }
 }
 

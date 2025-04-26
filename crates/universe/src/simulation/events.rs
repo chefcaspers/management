@@ -13,7 +13,14 @@ pub struct OrderLineReadyPayload {
     pub order_line_id: OrderLineId,
 }
 
+pub struct OrderDeliveredPayload {
+    pub timestamp: DateTime<Utc>,
+    pub order_id: OrderId,
+    pub courier_id: PersonId,
+}
+
 pub enum Event {
     OrderCreated(OrderCreatedPayload),
     OrderLineReady(OrderLineReadyPayload),
+    OrderDelivered(OrderDeliveredPayload),
 }

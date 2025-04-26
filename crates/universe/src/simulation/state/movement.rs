@@ -7,12 +7,14 @@ use arrow_schema::{DataType, Field, Schema, SchemaRef};
 use datafusion_common::SchemaExt;
 use fast_paths::{FastGraph, InputGraph, PathCalculator};
 use geo::Point;
+use geo_traits::PointTrait;
 use geo_traits::to_geo::ToGeoLineString;
 use geoarrow::array::{LineStringArray, PointArray};
 use geoarrow::scalar::{LineString as ArrowLineString, Point as ArrowPoint};
 use geoarrow::trait_::ArrayAccessor as _;
+use geoarrow::trait_::NativeScalar;
 use geoarrow_schema::{CoordType, Dimension, LineStringType, PointType};
-use h3o::LatLng;
+use h3o::{CellIndex, LatLng, Resolution};
 use indexmap::IndexSet;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -133,30 +135,40 @@ impl<T: Into<JourneyLeg>> FromIterator<T> for Journey {
 pub struct TripPlanner {
     routing: RoutingData,
     graph: FastGraph,
-    router: PathCalculator,
 }
 
 impl TripPlanner {
     fn new(routing: RoutingData) -> Self {
         let graph = routing.build_router();
-        let router = fast_paths::create_calculator(&graph);
-        Self {
-            routing,
-            graph,
-            router,
-        }
+        Self { routing, graph }
+    }
+
+    pub fn get_router(&self) -> PathCalculator {
+        fast_paths::create_calculator(&self.graph)
+    }
+
+    /// For a given point, find a nearby node in the routing graph.
+    ///
+    /// This function will not try to find the nearest node, but will instead
+    /// return the first node found in the vicinity.
+    pub fn nearest_node(&self, point: &LatLng) -> Option<Uuid> {
+        // TODO: try different resolutions, starting from lower ones.
+        let cell = point.to_cell(Resolution::Ten);
+        self.routing
+            .nodes()
+            .find(|node| node.is_in_cell(cell))
+            .map(|node| *node.id())
     }
 
     pub fn plan(
-        &mut self,
+        &self,
+        router: &mut PathCalculator,
         origin: impl AsRef<Uuid>,
         destination: impl AsRef<Uuid>,
     ) -> Option<Journey> {
         let origin_id = self.routing.node_map.get_index_of(origin.as_ref())?;
         let destination_id = self.routing.node_map.get_index_of(destination.as_ref())?;
-        let path = self
-            .router
-            .calc_path(&self.graph, origin_id, destination_id)?;
+        let path = router.calc_path(&self.graph, origin_id, destination_id)?;
         Some(
             path.get_nodes()
                 .iter()
@@ -169,14 +181,14 @@ impl TripPlanner {
                         .to_line_string()
                         .points()
                         .tuple_windows()
-                        .map(|(p0, p1)| {
+                        .filter_map(|(p0, p1)| {
                             let distance = LatLng::new(p0.y(), p0.x())
-                                .unwrap()
-                                .distance_m(LatLng::new(p1.y(), p1.x()).unwrap());
-                            JourneyLeg {
+                                .ok()?
+                                .distance_m(LatLng::new(p1.y(), p1.x()).ok()?);
+                            Some(JourneyLeg {
                                 destination: p1,
                                 distance_m: distance.round().abs() as usize,
-                            }
+                            })
                         })
                         .collect::<Vec<_>>();
                     legs.into_iter()
@@ -383,6 +395,22 @@ impl<'a> StreetNode<'a> {
         Self { data, valid_index }
     }
 
+    pub fn id(&self) -> &Uuid {
+        self.data.node_map.get_index(self.valid_index).unwrap()
+    }
+
+    pub fn is_in_cell(&self, cell: CellIndex) -> bool {
+        self.cell(cell.resolution())
+            .map(|c| c == cell)
+            .unwrap_or(false)
+    }
+
+    pub fn cell(&self, resolution: Resolution) -> Option<CellIndex> {
+        let coords = self.geometry().coord()?;
+        let lat_lng: LatLng = coords.to_geo().try_into().ok()?;
+        Some(lat_lng.to_cell(resolution))
+    }
+
     pub fn geometry(&self) -> ArrowPoint<'_> {
         self.data.node_positions.value(self.valid_index)
     }
@@ -458,11 +486,13 @@ mod tests {
         let nodes = concat_batches(&schema, &batches).unwrap();
 
         let routing = RoutingData::try_new(nodes, edges).unwrap();
-        let mut planner = routing.into_trip_planner();
+        let planner = routing.into_trip_planner();
         let ids = planner.routing.nodes.column(1).as_fixed_size_binary();
 
+        let mut router = planner.get_router();
         let journey = planner
             .plan(
+                &mut router,
                 Uuid::from_slice(ids.value(1)).unwrap(),
                 Uuid::from_slice(ids.value(20)).unwrap(),
             )

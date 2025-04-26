@@ -12,7 +12,7 @@ pub use self::events::*;
 pub use self::state::State;
 
 mod builder;
-mod events;
+pub mod events;
 mod execution;
 pub mod schemas;
 pub mod state;

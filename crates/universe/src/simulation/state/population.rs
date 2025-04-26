@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use strum::AsRefStr;
 use uuid::Uuid;
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::idents::{BrandId, MenuItemId, OrderId, PersonId};
 use crate::simulation::state::EntityView;
 
@@ -29,6 +29,7 @@ pub enum PersonStatus {
     AwaitingOrder(OrderId),
     Eating(DateTime<Utc>),
     Moving(Journey),
+    Delivering(OrderId, Journey),
 }
 
 impl Default for PersonStatus {
@@ -80,6 +81,11 @@ impl PopulationData {
 
     pub fn people(&self) -> &RecordBatch {
         &self.people
+    }
+
+    pub fn update_person_status(&mut self, id: &PersonId, status: PersonStatus) -> Result<()> {
+        self.lookup_index.get_mut(id).ok_or(Error::NotFound)?.status = status;
+        Ok(())
     }
 
     fn apply_offsets(
