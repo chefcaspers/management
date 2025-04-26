@@ -6,6 +6,7 @@ use arrow_array::builder::{
     FixedSizeBinaryBuilder, ListBuilder, StringBuilder, TimestampMillisecondBuilder,
 };
 use fake::Fake;
+use geo::Centroid;
 use geo::{BoundingRect, LineString, Point, Polygon};
 use geoarrow::array::PointBuilder;
 use geoarrow_schema::Dimension;
@@ -17,7 +18,7 @@ use crate::error::Result;
 use crate::idents::{BrandId, KitchenId, MenuItemId, PersonId, SiteId, StationId};
 use crate::models::{Brand, KitchenStation, MenuItem, Site, Station};
 use crate::simulation::schemas::{OBJECT_SCHEMA, POPULATION_SCHEMA};
-use crate::state::{ObjectLabel, PopulationData};
+use crate::state::{ObjectLabel, PersonRole, PopulationData};
 
 static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
     let mut brands = Vec::new();
@@ -249,7 +250,7 @@ pub struct PopulationDataBuilder {
     last_names: StringBuilder,
     emails: StringBuilder,
     cc_numbers: StringBuilder,
-
+    roles: StringBuilder,
     positions: PointBuilder,
 
     rng: ThreadRng,
@@ -263,6 +264,7 @@ impl PopulationDataBuilder {
             last_names: StringBuilder::new(),
             emails: StringBuilder::new(),
             cc_numbers: StringBuilder::new(),
+            roles: StringBuilder::new(),
             positions: PointBuilder::new(Dimension::XY),
             rng: rand::rng(),
         }
@@ -285,6 +287,7 @@ impl PopulationDataBuilder {
                 .append_value(gen_email.fake_with_rng::<String, _>(&mut self.rng));
             self.cc_numbers
                 .append_value(gen_cc.fake_with_rng::<String, _>(&mut self.rng));
+            self.roles.append_value(PersonRole::Customer.as_ref());
         }
 
         let latlng = LatLng::new(site.latitude, site.longitude)?;
@@ -306,6 +309,23 @@ impl PopulationDataBuilder {
                 self.positions.push_point(Some(&Point::new(x, y)));
             });
 
+        let n_couriers = n_people / 100;
+        let loc = polygon.centroid().unwrap();
+        for _ in 0..n_couriers {
+            let id = PersonId::new();
+            self.ids.append_value(id)?;
+            self.first_names
+                .append_value(gen_first_name.fake_with_rng::<String, _>(&mut self.rng));
+            self.last_names
+                .append_value(gen_last_name.fake_with_rng::<String, _>(&mut self.rng));
+            self.emails
+                .append_value(gen_email.fake_with_rng::<String, _>(&mut self.rng));
+            self.cc_numbers
+                .append_value(gen_cc.fake_with_rng::<String, _>(&mut self.rng));
+            self.roles.append_value(PersonRole::Courier.as_ref());
+            self.positions.push_point(Some(&loc));
+        }
+
         Ok(())
     }
 
@@ -315,10 +335,10 @@ impl PopulationDataBuilder {
         let last_names = Arc::new(self.last_names.finish());
         let emails = Arc::new(self.emails.finish());
         let cc_numbers = Arc::new(self.cc_numbers.finish());
-
+        let roles = Arc::new(self.roles.finish());
         let people = RecordBatch::try_new(
             POPULATION_SCHEMA.clone(),
-            vec![ids, first_names, last_names, emails, cc_numbers],
+            vec![ids, first_names, last_names, emails, cc_numbers, roles],
         )?;
 
         PopulationData::try_new(people, self.positions.finish())

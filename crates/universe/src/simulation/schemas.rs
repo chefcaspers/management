@@ -20,7 +20,7 @@ use crate::{
     idents::{BrandId, MenuItemId},
 };
 
-use super::state::Person;
+use super::state::PersonView;
 
 pub static OBJECT_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
     Arc::new(Schema::new(vec![
@@ -53,6 +53,7 @@ pub static POPULATION_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
         Field::new("last_name", DataType::Utf8, false),
         Field::new("email", DataType::Utf8, false),
         Field::new("cc_number", DataType::Utf8, true),
+        Field::new("role", DataType::Utf8, false),
     ]))
 });
 
@@ -204,7 +205,7 @@ impl OrderDataBuilder {
 
     pub fn add_order(
         mut self,
-        person: &Person,
+        person: &PersonView,
         destination: LatLng,
         order: &[(BrandId, MenuItemId)],
     ) -> Self {

@@ -24,7 +24,7 @@ mod objects;
 mod population;
 
 pub(crate) use objects::{ObjectData, ObjectLabel};
-pub(crate) use population::{Person, PopulationData};
+pub(crate) use population::{PersonRole, PersonView, PopulationData};
 
 #[derive(Debug, thiserror::Error)]
 enum StateError {
@@ -116,7 +116,7 @@ impl State {
 
         self.population
             // NB: resolution 6 corresponds to a cell size of approximately 36 km2
-            .idle_people_in_cell(lat_lng.to_cell(Resolution::Six))
+            .idle_people_in_cell(lat_lng.to_cell(Resolution::Six), &PersonRole::Customer)
             .filter_map(|person| person.create_order(self).map(|items| (person, items)))
             .fold(OrderDataBuilder::new(), |builder, (person, items)| {
                 builder.add_order(

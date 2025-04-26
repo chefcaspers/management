@@ -20,7 +20,7 @@ use uuid::Uuid;
 
 use crate::Result;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Transport {
     Foot,
     Bicycle,
@@ -75,21 +75,50 @@ impl Journey {
         self.legs.iter().map(|leg| leg.distance_m).sum()
     }
 
-    pub fn advance(&mut self, transport: Transport, time_step: std::time::Duration) {
+    pub fn advance(&mut self, transport: &Transport, time_step: std::time::Duration) -> Vec<Point> {
         let velocity_m_s = transport.default_velocity_m_s();
         let distance_m = velocity_m_s * time_step.as_secs_f64();
         let mut distance_remaining = distance_m;
-        while distance_remaining > 0. {
+        let mut traversed_points = Vec::new();
+
+        while distance_remaining > 0. && !self.legs.is_empty() {
             let leg = self.legs.pop_front().unwrap();
+
             if leg.distance_m as f64 <= distance_remaining {
+                // We completed this leg, add the destination point
+                traversed_points.push(leg.destination.clone());
                 distance_remaining -= leg.distance_m as f64;
             } else {
+                // We didn't complete this leg, calculate the intermediate point
+                // along the current line based on how far we got
+                let progress_ratio = distance_remaining / leg.distance_m as f64;
+
+                // If we have a previous point, interpolate between it and the destination
+                if let Some(prev_point) = traversed_points.last() {
+                    let dx = leg.destination.x() - prev_point.x();
+                    let dy = leg.destination.y() - prev_point.y();
+
+                    let intermediate_point = Point::new(
+                        prev_point.x() + dx * progress_ratio,
+                        prev_point.y() + dy * progress_ratio,
+                    );
+
+                    traversed_points.push(intermediate_point);
+                } else {
+                    // If there's no previous point, just add the destination
+                    traversed_points.push(leg.destination.clone());
+                }
+
+                // Add the leg back with reduced distance
                 self.legs.push_front(JourneyLeg {
                     destination: leg.destination,
                     distance_m: leg.distance_m - distance_remaining.round() as usize,
                 });
+                break;
             }
         }
+
+        traversed_points
     }
 }
 
@@ -409,20 +438,6 @@ mod tests {
     use itertools::Itertools;
 
     #[test_log::test]
-    fn test_osm_nodes() {
-        let file = std::fs::File::open("../../notebooks/nodes.parquet").unwrap();
-        let reader = GeoParquetRecordBatchReaderBuilder::try_new(file)
-            .unwrap()
-            .build()
-            .unwrap();
-        let schema = reader.schema();
-        let batches: Vec<_> = reader.into_iter().try_collect().unwrap();
-        let nodes = concat_batches(&schema, &batches).unwrap();
-
-        println!("nodes: {:?}", nodes.num_rows());
-    }
-
-    #[test_log::test]
     fn test_osm_node_properties() {
         let file = std::fs::File::open("../../notebooks/edges.parquet").unwrap();
         let reader = GeoParquetRecordBatchReaderBuilder::try_new(file)
@@ -442,19 +457,14 @@ mod tests {
         let batches: Vec<_> = reader.into_iter().try_collect().unwrap();
         let nodes = concat_batches(&schema, &batches).unwrap();
 
-        let routing = RoutingData::try_new(
-            nodes, //.project(&[0, 1, 2]).unwrap(),
-            edges, //.project(&[0, 1, 2, 3]).unwrap(),
-        )
-        .unwrap();
-
+        let routing = RoutingData::try_new(nodes, edges).unwrap();
         let mut planner = routing.into_trip_planner();
         let ids = planner.routing.nodes.column(1).as_fixed_size_binary();
 
         let journey = planner
             .plan(
                 Uuid::from_slice(ids.value(1)).unwrap(),
-                Uuid::from_slice(ids.value(10)).unwrap(),
+                Uuid::from_slice(ids.value(20)).unwrap(),
             )
             .unwrap();
 
@@ -479,28 +489,91 @@ mod tests {
     }
 
     #[test_log::test]
-    fn test_osm_node_properties2() {
-        let mut file = std::fs::File::open("../../notebooks/london.bin").unwrap();
+    fn test_journey() {
+        let journey = Journey {
+            legs: vec![
+                JourneyLeg {
+                    destination: Point::new(-0.1553777, 51.5453468),
+                    distance_m: 10,
+                },
+                JourneyLeg {
+                    destination: Point::new(-0.1556396, 51.5455222),
+                    distance_m: 20,
+                },
+                JourneyLeg {
+                    destination: Point::new(-0.1556897, 51.5455559),
+                    distance_m: 10,
+                },
+                JourneyLeg {
+                    destination: Point::new(-0.1557318, 51.5455873),
+                    distance_m: 10,
+                },
+            ]
+            .into_iter()
+            .collect(),
+        };
 
-        let fast_graph: FastGraph =
-            bincode::serde::decode_from_std_read(&mut file, bincode::config::standard()).unwrap();
+        // Test advancing a journey with a single time step that completes all legs
+        let mut journey1 = journey.clone();
+        let transport = Transport::Car;
+        let time_step = std::time::Duration::from_secs(60); // 60 seconds at car speed should complete all legs
 
-        let shortest_path = fast_paths::calc_path(&fast_graph, 8, 6);
+        let traversed_points = journey1.advance(&transport, time_step);
 
-        match shortest_path {
-            Some(p) => {
-                // the weight of the shortest path
-                let weight = p.get_weight();
+        // We should have traversed all points
+        assert_eq!(traversed_points.len(), journey.legs.len());
+        assert!(journey1.legs.is_empty(), "All legs should be completed");
 
-                // all nodes of the shortest path (including source and target)
-                let nodes = p.get_nodes();
+        // Test advancing a journey with multiple time steps
+        let mut journey2 = journey.clone();
+        let transport = Transport::Foot;
+        let time_step = std::time::Duration::from_secs(5); // 5 seconds at walking speed
 
-                println!("nodes: {:?}", nodes);
-                println!("weight: {:?}", weight);
-            }
-            None => {
-                // no path has been found (nodes are not connected in this graph)
-            }
-        }
+        // First step should traverse part of the first leg
+        let traversed_points1 = journey2.advance(&transport, time_step);
+        assert_eq!(
+            traversed_points1.len(),
+            1,
+            "Should have one intermediate point"
+        );
+        assert_eq!(
+            journey2.legs.len(),
+            4,
+            "Should have 4 legs remaining, first partial"
+        );
+
+        // Second step should complete the first leg and start on the second
+        let traversed_points2 = journey2.advance(&transport, time_step);
+        assert_eq!(
+            traversed_points2.len(),
+            2,
+            "Should have traversed one point, and started on the second leg"
+        );
+        assert_eq!(
+            journey2.legs.len(),
+            3,
+            "Should have 3 legs remaining, second leg partial"
+        );
+
+        // Test with zero time step
+        let mut journey3 = journey.clone();
+        let traversed_points = journey3.advance(&transport, std::time::Duration::from_secs(0));
+        assert!(
+            traversed_points.is_empty(),
+            "Zero time step should not traverse any points"
+        );
+        assert_eq!(
+            journey3.legs.len(),
+            journey.legs.len(),
+            "No legs should be completed"
+        );
+
+        // Test with empty journey
+        let mut empty_journey = Journey::default();
+        let traversed_points = empty_journey.advance(&transport, time_step);
+        assert!(
+            traversed_points.is_empty(),
+            "Empty journey should not traverse any points"
+        );
     }
 }

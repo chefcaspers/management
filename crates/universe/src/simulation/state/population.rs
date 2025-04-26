@@ -1,3 +1,5 @@
+use std::convert::AsRef;
+
 use arrow_array::{RecordBatch, cast::AsArray};
 use chrono::{DateTime, Utc};
 use geo::Point;
@@ -11,6 +13,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use strum::AsRefStr;
 use uuid::Uuid;
 
 use crate::error::Result;
@@ -19,6 +22,31 @@ use crate::simulation::state::EntityView;
 
 use super::State;
 use super::movement::Journey;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum PersonStatus {
+    Idle,
+    AwaitingOrder(OrderId),
+    Eating(DateTime<Utc>),
+    Moving(Journey),
+}
+
+impl Default for PersonStatus {
+    fn default() -> Self {
+        PersonStatus::Idle
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct PersonState {
+    status: PersonStatus,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, AsRefStr)]
+pub enum PersonRole {
+    Customer,
+    Courier,
+}
 
 /// Population data.
 ///
@@ -30,8 +58,8 @@ pub struct PopulationData {
 
     /// Lookup index for people.
     ///
-    /// An [`IndexSet`] tracks the insertion order of [`PersonId`]s.
-    /// as such we can use the "position" of a person in the [`IndexSet`] to
+    /// An [`IndexMap`] tracks the insertion order of [`PersonId`]s.
+    /// as such we can use the "position" of a person in the [`IndexMap`] to
     /// efficiently lookup their [`Person`] data as it corresponds to
     /// the index value within the [`people`] array.
     lookup_index: IndexMap<PersonId, PersonState>,
@@ -52,30 +80,6 @@ impl PopulationData {
 
     pub fn people(&self) -> &RecordBatch {
         &self.people
-    }
-
-    pub(crate) fn slice(&self, offset: usize, length: usize) -> Self {
-        let people = self.people.slice(offset, length);
-        // let homes = self.homes.slice(offset, length);
-        let positions = self.positions.slice(offset, length);
-        // safety: we apply the same offset to both arrays so they are aligned
-        Self::try_new(people, positions).unwrap()
-    }
-
-    // fn home_at(&self, index: usize) -> Option<ArrowPolygon> {
-    //     if index >= self.homes.len() {
-    //         None
-    //     } else {
-    //         self.homes.get(index)
-    //     }
-    // }
-
-    fn position_at(&self, index: usize) -> Option<ArrowPoint> {
-        if index >= self.positions.len() {
-            None
-        } else {
-            self.positions.get(index)
-        }
     }
 
     fn apply_offsets(
@@ -107,58 +111,49 @@ impl PopulationData {
         Ok(())
     }
 
-    pub fn person(&self, id: &PersonId) -> Option<Person<'_>> {
+    pub fn person(&self, id: &PersonId) -> Option<PersonView<'_>> {
         self.lookup_index
             .get_full(id)
-            .map(|(idx, person_id, _)| Person::new(person_id, self, idx))
+            .map(|(idx, person_id, _)| PersonView::new(person_id, self, idx))
     }
 
     pub(crate) fn idle_people_in_cell(
         &self,
         cell_index: CellIndex,
-    ) -> impl Iterator<Item = Person<'_>> {
+        role: &PersonRole,
+    ) -> impl Iterator<Item = PersonView<'_>> {
         self.iter().filter_map(move |person| {
-            (person.is_idle() && person.cell(cell_index.resolution()).ok()? == cell_index)
+            (person.is_idle()
+                && person.has_role(role)
+                && person.cell(cell_index.resolution()).ok()? == cell_index)
                 .then(|| person)
         })
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = Person<'_>> {
+    pub fn iter(&self) -> impl Iterator<Item = PersonView<'_>> {
         self.lookup_index
             .iter()
             .enumerate()
-            .map(|(valid_index, (id, _))| Person::new(id, self, valid_index))
+            .map(|(valid_index, (id, _))| PersonView::new(id, self, valid_index))
+    }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = PersonView<'_>> {
+        self.lookup_index
+            .iter()
+            .enumerate()
+            .map(|(valid_index, (id, _))| PersonView::new(id, self, valid_index))
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum PersonStatus {
-    Idle,
-    AwaitingOrder(OrderId),
-    Eating(DateTime<Utc>),
-    Moving(Journey),
-}
-
-impl Default for PersonStatus {
-    fn default() -> Self {
-        PersonStatus::Idle
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-pub struct PersonState {
-    status: PersonStatus,
-}
-
-pub struct Person<'a> {
+pub struct PersonView<'a> {
     id: &'a PersonId,
     data: &'a PopulationData,
     valid_index: usize,
 }
 
-impl<'a> Person<'a> {
+impl<'a> PersonView<'a> {
     fn new(id: &'a PersonId, data: &'a PopulationData, valid_index: usize) -> Self {
-        Person {
+        PersonView {
             id,
             data,
             valid_index,
@@ -171,6 +166,15 @@ impl<'a> Person<'a> {
 
     pub fn position(&self) -> ArrowPoint {
         self.data.positions.value(self.valid_index)
+    }
+
+    pub fn has_role(&self, role: &PersonRole) -> bool {
+        self.data
+            .people
+            .column(5)
+            .as_string::<i32>()
+            .value(self.valid_index)
+            == role.as_ref()
     }
 
     pub fn cell(&self, resolution: Resolution) -> Result<CellIndex> {
@@ -246,7 +250,7 @@ impl<'a> Person<'a> {
     }
 }
 
-impl std::fmt::Debug for Person<'_> {
+impl std::fmt::Debug for PersonView<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Person")
             .field("position", &self.position())
