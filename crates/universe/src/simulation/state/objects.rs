@@ -8,6 +8,7 @@ use dashmap::mapref::one::Ref;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use rand::Rng as _;
+use strum::AsRefStr;
 use uuid::Uuid;
 
 use crate::error::Result;
@@ -30,24 +31,14 @@ enum VendorDataError {
     ColumnNotFound(&'static str),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, AsRefStr)]
+#[strum(serialize_all = "snake_case")]
 pub enum ObjectLabel {
     Site,
     Kitchen,
     Station,
     Brand,
     MenuItem,
-}
-
-impl AsRef<str> for ObjectLabel {
-    fn as_ref(&self) -> &str {
-        match self {
-            ObjectLabel::Site => "site",
-            ObjectLabel::Kitchen => "kitchen",
-            ObjectLabel::Station => "station",
-            ObjectLabel::Brand => "brand",
-            ObjectLabel::MenuItem => "menu_item",
-        }
-    }
 }
 
 pub struct ObjectData {
@@ -114,17 +105,6 @@ impl ObjectData {
 
     pub fn objects(&self) -> &RecordBatch {
         &self.objects
-    }
-
-    pub(crate) fn brand(&self, brand_id: &BrandId) -> Result<BrandData> {
-        let (offset, length) = *self
-            .brand_slices
-            .get(brand_id)
-            .ok_or(VendorDataError::NotFound)?;
-        Ok(BrandData {
-            data: self.objects.slice(offset, length),
-            menu_items: HashMap::new(),
-        })
     }
 
     fn iter_ids(
@@ -277,6 +257,10 @@ impl EntityView for MenuItemView<'_> {
     type Id = MenuItemId;
     type Properties = MenuItem;
 
+    fn id(&self) -> Self::Id {
+        *self.id
+    }
+
     fn data(&self) -> &ObjectData {
         &self.data
     }
@@ -324,9 +308,4 @@ impl EntityView for SiteView<'_> {
     fn valid_index(&self) -> usize {
         self.valid_index
     }
-}
-
-pub struct BrandData {
-    data: RecordBatch,
-    menu_items: HashMap<MenuItemId, MenuItem>,
 }

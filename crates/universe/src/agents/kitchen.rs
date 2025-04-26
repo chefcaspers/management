@@ -15,10 +15,7 @@ enum StationStatus {
     Available,
 
     // Stores the recipe ID using this station
-    InUse(OrderLineId),
-
-    // Out of order
-    OutOfOrder,
+    Busy(OrderLineId),
 }
 
 /// A kitchen station
@@ -54,10 +51,9 @@ impl StationRunner {
 
 #[derive(Clone)]
 enum OrderLineStatus {
-    Queued,
-    // Current instruction index
-    InProgress(usize, DateTime<Utc>),
-    Completed,
+    // Current instruction index and start time
+    Processing(usize, DateTime<Utc>),
+
     // Blocked at instruction index
     Blocked(usize),
 }
@@ -100,7 +96,7 @@ impl KitchenRunner {
         for (order_line_id, progress) in self.in_progress.iter() {
             let menu_item = ctx.object_data().menu_item(&progress.order_line.item.1)?;
             match &progress.status {
-                OrderLineStatus::InProgress(instruction_idx, stated_time) => {
+                OrderLineStatus::Processing(instruction_idx, stated_time) => {
                     let expected_duration = menu_item.instructions[*instruction_idx]
                         .expected_duration
                         .map(|duration| duration.seconds)
@@ -126,10 +122,10 @@ impl KitchenRunner {
                     // Move the order to the next station, or block if not available
                     let next_step = &menu_item.instructions[next_idx];
                     if let Some(idx) = take_station(&self.stations, &next_step.required_station) {
-                        self.stations[idx].status = StationStatus::InUse(*order_line_id);
+                        self.stations[idx].status = StationStatus::Busy(*order_line_id);
                         to_update.push((
                             *order_line_id,
-                            OrderLineStatus::InProgress(next_idx, ctx.next_time()),
+                            OrderLineStatus::Processing(next_idx, ctx.next_time()),
                         ));
                     } else {
                         to_update.push((*order_line_id, OrderLineStatus::Blocked(next_idx)));
@@ -140,14 +136,13 @@ impl KitchenRunner {
                     let step = &menu_item.instructions[*instruction_idx];
                     if let Some(asset_idx) = take_station(&self.stations, &step.required_station) {
                         // Mark asset as in use
-                        self.stations[asset_idx].status = StationStatus::InUse(*order_line_id);
+                        self.stations[asset_idx].status = StationStatus::Busy(*order_line_id);
                         to_update.push((
                             *order_line_id,
-                            OrderLineStatus::InProgress(*instruction_idx, ctx.next_time()),
+                            OrderLineStatus::Processing(*instruction_idx, ctx.next_time()),
                         ));
                     }
                 }
-                _ => (),
             }
         }
 
@@ -206,14 +201,14 @@ impl KitchenRunner {
             let step = &menu_item.instructions[0];
             if let Some(asset_idx) = take_station(&self.stations, &step.required_station) {
                 // Mark asset as in use
-                self.stations[asset_idx].status = StationStatus::InUse(order_line.id);
+                self.stations[asset_idx].status = StationStatus::Busy(order_line.id);
 
                 // Add recipe to in-progress with first instruction
                 self.in_progress.insert(
                     order_line.id,
                     OrderProgress {
                         order_line,
-                        status: OrderLineStatus::InProgress(0, ctx.current_time()),
+                        status: OrderLineStatus::Processing(0, ctx.current_time()),
                     },
                 );
 
@@ -258,7 +253,7 @@ fn take_station(assets: &[StationRunner], asset_type: &i32) -> Option<usize> {
 fn release_station(assets: &mut Vec<StationRunner>, asset_type: &i32, recipe_id: &OrderLineId) {
     for asset in assets {
         if &(asset.station_type as i32) == asset_type {
-            if let StationStatus::InUse(id) = &asset.status {
+            if let StationStatus::Busy(id) = &asset.status {
                 if id == recipe_id {
                     asset.status = StationStatus::Available;
                     break;

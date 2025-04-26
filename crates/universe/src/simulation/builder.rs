@@ -1,23 +1,18 @@
 use std::collections::HashMap;
 
+use arrow_array::RecordBatchReader;
+use arrow_select::concat::concat_batches;
 use chrono::{DateTime, Duration, Utc};
+use geoarrow_geoparquet::GeoParquetRecordBatchReaderBuilder;
 use itertools::Itertools;
 use url::Url;
 
+use super::state::RoutingData;
 use super::{Simulation, SimulationConfig, State, state::EntityView};
 use crate::SiteRunner;
 use crate::error::Result;
 use crate::idents::{BrandId, SiteId};
 use crate::models::{Brand, Site};
-
-#[derive(Debug, thiserror::Error)]
-enum BuilderError {
-    #[error("Duplicate brand: {0}")]
-    DuplicateBrand(String),
-
-    #[error("Invalid location: {0} / {1}")]
-    InvalidLocation(f64, f64),
-}
 
 pub struct SimulationBuilder {
     brands: Vec<Brand>,
@@ -38,6 +33,10 @@ pub struct SimulationBuilder {
 
     /// Interval at which to take snapshots of the simulation state
     snapshot_interval: Option<Duration>,
+
+    /// Routing nodes and edges
+    routing_nodes: Option<Url>,
+    routing_edges: Option<Url>,
 }
 
 impl Default for SimulationBuilder {
@@ -50,6 +49,8 @@ impl Default for SimulationBuilder {
             start_time: Utc::now(),
             result_storage_location: None,
             snapshot_interval: None,
+            routing_nodes: None,
+            routing_edges: None,
         }
     }
 }
@@ -104,6 +105,16 @@ impl SimulationBuilder {
         self
     }
 
+    pub fn with_routing_nodes(&mut self, routing_nodes: Url) -> &mut Self {
+        self.routing_nodes = Some(routing_nodes);
+        self
+    }
+
+    pub fn with_routing_edges(&mut self, routing_edges: Url) -> &mut Self {
+        self.routing_edges = Some(routing_edges);
+        self
+    }
+
     /// Build the simulation with the given initial conditions
     pub fn build(self) -> Result<Simulation> {
         let brands: HashMap<BrandId, _> = self
@@ -131,13 +142,37 @@ impl SimulationBuilder {
             })
             .collect_vec();
 
+        let file =
+            std::fs::File::open("/Users/robert.pack/code/management/notebooks/edges.parquet")
+                .unwrap();
+        let reader = GeoParquetRecordBatchReaderBuilder::try_new(file)
+            .unwrap()
+            .build()
+            .unwrap();
+        let schema = reader.schema();
+        let batches: Vec<_> = reader.into_iter().try_collect().unwrap();
+        let edges = concat_batches(&schema, &batches).unwrap();
+
+        let file =
+            std::fs::File::open("/Users/robert.pack/code/management/notebooks/nodes.parquet")
+                .unwrap();
+        let reader = GeoParquetRecordBatchReaderBuilder::try_new(file)
+            .unwrap()
+            .build()
+            .unwrap();
+        let schema = reader.schema();
+        let batches: Vec<_> = reader.into_iter().try_collect().unwrap();
+        let nodes = concat_batches(&schema, &batches).unwrap();
+
+        let routing = RoutingData::try_new(nodes, edges).unwrap();
+
         let config = SimulationConfig {
             simulation_start: self.start_time,
             time_increment: self.time_increment,
             result_storage_location: self.result_storage_location,
             snapshot_interval: self.snapshot_interval,
         };
-        let state = State::try_new(brands, sites, Some(config))?;
+        let state = State::try_new(brands, sites, routing, Some(config))?;
 
         let site_runners = state
             .object_data()

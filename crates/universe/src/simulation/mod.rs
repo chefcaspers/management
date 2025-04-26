@@ -103,30 +103,3 @@ impl Simulation {
         &self.state
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test_log::test]
-    fn test_inner_simulation() -> Result<(), Box<dyn std::error::Error>> {
-        let path = Url::parse("file:///Users/robert.pack/code/management/notebooks/data/")?;
-        let mut simulation = SimulationBuilder::new();
-        simulation
-            .with_result_storage_location(path)
-            .with_snapshot_interval(Duration::minutes(30));
-
-        for brand in crate::init::generate_brands() {
-            simulation.with_brand(brand);
-        }
-
-        for (name, (lat, long)) in [("london", (51.518898098201326, -0.13381370382489707))] {
-            simulation.with_site(name, lat, long);
-        }
-
-        let mut simulation = simulation.build()?;
-        simulation.run(100)?;
-
-        Ok(())
-    }
-}

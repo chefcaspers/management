@@ -1,4 +1,3 @@
-mod customer;
 mod kitchen;
 mod site;
 

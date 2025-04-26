@@ -214,7 +214,7 @@ pub struct RoutingData {
 }
 
 impl RoutingData {
-    fn try_new(nodes: RecordBatch, edges: RecordBatch) -> Result<Self> {
+    pub(crate) fn try_new(nodes: RecordBatch, edges: RecordBatch) -> Result<Self> {
         Self::nodes_schema().logically_equivalent_names_and_types(nodes.schema().as_ref())?;
         Self::edges_schema().logically_equivalent_names_and_types(edges.schema().as_ref())?;
         let mut node_map = IndexSet::new();
@@ -345,10 +345,6 @@ impl RoutingData {
         (0..self.nodes.num_rows())
             .into_iter()
             .map(|i| StreetNode::new(self, i))
-    }
-
-    fn node(&self, index: usize) -> StreetNode<'_> {
-        StreetNode::new(self, index)
     }
 
     pub fn edges(&self) -> impl ExactSizeIterator<Item = StreetEdge<'_>> {

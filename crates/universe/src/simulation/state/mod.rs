@@ -12,6 +12,7 @@ use rand::Rng;
 use tokio::runtime::Runtime;
 use uuid::Uuid;
 
+use self::movement::TripPlanner;
 use super::SimulationConfig;
 use super::schemas::{OrderData, OrderDataBuilder};
 use crate::error::Result;
@@ -23,8 +24,9 @@ mod movement;
 mod objects;
 mod population;
 
+pub(crate) use movement::RoutingData;
 pub(crate) use objects::{ObjectData, ObjectLabel};
-pub(crate) use population::{PersonRole, PersonView, PopulationData};
+pub(crate) use population::{PersonRole, PersonStatus, PersonView, PopulationData};
 
 #[derive(Debug, thiserror::Error)]
 enum StateError {
@@ -56,12 +58,16 @@ pub struct State {
 
     /// Vendor data
     objects: ObjectData,
+
+    /// Routing data
+    routing: TripPlanner,
 }
 
 impl State {
     pub(crate) fn try_new(
         brands: impl IntoIterator<Item = (BrandId, Brand)>,
         sites: Vec<(SiteId, Site)>,
+        routing: RoutingData,
         config: Option<SimulationConfig>,
     ) -> Result<Self> {
         let mut builder = PopulationDataBuilder::new();
@@ -85,6 +91,7 @@ impl State {
             time: config.simulation_start,
             population: builder.finish()?,
             objects: ObjectData::try_new(vendors)?,
+            routing: routing.into_trip_planner(),
             config,
         })
     }
@@ -107,6 +114,14 @@ impl State {
 
     pub fn object_data(&self) -> &ObjectData {
         &self.objects
+    }
+
+    pub fn population(&self) -> &PopulationData {
+        &self.population
+    }
+
+    pub fn trip_planner(&self) -> &TripPlanner {
+        &self.routing
     }
 
     pub(crate) fn orders_for_site(&self, site_id: &SiteId) -> Result<OrderData> {
