@@ -6,11 +6,10 @@ use geo::Point;
 use geo_traits::PointTrait;
 use geoarrow::array::PointArray;
 use geoarrow::trait_::{ArrayAccessor, NativeScalar};
-use geoarrow::{ArrayBase, array::PointBuilder, scalar::Point as ArrowPoint};
+use geoarrow::{ArrayBase, scalar::Point as ArrowPoint};
 use geoarrow_schema::Dimension;
 use h3o::{CellIndex, LatLng, Resolution};
 use indexmap::IndexMap;
-use itertools::Itertools;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use strum::AsRefStr;
@@ -21,7 +20,7 @@ use crate::idents::{BrandId, MenuItemId, OrderId, PersonId};
 use crate::simulation::state::EntityView;
 
 use super::State;
-use super::movement::Journey;
+use super::movement::{Journey, Transport};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum PersonStatus {
@@ -30,6 +29,7 @@ pub enum PersonStatus {
     Eating(DateTime<Utc>),
     Moving(Journey),
     Delivering(OrderId, Journey),
+    WaitingForCustomer(OrderId),
 }
 
 impl Default for PersonStatus {
@@ -88,33 +88,47 @@ impl PopulationData {
         Ok(())
     }
 
-    fn apply_offsets(
+    pub(crate) fn update_journeys(
         &mut self,
-        offsets: impl IntoIterator<Item = Option<(f64, f64)>>,
-    ) -> Result<()> {
-        let offsets = offsets.into_iter().collect_vec();
-        if offsets.len() != self.positions.len() {
-            return Err("Population data must have the same length".into());
-        }
-        let mut builder = PointBuilder::with_capacity(Dimension::XY, self.positions.len());
-        for (curr, maybe_offset) in self.positions.iter().zip(offsets.iter()) {
-            match (maybe_offset, curr) {
-                (Some(offset), Some(point)) => {
-                    let curr_pos = point.to_geo().x_y();
-                    builder.push_point(Some(&Point::new(
-                        curr_pos.0 + offset.0,
-                        curr_pos.1 + offset.1,
-                    )));
+        time_step: std::time::Duration,
+    ) -> Result<(Vec<(PersonId, Vec<Point>)>, Vec<(PersonId, PersonStatus)>)> {
+        let mut new_positions = Vec::new();
+        let mut journey_slices = Vec::new();
+        let mut status_updates = Vec::new();
+
+        for (idx, (person_id, state)) in self.lookup_index.iter_mut().enumerate() {
+            let (progress, next_status) = match &mut state.status {
+                PersonStatus::Moving(journey) => {
+                    let progress = journey.advance(&Transport::Bicycle, time_step);
+                    let next_status = journey.is_done().then(|| PersonStatus::Idle);
+                    (Some(progress), next_status)
                 }
-                (None, curr) => {
-                    builder.push_point(curr.as_ref());
+                PersonStatus::Delivering(_, journey) => {
+                    let progress = journey.advance(&Transport::Bicycle, time_step);
+                    let next_status = journey.is_done().then(|| PersonStatus::Idle);
+                    (Some(progress), next_status)
                 }
-                (Some(_), None) => return Err("Offset provided for a missing position".into()),
+                _ => (None, None),
+            };
+
+            if let Some(next_status) = next_status {
+                status_updates.push((*person_id, next_status));
+            }
+
+            match progress {
+                Some(slice) => {
+                    if let Some(last_pos) = slice.last() {
+                        new_positions.push(last_pos.clone());
+                    }
+                    journey_slices.push((*person_id, slice));
+                }
+                None => new_positions.push(self.positions.value(idx).to_geo()),
             }
         }
 
-        self.positions = builder.finish();
-        Ok(())
+        self.positions = (new_positions.as_slice(), Dimension::XY).into();
+
+        Ok((journey_slices, status_updates))
     }
 
     pub fn person(&self, id: &PersonId) -> Option<PersonView<'_>> {

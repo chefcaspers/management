@@ -23,6 +23,8 @@ struct Report {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    tracing_subscriber::fmt::init();
+
     let cli = Cli::parse();
 
     let path = Url::parse("file:///Users/robert.pack/code/management/notebooks/data/")?;
@@ -38,8 +40,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for (name, (lat, long)) in [("london", (51.518898098201326, -0.13381370382489707))] {
         simulation.with_site(name, lat, long);
     }
-
     let mut simulation = simulation.build()?;
+
     simulation.run(100)?;
 
     // let table = Table::new(stats)

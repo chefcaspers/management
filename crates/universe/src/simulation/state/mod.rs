@@ -5,6 +5,7 @@ use arrow_array::{RecordBatch, cast::AsArray};
 use chrono::{DateTime, Utc};
 use datafusion::dataframe::DataFrameWriteOptions;
 use datafusion::prelude::*;
+use geo::Point;
 use geo_traits::PointTrait;
 use geoarrow::trait_::NativeScalar;
 use h3o::{LatLng, Resolution};
@@ -13,8 +14,8 @@ use tokio::runtime::Runtime;
 use uuid::Uuid;
 
 use self::movement::TripPlanner;
-use super::SimulationConfig;
 use super::schemas::{OrderData, OrderDataBuilder};
+use super::{EventPayload, SimulationConfig};
 use crate::error::Result;
 use crate::idents::*;
 use crate::init::PopulationDataBuilder;
@@ -161,8 +162,30 @@ impl State {
         self.time + self.time_step
     }
 
-    pub(crate) fn step(&mut self) {
+    pub(crate) fn move_people(&mut self) -> Result<Vec<(PersonId, Vec<Point>)>> {
+        // update person positions first, so that journeys stated in this step are not advanced.
+        let (movements, status_updates) = self.population.update_journeys(self.time_step)?;
+        // update person statuses after positions have been updated.
+        for (person_id, status) in status_updates.into_iter() {
+            self.population.update_person_status(&person_id, status)?;
+        }
+        Ok(movements)
+    }
+
+    pub(crate) fn step(&mut self, events: impl IntoIterator<Item = EventPayload>) -> Result<()> {
+        for event in events.into_iter() {
+            match event {
+                EventPayload::PersonUpdated(payload) => {
+                    self.population
+                        .update_person_status(&payload.person_id, payload.status)?;
+                }
+                _ => {}
+            }
+        }
+
         self.time += self.time_step;
+
+        Ok(())
     }
 
     pub(crate) fn snapshot(&self, base_path: &url::Url) -> Result<()> {

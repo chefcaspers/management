@@ -28,7 +28,7 @@ pub trait Entity: Send + Sync + 'static {
 /// Trait for entities that need to be updated each simulation step
 pub trait Simulatable: Entity {
     /// Update the entity state based on the current simulation context
-    fn step(&mut self, context: &state::State) -> Result<Vec<Event>>;
+    fn step(&mut self, context: &state::State) -> Result<Vec<EventPayload>>;
 }
 
 /// Configuration for the simulation engine
@@ -73,10 +73,27 @@ pub struct Simulation {
 impl Simulation {
     /// Advance the simulation by one time step
     fn step(&mut self) -> Result<()> {
+        let mut events = Vec::new();
+
+        // move people
+        let movements = self.state.move_people()?;
+        tracing::info!(target: "simulation", "Moved {} people.", movements.len());
+
+        // advance all sites and collect events
         for site in self.sites.values_mut() {
-            site.step(&self.state)?;
+            if let Ok(site_events) = site.step(&self.state) {
+                events.extend(site_events);
+            } else {
+                tracing::error!("Failed to step site {:?}", site.id());
+            }
         }
-        self.state.step();
+
+        tracing::info!(target: "simulation", "Collected {} events.", events.len());
+
+        // update the state with the collected events
+        self.state.step(events)?;
+
+        // snapshot the state if the time is right
         if let (Some(base_url), Some(interval)) = (
             self.state().config().result_storage_location.as_ref(),
             self.state().config().snapshot_interval,
@@ -84,10 +101,12 @@ impl Simulation {
             if (self.state.current_time() - self.last_snapshot_time).num_seconds()
                 > interval.num_seconds()
             {
+                tracing::info!(target: "simulation", "Snapshotting state.");
                 self.state().snapshot(base_url)?;
                 self.last_snapshot_time = self.state.current_time();
             }
         }
+
         Ok(())
     }
 

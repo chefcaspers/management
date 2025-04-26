@@ -77,6 +77,10 @@ impl Journey {
         self.legs.iter().map(|leg| leg.distance_m).sum()
     }
 
+    pub fn is_done(&self) -> bool {
+        self.legs.is_empty()
+    }
+
     pub fn advance(&mut self, transport: &Transport, time_step: std::time::Duration) -> Vec<Point> {
         let velocity_m_s = transport.default_velocity_m_s();
         let distance_m = velocity_m_s * time_step.as_secs_f64();

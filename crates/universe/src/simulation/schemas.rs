@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
 
 use arrow_array::types::Float64Type;
@@ -94,11 +95,20 @@ fn test_order_schema() {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, EnumString, Display, AsRefStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum OrderStatus {
+    /// Customer submitted the order
     Submitted,
+    /// Order is being processed
     Processing,
+    /// Order is ready for pickup
     Ready,
+    /// Order is picked up
     PickedUp,
+    /// Order is delivered
     Delivered,
+    /// Order is cancelled
+    Cancelled,
+    /// Order failed to be processed
+    Failed,
 
     /// Catch-all for unknown statuses to avoid panics
     #[strum(default)]
@@ -396,7 +406,11 @@ impl OrderData {
         Self::try_new(orders, lines)
     }
 
-    pub(crate) fn update_statuses(
+    /// Update the status of order lines.
+    ///
+    /// This will update the status of the order lines and recompute the order status
+    /// based on the aggregate status of the order lines.
+    pub(crate) fn update_order_lines(
         &mut self,
         updates: impl IntoIterator<Item = (OrderLineId, OrderLineStatus)>,
     ) -> Result<()> {
@@ -443,6 +457,33 @@ impl OrderData {
         arrays.push(status_arr);
         self.orders = RecordBatch::try_new(ORDER_SCHEMA.clone(), arrays)?;
 
+        Ok(())
+    }
+
+    /// Update the status of orders.
+    pub(crate) fn update_orders(
+        &mut self,
+        updates: impl IntoIterator<Item = (OrderId, OrderStatus)>,
+    ) -> Result<()> {
+        let update_map: HashMap<OrderId, OrderStatus> = updates.into_iter().collect();
+        let mut statuses = Vec::with_capacity(self.orders.num_rows());
+        for order in self.orders() {
+            if let Some(status) = update_map.get(order.id()) {
+                statuses.push(status.to_string());
+            } else {
+                statuses.push(order.status().to_string());
+            }
+        }
+        let status_arr = Arc::new(StringArray::from(statuses));
+        let mut arrays = self
+            .orders
+            .columns()
+            .into_iter()
+            .cloned()
+            .take(self.orders.num_columns() - 1)
+            .collect_vec();
+        arrays.push(status_arr);
+        self.orders = RecordBatch::try_new(ORDER_SCHEMA.clone(), arrays)?;
         Ok(())
     }
 }
