@@ -13,7 +13,7 @@ use rand::Rng;
 use tokio::runtime::Runtime;
 use uuid::Uuid;
 
-use self::movement::TripPlanner;
+use self::movement::JourneyPlanner;
 use super::schemas::{OrderData, OrderDataBuilder};
 use super::{EventPayload, SimulationConfig};
 use crate::error::Result;
@@ -61,7 +61,7 @@ pub struct State {
     objects: ObjectData,
 
     /// Routing data
-    routing: TripPlanner,
+    routing: JourneyPlanner,
 }
 
 impl State {
@@ -121,7 +121,7 @@ impl State {
         &self.population
     }
 
-    pub fn trip_planner(&self) -> &TripPlanner {
+    pub fn trip_planner(&self) -> &JourneyPlanner {
         &self.routing
     }
 
@@ -162,8 +162,8 @@ impl State {
         self.time + self.time_step
     }
 
-    pub(crate) fn move_people(&mut self) -> Result<Vec<(PersonId, Vec<Point>)>> {
-        // update person positions first, so that journeys stated in this step are not advanced.
+    /// Advance people's journeys and update their statuses on arrival at their destination.
+    pub(super) fn move_people(&mut self) -> Result<Vec<(PersonId, Vec<Point>)>> {
         let (movements, status_updates) = self.population.update_journeys(self.time_step)?;
         // update person statuses after positions have been updated.
         for (person_id, status) in status_updates.into_iter() {
@@ -172,7 +172,7 @@ impl State {
         Ok(movements)
     }
 
-    pub(crate) fn step(&mut self, events: impl IntoIterator<Item = EventPayload>) -> Result<()> {
+    pub(super) fn step(&mut self, events: impl IntoIterator<Item = EventPayload>) -> Result<()> {
         for event in events.into_iter() {
             match event {
                 EventPayload::PersonUpdated(payload) => {
@@ -204,11 +204,16 @@ impl State {
             .unwrap();
 
         self.rt().block_on(async {
-            let df = self.ctx().read_batch(self.population.people().clone())?;
+            self.ctx()
+                .register_batch("population", self.population.people_full().clone())?;
+            self.ctx()
+                .register_batch("objects", self.objects.objects().clone())?;
+
+            let df = self.ctx().sql("SELECT * FROM population").await?;
             df.write_parquet(people_path.as_str(), DataFrameWriteOptions::new(), None)
                 .await?;
 
-            let df = self.ctx().read_batch(self.objects.objects().clone())?;
+            let df = self.ctx().sql("SELECT * FROM objects").await?;
             df.write_parquet(objects_path.as_str(), DataFrameWriteOptions::new(), None)
                 .await?;
 

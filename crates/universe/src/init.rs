@@ -276,6 +276,7 @@ impl PopulationDataBuilder {
         let gen_email = fake::faker::internet::en::SafeEmail();
         let gen_cc = fake::faker::creditcard::en::CreditCardNumber();
 
+        tracing::info!("Adding {} people", n_people);
         for _ in 0..n_people {
             let id = PersonId::new();
             self.ids.append_value(id)?;
@@ -309,7 +310,8 @@ impl PopulationDataBuilder {
                 self.positions.push_point(Some(&Point::new(x, y)));
             });
 
-        let n_couriers = n_people / 100;
+        let n_couriers = n_people / 10;
+        tracing::info!("Adding {} couriers", n_couriers);
         let loc = polygon.centroid().unwrap();
         for _ in 0..n_couriers {
             let id = PersonId::new();

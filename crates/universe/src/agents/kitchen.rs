@@ -5,9 +5,10 @@ use itertools::Itertools;
 use tabled::Tabled;
 
 use super::OrderLine;
+use crate::error::Result;
 use crate::idents::*;
 use crate::models::{KitchenStation, Station};
-use crate::{Entity, State, error::Result};
+use crate::{Entity, EventPayload, State};
 
 #[derive(Clone)]
 enum StationStatus {
@@ -85,7 +86,9 @@ impl Entity for KitchenRunner {
 }
 
 impl KitchenRunner {
-    pub(crate) fn step(&mut self, ctx: &State) -> Result<()> {
+    pub(crate) fn step(&mut self, ctx: &State) -> Result<Vec<EventPayload>> {
+        let mut events = Vec::new();
+
         // Try to start new recipes if possible
         while self.start_order_line(ctx)? {}
 
@@ -147,8 +150,21 @@ impl KitchenRunner {
         }
 
         // Apply updates
+        let kitchen_id = *self.id();
         for (recipe_id, status) in to_update {
             if let Some(progress) = self.in_progress.get_mut(&recipe_id) {
+                match status {
+                    OrderLineStatus::Processing(_, _) => {
+                        events.push(EventPayload::order_line_updated(
+                            recipe_id,
+                            crate::simulation::schemas::OrderLineStatus::Processing,
+                            Some(kitchen_id),
+                            None,
+                        ));
+                    }
+                    OrderLineStatus::Blocked(_) => {}
+                }
+
                 progress.status = status;
             }
         }
@@ -161,7 +177,7 @@ impl KitchenRunner {
             }
         }
 
-        Ok(())
+        Ok(events)
     }
 }
 

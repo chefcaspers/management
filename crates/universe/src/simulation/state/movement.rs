@@ -136,12 +136,12 @@ impl<T: Into<JourneyLeg>> FromIterator<T> for Journey {
     }
 }
 
-pub struct TripPlanner {
+pub struct JourneyPlanner {
     routing: RoutingData,
     graph: FastGraph,
 }
 
-impl TripPlanner {
+impl JourneyPlanner {
     fn new(routing: RoutingData) -> Self {
         let graph = routing.build_router();
         Self { routing, graph }
@@ -202,7 +202,7 @@ impl TripPlanner {
     }
 }
 
-impl From<RoutingData> for TripPlanner {
+impl From<RoutingData> for JourneyPlanner {
     fn from(routing: RoutingData) -> Self {
         Self::new(routing)
     }
@@ -380,8 +380,8 @@ impl RoutingData {
         fast_paths::prepare(&graph)
     }
 
-    pub fn into_trip_planner(self) -> TripPlanner {
-        TripPlanner::new(self)
+    pub fn into_trip_planner(self) -> JourneyPlanner {
+        JourneyPlanner::new(self)
     }
 }
 

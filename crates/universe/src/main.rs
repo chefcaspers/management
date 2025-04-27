@@ -3,7 +3,7 @@ use clap::Parser;
 use tabled::Tabled;
 use url::Url;
 
-use caspers_universe::{KitchenStats, SimulationBuilder};
+use caspers_universe::{KitchenStats, Result, SimulationBuilder};
 
 #[derive(Debug, Clone, clap::Parser)]
 #[command(name = "caspers-universe", version, about = "Running Caspers Universe", long_about = None)]
@@ -22,10 +22,10 @@ struct Report {
     stats: KitchenStats,
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
-    let cli = Cli::parse();
+    let _cli = Cli::parse();
 
     let path = Url::parse("file:///Users/robert.pack/code/management/notebooks/data/")?;
     let mut simulation = SimulationBuilder::new();

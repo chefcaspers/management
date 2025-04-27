@@ -1,15 +1,18 @@
 use std::convert::AsRef;
+use std::sync::Arc;
 
 use arrow_array::{RecordBatch, cast::AsArray};
+use arrow_schema::{Field, Schema};
 use chrono::{DateTime, Utc};
 use geo::Point;
 use geo_traits::PointTrait;
 use geoarrow::array::PointArray;
-use geoarrow::trait_::{ArrayAccessor, NativeScalar};
+use geoarrow::trait_::{ArrayAccessor, IntoArrow, NativeScalar};
 use geoarrow::{ArrayBase, scalar::Point as ArrowPoint};
 use geoarrow_schema::Dimension;
 use h3o::{CellIndex, LatLng, Resolution};
 use indexmap::IndexMap;
+use itertools::Itertools;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use strum::AsRefStr;
@@ -44,6 +47,8 @@ pub struct PersonState {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, AsRefStr)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum PersonRole {
     Customer,
     Courier,
@@ -81,6 +86,25 @@ impl PopulationData {
 
     pub fn people(&self) -> &RecordBatch {
         &self.people
+    }
+
+    pub fn people_full(&self) -> RecordBatch {
+        let people = self.people.clone();
+        let positions = self.positions.clone().into_arrow();
+        let full_schema = people
+            .schema()
+            .fields()
+            .iter()
+            .cloned()
+            .chain(std::iter::once(Arc::new(Field::new(
+                "position",
+                positions.data_type().clone(),
+                false,
+            ))))
+            .collect_vec();
+        let mut columns = people.columns().into_iter().cloned().collect_vec();
+        columns.push(positions);
+        RecordBatch::try_new(Arc::new(Schema::new(full_schema)), columns).unwrap()
     }
 
     pub fn update_person_status(&mut self, id: &PersonId, status: PersonStatus) -> Result<()> {

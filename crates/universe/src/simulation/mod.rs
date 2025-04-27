@@ -101,7 +101,10 @@ impl Simulation {
             if (self.state.current_time() - self.last_snapshot_time).num_seconds()
                 > interval.num_seconds()
             {
-                tracing::info!(target: "simulation", "Snapshotting state.");
+                for site in self.sites.values() {
+                    site.snapshot(&self.state, base_url)?;
+                }
+
                 self.state().snapshot(base_url)?;
                 self.last_snapshot_time = self.state.current_time();
             }

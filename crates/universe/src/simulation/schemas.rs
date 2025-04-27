@@ -165,6 +165,7 @@ impl OrderBuilder {
 #[strum(serialize_all = "snake_case")]
 pub enum OrderLineStatus {
     Submitted,
+    Assigned,
     Processing,
     Ready,
     Delivered,
@@ -354,6 +355,14 @@ impl OrderData {
             index,
             lines_index,
         })
+    }
+
+    pub(crate) fn batch_orders(&self) -> &RecordBatch {
+        &self.orders
+    }
+
+    pub(crate) fn batch_lines(&self) -> &RecordBatch {
+        &self.lines
     }
 
     pub fn num_orders(&self) -> usize {

@@ -1,6 +1,7 @@
 use std::collections::{HashMap, VecDeque};
 
 use counter::Counter;
+use datafusion::dataframe::DataFrameWriteOptions;
 use h3o::Resolution;
 use itertools::Itertools;
 use tabled::Tabled;
@@ -42,16 +43,26 @@ impl<'a> OrderRouter<'a> {
         }
     }
 
-    pub fn route_order_line(&mut self, order_line: OrderLine) {
+    pub fn route_order_line(&mut self, order_line: OrderLine) -> Vec<EventPayload> {
+        let mut events = Vec::new();
+
         let brand = order_line.item.0;
         self.submit_counter[&brand] += 1;
         let kitchen_ids = &self.brand_to_kitchens[&brand];
         let index = self.submit_counter[&brand] % kitchen_ids.len();
         if let Some(kitchen) = self.kitchens.get_mut(&kitchen_ids[index]) {
+            events.push(EventPayload::order_line_updated(
+                order_line.id,
+                OrderLineStatus::Assigned,
+                Some(*kitchen.id()),
+                None,
+            ));
             kitchen.queue_order_line(order_line);
         } else {
             tracing::error!("No kitchen available for brand {:?}", brand);
         }
+
+        events
     }
 }
 
@@ -157,11 +168,37 @@ impl SiteRunner {
         &self.order_data
     }
 
-    pub fn snapshot(&self) {
-        println!("{:?}", self.stats());
-        for kitchen in self.kitchens.values() {
-            println!("{:?}", kitchen.stats());
-        }
+    pub(crate) fn snapshot(&self, ctx: &State, base_path: &url::Url) -> Result<()> {
+        let orders_path = base_path
+            .join(&format!(
+                "sites/{}/orders/{}.parquet",
+                self.id().to_string(),
+                ctx.current_time().timestamp()
+            ))
+            .unwrap();
+        let lines_path = base_path
+            .join(&format!(
+                "sites/{}/lines/{}.parquet",
+                self.id().to_string(),
+                ctx.current_time().timestamp()
+            ))
+            .unwrap();
+        ctx.rt().block_on(async {
+            ctx.ctx()
+                .register_batch("orders", self.order_data().batch_orders().clone())?;
+            ctx.ctx()
+                .register_batch("lines", self.order_data().batch_lines().clone())?;
+
+            let df = ctx.ctx().sql("SELECT * FROM orders").await?;
+            df.write_parquet(orders_path.as_str(), DataFrameWriteOptions::new(), None)
+                .await?;
+
+            let df = ctx.ctx().sql("SELECT * FROM lines").await?;
+            df.write_parquet(lines_path.as_str(), DataFrameWriteOptions::new(), None)
+                .await?;
+
+            Ok::<_, Box<dyn std::error::Error>>(())
+        })
     }
 
     /// Receive new orders from the state and queue them for processing.
@@ -195,7 +232,7 @@ impl SiteRunner {
             if let Some(order) = self.order_data.order(&order_id) {
                 for line in order.lines() {
                     if let Some(line) = self.order_lines.get(line.id()) {
-                        router.route_order_line(line.clone());
+                        events.extend(router.route_order_line(line.clone()));
                     }
                 }
             }
@@ -203,7 +240,7 @@ impl SiteRunner {
 
         // Advance kitchens and collect completed order lines
         for kitchen in self.kitchens.values_mut() {
-            kitchen.step(ctx)?;
+            events.extend(kitchen.step(ctx)?);
             events.extend(kitchen.take_completed().into_iter().map(|(_, id)| {
                 EventPayload::order_line_updated(
                     id,
