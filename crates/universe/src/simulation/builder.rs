@@ -185,7 +185,12 @@ impl SimulationBuilder {
             })
             .try_collect()?;
 
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+
         Ok(Simulation {
+            rt,
             last_snapshot_time: state.current_time(),
             state,
             sites: site_runners,

@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Duration, Utc};
+use datafusion::dataframe::DataFrameWriteOptions;
 use geoarrow::trait_::NativeScalar;
 use h3o::{LatLng, Resolution};
 use itertools::Itertools;
 use rand::Rng;
+use tokio::runtime::Runtime;
 use url::Url;
 
 use crate::agents::SiteRunner;
@@ -63,6 +65,9 @@ impl Default for SimulationConfig {
 /// Single entry point to run simulations.
 /// THis will drive progress in all entities and make sure results are reported.
 pub struct Simulation {
+    /// Async runtime to handle datafusion tasks
+    rt: Runtime,
+
     /// Global simulation state
     state: State,
 
@@ -136,21 +141,7 @@ impl Simulation {
         self.state.step(events)?;
 
         // snapshot the state if the time is right
-        if let (Some(base_url), Some(interval)) = (
-            self.state.config().result_storage_location.as_ref(),
-            self.state.config().snapshot_interval,
-        ) {
-            if (self.state.current_time() - self.last_snapshot_time).num_seconds()
-                > interval.num_seconds()
-            {
-                // for site in self.sites.values() {
-                //     site.snapshot(&self.state, base_url)?;
-                // }
-
-                self.state.snapshot(base_url)?;
-                self.last_snapshot_time = self.state.current_time();
-            }
-        }
+        self.snapshot()?;
 
         Ok(())
     }
@@ -159,6 +150,63 @@ impl Simulation {
     pub fn run(&mut self, steps: usize) -> Result<()> {
         for _ in 0..steps {
             self.step()?;
+        }
+        Ok(())
+    }
+
+    /// Snapshot the state of the simulation
+    fn snapshot(&mut self) -> Result<()> {
+        let base_url = self.state.config().result_storage_location.as_ref();
+        let interval = self.state.config().snapshot_interval;
+
+        if let (Some(base_path), Some(interval)) = (base_url, interval) {
+            let diff = self.state.current_time() - self.last_snapshot_time;
+            if diff.num_seconds() > interval.num_seconds() {
+                let ts = self.state.current_time().timestamp();
+                let path =
+                    |name: &str| base_path.join(&format!("{}/{}.parquet", name, ts)).unwrap();
+
+                let people_path = path("population");
+                let objects_path = path("objects");
+                let orders_path = path("orders");
+                let order_lines_path = path("order_lines");
+
+                let timestamp = self.state.current_time().to_rfc3339();
+                let query = |name: &str| {
+                    format!(
+                        "SELECT '{}'::timestamp(6) as timestamp, * FROM {}",
+                        timestamp, name
+                    )
+                };
+
+                let ctx = self.state.snapshot_session()?;
+
+                self.rt.block_on(async {
+                    let df = ctx.sql(&query("population")).await?;
+                    df.write_parquet(people_path.as_str(), DataFrameWriteOptions::new(), None)
+                        .await?;
+
+                    let df = ctx.sql(&query("objects")).await?;
+                    df.write_parquet(objects_path.as_str(), DataFrameWriteOptions::new(), None)
+                        .await?;
+
+                    let df = ctx.sql(&query("orders")).await?;
+                    df.write_parquet(orders_path.as_str(), DataFrameWriteOptions::new(), None)
+                        .await?;
+
+                    let df = ctx.sql(&query("order_lines")).await?;
+                    df.write_parquet(
+                        order_lines_path.as_str(),
+                        DataFrameWriteOptions::new(),
+                        None,
+                    )
+                    .await?;
+
+                    Ok::<_, Box<dyn std::error::Error>>(())
+                })?;
+
+                self.last_snapshot_time = self.state.current_time();
+            }
         }
         Ok(())
     }

@@ -3,13 +3,11 @@ use std::time::Duration;
 
 use arrow_array::{RecordBatch, cast::AsArray as _};
 use chrono::{DateTime, Utc};
-use datafusion::dataframe::DataFrameWriteOptions;
 use datafusion::prelude::*;
 use geo::Point;
 use geo_traits::PointTrait;
 use itertools::Itertools;
 use rand::Rng;
-use tokio::runtime::Runtime;
 use uuid::Uuid;
 
 use self::movement::JourneyPlanner;
@@ -44,12 +42,6 @@ enum StateError {
 
 pub struct State {
     config: SimulationConfig,
-
-    /// Datafusion session context
-    ctx: SessionContext,
-
-    /// Async runtime to handle datafusion tasks
-    rt: Runtime,
 
     /// Current simulation time
     time: DateTime<Utc>,
@@ -86,14 +78,8 @@ impl State {
         let brands: HashMap<_, _> = brands.into_iter().collect();
         let vendors = crate::init::generate_objects(&brands, sites)?;
 
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()?;
-
         let config = config.unwrap_or_default();
         Ok(State {
-            ctx: SessionContext::new(),
-            rt,
             time_step: Duration::from_secs(config.time_increment.num_seconds() as u64),
             time: config.simulation_start,
             population: builder.finish()?,
@@ -102,14 +88,6 @@ impl State {
             config,
             orders: OrderData::empty(),
         })
-    }
-
-    pub(crate) fn ctx(&self) -> &SessionContext {
-        &self.ctx
-    }
-
-    pub(crate) fn rt(&self) -> &Runtime {
-        &self.rt
     }
 
     pub(crate) fn config(&self) -> &SimulationConfig {
@@ -226,44 +204,13 @@ impl State {
     }
 
     /// Create a new session context with the current state of the simulation.
-    pub(crate) fn snapshot_session(&self, rt: &Runtime) -> Result<SessionContext> {
+    pub(crate) fn snapshot_session(&self) -> Result<SessionContext> {
         let ctx = SessionContext::new();
         ctx.register_batch("population", self.population.people_full().clone())?;
         ctx.register_batch("objects", self.objects.objects().clone())?;
+        ctx.register_batch("orders", self.orders.batch_orders().clone())?;
+        ctx.register_batch("order_lines", self.orders.batch_lines().clone())?;
         Ok(ctx)
-    }
-
-    pub(crate) fn snapshot(&self, base_path: &url::Url) -> Result<()> {
-        let people_path = base_path
-            .join(&format!(
-                "people/{}.parquet",
-                self.current_time().timestamp()
-            ))
-            .unwrap();
-
-        let objects_path = base_path
-            .join(&format!(
-                "objects/{}.parquet",
-                self.current_time().timestamp()
-            ))
-            .unwrap();
-
-        self.rt().block_on(async {
-            self.ctx()
-                .register_batch("population", self.population.people_full().clone())?;
-            self.ctx()
-                .register_batch("objects", self.objects.objects().clone())?;
-
-            let df = self.ctx().sql("SELECT * FROM population").await?;
-            df.write_parquet(people_path.as_str(), DataFrameWriteOptions::new(), None)
-                .await?;
-
-            let df = self.ctx().sql("SELECT * FROM objects").await?;
-            df.write_parquet(objects_path.as_str(), DataFrameWriteOptions::new(), None)
-                .await?;
-
-            Ok::<_, Box<dyn std::error::Error>>(())
-        })
     }
 }
 
