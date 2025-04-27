@@ -1,7 +1,7 @@
 use std::convert::AsRef;
 use std::sync::Arc;
 
-use arrow_array::{RecordBatch, cast::AsArray};
+use arrow_array::{RecordBatch, cast::AsArray as _};
 use arrow_schema::{Field, Schema};
 use chrono::{DateTime, Utc};
 use geo::Point;
@@ -24,6 +24,10 @@ use crate::simulation::state::EntityView;
 
 use super::State;
 use super::movement::{Journey, Transport};
+
+pub use builder::PopulationDataBuilder;
+
+mod builder;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum PersonStatus {

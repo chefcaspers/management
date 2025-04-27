@@ -14,7 +14,6 @@ pub use self::state::State;
 mod builder;
 pub mod events;
 mod execution;
-pub mod schemas;
 pub mod state;
 
 /// Core trait that any simulatable entity must implement

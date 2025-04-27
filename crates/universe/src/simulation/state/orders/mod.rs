@@ -1,14 +1,9 @@
 use std::collections::HashMap;
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 
 use arrow_array::types::Float64Type;
-use arrow_array::{
-    RecordBatch, StringArray,
-    builder::{FixedSizeBinaryBuilder, FixedSizeListBuilder, Float64Builder, StringBuilder},
-    cast::AsArray,
-};
+use arrow_array::{RecordBatch, StringArray, cast::AsArray as _};
 use arrow_ord::partition::partition;
-use arrow_schema::{ArrowError, DataType, Field, Schema, SchemaRef, TimeUnit};
 use arrow_select::concat::concat_batches;
 use counter::Counter;
 use h3o::LatLng;
@@ -16,81 +11,12 @@ use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use strum::{AsRefStr, Display, EnumString};
 
+use crate::error::{Error, Result};
 use crate::idents::{OrderId, OrderLineId};
-use crate::{
-    error::{Error, Result},
-    idents::{BrandId, MenuItemId},
-};
 
-use super::state::PersonView;
+pub(crate) use self::builder::OrderDataBuilder;
 
-pub static OBJECT_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
-    Arc::new(Schema::new(vec![
-        Field::new("id", DataType::FixedSizeBinary(16), false),
-        Field::new("parent_id", DataType::FixedSizeBinary(16), true),
-        Field::new("label", DataType::Utf8, false),
-        Field::new(
-            "name",
-            DataType::List(Arc::new(Field::new_list_field(DataType::Utf8, true))),
-            false,
-        ),
-        Field::new("properties", DataType::Utf8, true),
-        Field::new(
-            "created_at",
-            DataType::Timestamp(TimeUnit::Millisecond, Some("UTC".into())),
-            false,
-        ),
-        Field::new(
-            "updated_at",
-            DataType::Timestamp(TimeUnit::Millisecond, Some("UTC".into())),
-            true,
-        ),
-    ]))
-});
-
-pub static POPULATION_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
-    SchemaRef::new(Schema::new(vec![
-        Field::new("id", DataType::FixedSizeBinary(16), false),
-        Field::new("first_name", DataType::Utf8, false),
-        Field::new("last_name", DataType::Utf8, false),
-        Field::new("email", DataType::Utf8, false),
-        Field::new("cc_number", DataType::Utf8, true),
-        Field::new("role", DataType::Utf8, false),
-    ]))
-});
-
-pub(crate) static ORDER_DESTINATION_IDX: usize = 2;
-pub(crate) static ORDER_STATUS_IDX: usize = 3;
-static ORDER_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
-    let mut fields = Vec::with_capacity(4);
-    fields.push(Field::new("id", DataType::FixedSizeBinary(16), false));
-    fields.push(Field::new(
-        "customer_id",
-        DataType::FixedSizeBinary(16),
-        false,
-    ));
-    fields.push(Field::new_fixed_size_list(
-        "destination",
-        Field::new("item", DataType::Float64, false),
-        2,
-        false,
-    ));
-    fields.push(Field::new("status", DataType::Utf8, false));
-    SchemaRef::new(Schema::new(fields))
-});
-
-#[test]
-fn test_order_schema() {
-    let schema = ORDER_SCHEMA.clone();
-
-    let destination = schema.field(ORDER_DESTINATION_IDX);
-    assert_eq!(destination.name(), "destination");
-
-    let status = schema.field(ORDER_STATUS_IDX);
-    assert_eq!(status.name(), "status");
-    assert_eq!(status.data_type(), &DataType::Utf8);
-    assert!(schema.fields().len() == ORDER_STATUS_IDX + 1);
-}
+mod builder;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, EnumString, Display, AsRefStr)]
 #[strum(serialize_all = "snake_case")]
@@ -115,52 +41,6 @@ pub enum OrderStatus {
     Unknown(String),
 }
 
-struct OrderBuilder {
-    ids: FixedSizeBinaryBuilder,
-    customer_ids: FixedSizeBinaryBuilder,
-    destination: FixedSizeListBuilder<Float64Builder>,
-    statuses: StringBuilder,
-}
-
-impl OrderBuilder {
-    pub fn new() -> Self {
-        Self {
-            ids: FixedSizeBinaryBuilder::new(16),
-            customer_ids: FixedSizeBinaryBuilder::new(16),
-            destination: FixedSizeListBuilder::new(Float64Builder::new(), 2)
-                .with_field(Field::new("item", DataType::Float64, false)),
-            statuses: StringBuilder::new(),
-        }
-    }
-
-    pub fn add_order(
-        &mut self,
-        customer_id: impl AsRef<[u8]>,
-        destination: LatLng,
-    ) -> Result<OrderId, ArrowError> {
-        let id = OrderId::new();
-        self.ids.append_value(id)?;
-        self.customer_ids.append_value(customer_id)?;
-        self.destination.values().append_value(destination.lat());
-        self.destination.values().append_value(destination.lng());
-        self.destination.append(true);
-        self.statuses.append_value(OrderStatus::Submitted.as_ref());
-        Ok(id)
-    }
-
-    pub fn finish(mut self) -> Result<RecordBatch, ArrowError> {
-        Ok(RecordBatch::try_new(
-            ORDER_SCHEMA.clone(),
-            vec![
-                Arc::new(self.ids.finish()),
-                Arc::new(self.customer_ids.finish()),
-                Arc::new(self.destination.finish()),
-                Arc::new(self.statuses.finish()),
-            ],
-        )?)
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumString, Display, AsRefStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum OrderLineStatus {
@@ -169,101 +49,6 @@ pub enum OrderLineStatus {
     Processing,
     Ready,
     Delivered,
-}
-
-struct OrderLineBuilder {
-    ids: FixedSizeBinaryBuilder,
-    order_ids: FixedSizeBinaryBuilder,
-    brand_ids: FixedSizeBinaryBuilder,
-    menu_item_ids: FixedSizeBinaryBuilder,
-    statuses: StringBuilder,
-}
-
-impl OrderLineBuilder {
-    pub fn new() -> Self {
-        Self {
-            ids: FixedSizeBinaryBuilder::new(16),
-            order_ids: FixedSizeBinaryBuilder::new(16),
-            brand_ids: FixedSizeBinaryBuilder::new(16),
-            menu_item_ids: FixedSizeBinaryBuilder::new(16),
-            statuses: StringBuilder::new(),
-        }
-    }
-
-    pub fn add_line(
-        &mut self,
-        order_id: impl AsRef<[u8]>,
-        brand_id: impl AsRef<[u8]>,
-        menu_item_id: impl AsRef<[u8]>,
-    ) -> Result<OrderLineId, ArrowError> {
-        let id = OrderLineId::new();
-        self.ids.append_value(id)?;
-        self.order_ids.append_value(order_id)?;
-        self.brand_ids.append_value(brand_id)?;
-        self.menu_item_ids.append_value(menu_item_id)?;
-        self.statuses
-            .append_value(OrderLineStatus::Submitted.to_string());
-        Ok(id)
-    }
-
-    pub fn finish(mut self) -> Result<RecordBatch, ArrowError> {
-        Ok(RecordBatch::try_new(
-            ORDER_LINE_SCHEMA.clone(),
-            vec![
-                Arc::new(self.ids.finish()),
-                Arc::new(self.order_ids.finish()),
-                Arc::new(self.brand_ids.finish()),
-                Arc::new(self.menu_item_ids.finish()),
-                Arc::new(self.statuses.finish()),
-            ],
-        )?)
-    }
-}
-
-pub static ORDER_LINE_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
-    SchemaRef::new(Schema::new(vec![
-        Field::new("id", DataType::FixedSizeBinary(16), false),
-        Field::new("order_id", DataType::FixedSizeBinary(16), false),
-        Field::new("brand_id", DataType::FixedSizeBinary(16), false),
-        Field::new("menu_item_id", DataType::FixedSizeBinary(16), false),
-        // status column MUST be the last column - or update the order data update method.
-        Field::new("status", DataType::Utf8, false),
-    ]))
-});
-
-pub struct OrderDataBuilder {
-    orders: OrderBuilder,
-    lines: OrderLineBuilder,
-}
-
-impl OrderDataBuilder {
-    pub fn new() -> Self {
-        Self {
-            orders: OrderBuilder::new(),
-            lines: OrderLineBuilder::new(),
-        }
-    }
-
-    pub fn add_order(
-        mut self,
-        person: &PersonView,
-        destination: LatLng,
-        order: &[(BrandId, MenuItemId)],
-    ) -> Self {
-        let order_id = self.orders.add_order(person.id(), destination).unwrap();
-        for (brand_id, menu_item_id) in order {
-            self.lines
-                .add_line(&order_id, brand_id, menu_item_id)
-                .unwrap();
-        }
-        self
-    }
-
-    pub fn finish(self) -> Result<OrderData> {
-        let orders = self.orders.finish()?;
-        let lines = self.lines.finish()?;
-        OrderData::try_new(orders, lines)
-    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -297,10 +82,10 @@ pub struct OrderData {
 
 impl OrderData {
     fn try_new(orders: RecordBatch, lines: RecordBatch) -> Result<Self> {
-        if orders.schema().as_ref() != ORDER_SCHEMA.as_ref() {
+        if orders.schema().as_ref() != builder::ORDER_SCHEMA.as_ref() {
             return Err(Error::invalid_data("expected orders to have schema").into());
         }
-        if lines.schema().as_ref() != ORDER_LINE_SCHEMA.as_ref() {
+        if lines.schema().as_ref() != builder::ORDER_LINE_SCHEMA.as_ref() {
             return Err(Error::invalid_data("expected lines to have schema").into());
         }
         if orders.num_rows() == 0 && lines.num_rows() > 0 {
@@ -410,8 +195,11 @@ impl OrderData {
     }
 
     pub(crate) fn merge(&self, other: Self) -> Result<Self> {
-        let orders = concat_batches(&ORDER_SCHEMA, &[self.orders.clone(), other.orders])?;
-        let lines = concat_batches(&ORDER_LINE_SCHEMA, &[self.lines.clone(), other.lines])?;
+        let orders = concat_batches(&builder::ORDER_SCHEMA, &[self.orders.clone(), other.orders])?;
+        let lines = concat_batches(
+            &builder::ORDER_LINE_SCHEMA,
+            &[self.lines.clone(), other.lines],
+        )?;
         Self::try_new(orders, lines)
     }
 
@@ -450,7 +238,7 @@ impl OrderData {
             .take(self.lines.num_columns() - 1)
             .collect_vec();
         arrays.push(new_array);
-        self.lines = RecordBatch::try_new(ORDER_LINE_SCHEMA.clone(), arrays)?;
+        self.lines = RecordBatch::try_new(builder::ORDER_LINE_SCHEMA.clone(), arrays)?;
 
         let statuses = self
             .orders()
@@ -464,7 +252,7 @@ impl OrderData {
             .take(self.orders.num_columns() - 1)
             .collect_vec();
         arrays.push(status_arr);
-        self.orders = RecordBatch::try_new(ORDER_SCHEMA.clone(), arrays)?;
+        self.orders = RecordBatch::try_new(builder::ORDER_SCHEMA.clone(), arrays)?;
 
         Ok(())
     }
@@ -492,7 +280,7 @@ impl OrderData {
             .take(self.orders.num_columns() - 1)
             .collect_vec();
         arrays.push(status_arr);
-        self.orders = RecordBatch::try_new(ORDER_SCHEMA.clone(), arrays)?;
+        self.orders = RecordBatch::try_new(builder::ORDER_SCHEMA.clone(), arrays)?;
         Ok(())
     }
 }
@@ -519,7 +307,7 @@ impl<'a> OrderView<'a> {
     pub fn status(&self) -> &str {
         self.data
             .orders
-            .column(ORDER_STATUS_IDX)
+            .column(builder::ORDER_STATUS_IDX)
             .as_string::<i32>()
             .value(self.valid_index)
     }
@@ -574,7 +362,7 @@ impl<'a> OrderView<'a> {
         let pos = self
             .data
             .orders
-            .column(ORDER_DESTINATION_IDX)
+            .column(builder::ORDER_DESTINATION_IDX)
             .as_fixed_size_list()
             .value(*order_idx);
         let vals = pos.as_primitive::<Float64Type>();

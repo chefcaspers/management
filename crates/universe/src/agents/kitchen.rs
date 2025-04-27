@@ -8,6 +8,7 @@ use super::OrderLine;
 use crate::error::Result;
 use crate::idents::*;
 use crate::models::{KitchenStation, Station};
+use crate::simulation::state::OrderLineStatus;
 use crate::{Entity, EventPayload, State};
 
 #[derive(Clone)]
@@ -51,7 +52,7 @@ impl StationRunner {
 }
 
 #[derive(Clone)]
-enum OrderLineStatus {
+enum OrderLineProcessingStatus {
     // Current instruction index and start time
     Processing(usize, DateTime<Utc>),
 
@@ -65,7 +66,7 @@ struct OrderProgress {
     order_line: OrderLine,
 
     // The processing status of the recipe
-    status: OrderLineStatus,
+    status: OrderLineProcessingStatus,
 }
 
 pub struct KitchenRunner {
@@ -99,7 +100,7 @@ impl KitchenRunner {
         for (order_line_id, progress) in self.in_progress.iter() {
             let menu_item = ctx.object_data().menu_item(&progress.order_line.item.1)?;
             match &progress.status {
-                OrderLineStatus::Processing(instruction_idx, stated_time) => {
+                OrderLineProcessingStatus::Processing(instruction_idx, stated_time) => {
                     let expected_duration = menu_item.instructions[*instruction_idx]
                         .expected_duration
                         .map(|duration| duration.seconds)
@@ -128,13 +129,14 @@ impl KitchenRunner {
                         self.stations[idx].status = StationStatus::Busy(*order_line_id);
                         to_update.push((
                             *order_line_id,
-                            OrderLineStatus::Processing(next_idx, ctx.next_time()),
+                            OrderLineProcessingStatus::Processing(next_idx, ctx.next_time()),
                         ));
                     } else {
-                        to_update.push((*order_line_id, OrderLineStatus::Blocked(next_idx)));
+                        to_update
+                            .push((*order_line_id, OrderLineProcessingStatus::Blocked(next_idx)));
                     }
                 }
-                OrderLineStatus::Blocked(instruction_idx) => {
+                OrderLineProcessingStatus::Blocked(instruction_idx) => {
                     // Check if we can now acquire the needed asset
                     let step = &menu_item.instructions[*instruction_idx];
                     if let Some(asset_idx) = take_station(&self.stations, &step.required_station) {
@@ -142,7 +144,10 @@ impl KitchenRunner {
                         self.stations[asset_idx].status = StationStatus::Busy(*order_line_id);
                         to_update.push((
                             *order_line_id,
-                            OrderLineStatus::Processing(*instruction_idx, ctx.next_time()),
+                            OrderLineProcessingStatus::Processing(
+                                *instruction_idx,
+                                ctx.next_time(),
+                            ),
                         ));
                     }
                 }
@@ -154,15 +159,15 @@ impl KitchenRunner {
         for (recipe_id, status) in to_update {
             if let Some(progress) = self.in_progress.get_mut(&recipe_id) {
                 match status {
-                    OrderLineStatus::Processing(_, _) => {
+                    OrderLineProcessingStatus::Processing(_, _) => {
                         events.push(EventPayload::order_line_updated(
                             recipe_id,
-                            crate::simulation::schemas::OrderLineStatus::Processing,
+                            OrderLineStatus::Processing,
                             Some(kitchen_id),
                             None,
                         ));
                     }
-                    OrderLineStatus::Blocked(_) => {}
+                    OrderLineProcessingStatus::Blocked(_) => {}
                 }
 
                 progress.status = status;
@@ -224,7 +229,7 @@ impl KitchenRunner {
                     order_line.id,
                     OrderProgress {
                         order_line,
-                        status: OrderLineStatus::Processing(0, ctx.current_time()),
+                        status: OrderLineProcessingStatus::Processing(0, ctx.current_time()),
                     },
                 );
 

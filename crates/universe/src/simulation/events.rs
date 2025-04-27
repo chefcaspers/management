@@ -1,7 +1,4 @@
-use super::{
-    schemas::{OrderLineStatus, OrderStatus},
-    state::PersonStatus,
-};
+use super::state::{OrderLineStatus, OrderStatus, PersonStatus};
 use crate::idents::{KitchenId, OrderId, OrderLineId, PersonId};
 
 pub struct PersonUpdatedPayload {

@@ -8,11 +8,10 @@ use tabled::Tabled;
 
 use super::kitchen::{KitchenRunner, KitchenStats};
 use crate::idents::*;
-use crate::schemas::OrderStatus;
 use crate::simulation::events::EventPayload;
-use crate::simulation::schemas::{OrderData, OrderLineStatus};
-use crate::simulation::state::EntityView;
-use crate::simulation::state::{PersonRole, PersonStatus};
+use crate::simulation::state::{
+    EntityView, OrderData, OrderLineStatus, OrderStatus, PersonRole, PersonStatus,
+};
 use crate::{Entity, Error, Result, Simulatable, State};
 
 // TODO: Move order data management to simulation level.

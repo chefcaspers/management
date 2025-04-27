@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use arrow_array::{RecordBatch, cast::AsArray};
+use arrow_array::{RecordBatch, cast::AsArray as _};
 use chrono::{DateTime, Utc};
 use datafusion::dataframe::DataFrameWriteOptions;
 use datafusion::prelude::*;
@@ -14,20 +14,22 @@ use tokio::runtime::Runtime;
 use uuid::Uuid;
 
 use self::movement::JourneyPlanner;
-use super::schemas::{OrderData, OrderDataBuilder};
 use super::{EventPayload, SimulationConfig};
 use crate::error::Result;
 use crate::idents::*;
-use crate::init::PopulationDataBuilder;
 use crate::models::{Brand, Site};
+
+pub(crate) use self::movement::RoutingData;
+pub(crate) use self::objects::{ObjectData, ObjectDataBuilder, ObjectLabel};
+pub(crate) use self::orders::{OrderData, OrderDataBuilder, OrderLineStatus, OrderStatus};
+pub(crate) use self::population::{
+    PersonRole, PersonStatus, PersonView, PopulationData, PopulationDataBuilder,
+};
 
 mod movement;
 mod objects;
+mod orders;
 mod population;
-
-pub(crate) use movement::RoutingData;
-pub(crate) use objects::{ObjectData, ObjectLabel};
-pub(crate) use population::{PersonRole, PersonStatus, PersonView, PopulationData};
 
 #[derive(Debug, thiserror::Error)]
 enum StateError {

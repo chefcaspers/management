@@ -1,21 +1,23 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use arrow_array::RecordBatch;
-use arrow_array::cast::AsArray;
+use arrow_array::cast::AsArray as _;
 use dashmap::DashMap;
 use dashmap::mapref::one::Ref;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use rand::Rng as _;
 use strum::AsRefStr;
-use uuid::Uuid;
 
 use crate::error::Result;
 use crate::idents::{BrandId, KitchenId, MenuItemId, SiteId, StationId};
 use crate::models::{MenuItem, Site, Station};
 
 use super::EntityView;
+
+pub use builder::ObjectDataBuilder;
+
+mod builder;
 
 // TODO: object indices for frequently accessed objects
 
@@ -44,9 +46,6 @@ pub enum ObjectLabel {
 pub struct ObjectData {
     objects: RecordBatch,
 
-    // Map of brand_id to (offset, length) slice in the objects record batch
-    brand_slices: HashMap<BrandId, (usize, usize)>,
-
     // kitchen_slices: HashMap<KitchenId, (usize, usize)>,
     menu_items: Arc<DashMap<MenuItemId, MenuItem>>,
 
@@ -56,33 +55,8 @@ pub struct ObjectData {
 impl ObjectData {
     /// Record batch MUST be sorted by parent_id.
     pub fn try_new(objects: RecordBatch) -> Result<Self> {
-        let mut brand_slices = HashMap::new();
-
-        for (idx, brand_id) in objects
-            .column_by_name("parent_id")
-            .unwrap()
-            .as_fixed_size_binary()
-            .iter()
-            .enumerate()
-        {
-            if let Some(id) = brand_id {
-                let typed: BrandId = Uuid::from_slice(id)?.into();
-                brand_slices.entry(typed).or_insert_with(Vec::new).push(idx);
-            }
-        }
-
-        let brand_slices = brand_slices
-            .into_iter()
-            .map(|(id, mut indices)| {
-                indices.sort();
-                // safety: we always push at least one item
-                (id, (*indices.iter().min().unwrap(), indices.len()))
-            })
-            .collect();
-
         let data = Self {
             objects,
-            brand_slices,
             menu_items: Arc::new(DashMap::new()),
             menu_item_idx: Default::default(),
         };
