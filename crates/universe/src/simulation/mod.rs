@@ -1,12 +1,16 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Duration, Utc};
+use geoarrow::trait_::NativeScalar;
+use h3o::{LatLng, Resolution};
+use itertools::Itertools;
+use rand::Rng;
 use url::Url;
 
 use crate::agents::SiteRunner;
 use crate::error::Result;
-use crate::idents::{SiteId, TypedId};
-use crate::state::State;
+use crate::idents::{BrandId, MenuItemId, SiteId, TypedId};
+use crate::state::{EntityView, PersonRole, State};
 
 pub use self::builder::SimulationBuilder;
 pub use self::events::*;
@@ -77,9 +81,49 @@ impl Simulation {
         let movements = self.state.move_people()?;
         tracing::info!(target: "simulation", "Moved {} people.", movements.len());
 
+        // generate orders for each site
+        let orders: HashMap<_, _> = self
+            .sites
+            .iter()
+            .flat_map(|(site_id, _)| {
+                self.orders_for_site(site_id)
+                    .ok()
+                    .map(|orders| (*site_id, orders.collect_vec()))
+            })
+            .collect();
+
+        // process orders for each site
+        // for orders in orders.values() {
+        //     self.state.process_orders(orders)?;
+        // }
+        let orders: HashMap<_, _> = orders
+            .into_iter()
+            .flat_map(|(site_id, orders)| Some((site_id, self.state.process_orders(&orders).ok()?)))
+            .collect();
+
         // advance all sites and collect events
-        for site in self.sites.values_mut() {
+        for (site_id, site) in self.sites.iter_mut() {
+            // send new orders to the site for processing
+            let orders = orders.get(site_id).unwrap();
+            let orders = orders
+                .iter()
+                .map(|order_id| self.state.orders().order(order_id).unwrap());
+            site.receive_orders(orders)?;
+
+            // advance the site and collect events
             if let Ok(site_events) = site.step(&self.state) {
+                let order_line_updates = site_events.iter().filter_map(|event| match event {
+                    EventPayload::OrderLineUpdated(payload) => Some(payload),
+                    _ => None,
+                });
+                self.state.update_order_lines(order_line_updates)?;
+
+                let order_updates = site_events.iter().filter_map(|event| match event {
+                    EventPayload::OrderUpdated(payload) => Some(payload),
+                    _ => None,
+                });
+                self.state.update_orders(order_updates)?;
+
                 events.extend(site_events);
             } else {
                 tracing::error!("Failed to step site {:?}", site.id());
@@ -93,17 +137,17 @@ impl Simulation {
 
         // snapshot the state if the time is right
         if let (Some(base_url), Some(interval)) = (
-            self.state().config().result_storage_location.as_ref(),
-            self.state().config().snapshot_interval,
+            self.state.config().result_storage_location.as_ref(),
+            self.state.config().snapshot_interval,
         ) {
             if (self.state.current_time() - self.last_snapshot_time).num_seconds()
                 > interval.num_seconds()
             {
-                for site in self.sites.values() {
-                    site.snapshot(&self.state, base_url)?;
-                }
+                // for site in self.sites.values() {
+                //     site.snapshot(&self.state, base_url)?;
+                // }
 
-                self.state().snapshot(base_url)?;
+                self.state.snapshot(base_url)?;
                 self.last_snapshot_time = self.state.current_time();
             }
         }
@@ -119,7 +163,38 @@ impl Simulation {
         Ok(())
     }
 
-    pub fn state(&self) -> &State {
-        &self.state
+    fn orders_for_site(
+        &self,
+        site_id: &SiteId,
+    ) -> Result<impl Iterator<Item = OrderCreatedPayload>> {
+        let site = self.state.objects().site(site_id)?;
+        let props = site.properties()?;
+        let lat_lng = LatLng::new(props.latitude, props.longitude)?;
+
+        Ok(self
+            .state
+            .population()
+            // NB: resolution 6 corresponds to a cell size of approximately 36 km2
+            .idle_people_in_cell(lat_lng.to_cell(Resolution::Six), &PersonRole::Customer)
+            .filter_map(|person| create_order(&self.state).map(|items| (person, items)))
+            .map(|(person, items)| OrderCreatedPayload {
+                person_id: *person.id(),
+                items,
+                destination: person.position().to_geo(),
+            }))
     }
+}
+
+fn create_order(state: &State) -> Option<Vec<(BrandId, MenuItemId)>> {
+    let mut rng = rand::rng();
+
+    // TODO: compute probability from person state
+    rng.random_bool(1.0 / 50.0).then(|| {
+        state
+            .objects()
+            .sample_menu_items(None, &mut rng)
+            .into_iter()
+            .map(|menu_item| (menu_item.brand_id().try_into().unwrap(), menu_item.id()))
+            .collect()
+    })
 }

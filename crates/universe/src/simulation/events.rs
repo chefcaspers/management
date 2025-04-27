@@ -1,17 +1,29 @@
-use crate::idents::{KitchenId, OrderId, OrderLineId, PersonId};
+use geo::Point;
+
+use crate::idents::{BrandId, KitchenId, MenuItemId, OrderId, OrderLineId, PersonId};
 use crate::state::{OrderLineStatus, OrderStatus, PersonStatus};
 
+#[derive(Debug, Clone)]
+pub struct OrderCreatedPayload {
+    pub person_id: PersonId,
+    pub items: Vec<(BrandId, MenuItemId)>,
+    pub destination: Point,
+}
+
+#[derive(Debug, Clone)]
 pub struct PersonUpdatedPayload {
     pub person_id: PersonId,
     pub status: PersonStatus,
 }
 
+#[derive(Debug, Clone)]
 pub struct OrderUpdatedPayload {
     pub order_id: OrderId,
     pub status: OrderStatus,
     pub actor_id: Option<PersonId>,
 }
 
+#[derive(Debug, Clone)]
 pub struct OrderLineUpdatedPayload {
     pub order_line_id: OrderLineId,
     pub status: OrderLineStatus,
@@ -19,10 +31,12 @@ pub struct OrderLineUpdatedPayload {
     pub actor_id: Option<PersonId>,
 }
 
+#[derive(Debug, Clone)]
 pub enum EventPayload {
     PersonUpdated(PersonUpdatedPayload),
     OrderUpdated(OrderUpdatedPayload),
     OrderLineUpdated(OrderLineUpdatedPayload),
+    OrderCreated(OrderCreatedPayload),
 }
 
 impl EventPayload {

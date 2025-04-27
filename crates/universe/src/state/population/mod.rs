@@ -13,24 +13,20 @@ use geoarrow_schema::Dimension;
 use h3o::{CellIndex, LatLng, Resolution};
 use indexmap::IndexMap;
 use itertools::Itertools;
-use rand::Rng;
 use serde::{Deserialize, Serialize};
 use strum::AsRefStr;
 use uuid::Uuid;
 
-use super::EntityView;
 use crate::error::{Error, Result};
-use crate::idents::{BrandId, MenuItemId, OrderId, PersonId};
+use crate::idents::{OrderId, PersonId};
 
-use super::State;
 use super::movement::{Journey, Transport};
 
 pub use builder::PopulationDataBuilder;
 
 mod builder;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub enum PersonStatus {
     #[default]
     Idle,
@@ -40,7 +36,6 @@ pub enum PersonStatus {
     Delivering(OrderId, Journey),
     WaitingForCustomer(OrderId),
 }
-
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct PersonState {
@@ -108,6 +103,32 @@ impl PopulationData {
         RecordBatch::try_new(Arc::new(Schema::new(full_schema)), columns).unwrap()
     }
 
+    pub fn person(&self, id: &PersonId) -> Option<PersonView<'_>> {
+        self.lookup_index
+            .get_full(id)
+            .map(|(idx, person_id, _)| PersonView::new(person_id, self, idx))
+    }
+
+    pub(crate) fn idle_people_in_cell(
+        &self,
+        cell_index: CellIndex,
+        role: &PersonRole,
+    ) -> impl Iterator<Item = PersonView<'_>> {
+        self.iter().filter_map(move |person| {
+            (person.is_idle()
+                && person.has_role(role)
+                && person.cell(cell_index.resolution()).ok()? == cell_index)
+                .then_some(person)
+        })
+    }
+
+    pub(crate) fn iter(&self) -> impl Iterator<Item = PersonView<'_>> {
+        self.lookup_index
+            .iter()
+            .enumerate()
+            .map(|(valid_index, (id, _))| PersonView::new(id, self, valid_index))
+    }
+
     pub fn update_person_status(&mut self, id: &PersonId, status: PersonStatus) -> Result<()> {
         self.lookup_index.get_mut(id).ok_or(Error::NotFound)?.status = status;
         Ok(())
@@ -154,39 +175,6 @@ impl PopulationData {
         self.positions = (new_positions.as_slice(), Dimension::XY).into();
 
         Ok((journey_slices, status_updates))
-    }
-
-    pub fn person(&self, id: &PersonId) -> Option<PersonView<'_>> {
-        self.lookup_index
-            .get_full(id)
-            .map(|(idx, person_id, _)| PersonView::new(person_id, self, idx))
-    }
-
-    pub(crate) fn idle_people_in_cell(
-        &self,
-        cell_index: CellIndex,
-        role: &PersonRole,
-    ) -> impl Iterator<Item = PersonView<'_>> {
-        self.iter().filter_map(move |person| {
-            (person.is_idle()
-                && person.has_role(role)
-                && person.cell(cell_index.resolution()).ok()? == cell_index)
-                .then_some(person)
-        })
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = PersonView<'_>> {
-        self.lookup_index
-            .iter()
-            .enumerate()
-            .map(|(valid_index, (id, _))| PersonView::new(id, self, valid_index))
-    }
-
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = PersonView<'_>> {
-        self.lookup_index
-            .iter()
-            .enumerate()
-            .map(|(valid_index, (id, _))| PersonView::new(id, self, valid_index))
     }
 }
 
@@ -273,25 +261,6 @@ impl<'a> PersonView<'a> {
 
     pub fn is_idle(&self) -> bool {
         matches!(self.state().status, PersonStatus::Idle)
-    }
-
-    pub(crate) fn create_order(&self, state: &State) -> Option<Vec<(BrandId, MenuItemId)>> {
-        let mut rng = rand::rng();
-
-        // Do not create an order if the person is not idle
-        if !self.is_idle() {
-            return None;
-        }
-
-        // TODO: compute probability from person state
-        rng.random_bool(1.0 / 50.0).then(|| {
-            state
-                .object_data()
-                .sample_menu_items(None, &mut rng)
-                .into_iter()
-                .map(|menu_item| (menu_item.brand_id().try_into().unwrap(), menu_item.id()))
-                .collect()
-        })
     }
 }
 

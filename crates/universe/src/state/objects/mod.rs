@@ -67,13 +67,16 @@ impl ObjectData {
         let menu_item_idx = self
             .iter_ids()?
             .enumerate()
-            .filter(|&(idx, (id, _parent_id, label))| (label == Some(ObjectLabel::MenuItem.as_ref()))).filter_map(|(idx, (id, _parent_id, label))| id.and_then(|id| Some((id.try_into().ok()?, idx))))
+            .filter(|&(_, (_, _, label))| (label == Some(ObjectLabel::MenuItem.as_ref())))
+            .filter_map(|(idx, (id, _parent_id, _))| {
+                id.and_then(|id| Some((id.try_into().ok()?, idx)))
+            })
             .collect();
         self.menu_item_idx = menu_item_idx;
         Ok(self)
     }
 
-    pub fn objects(&self) -> &RecordBatch {
+    pub(super) fn objects(&self) -> &RecordBatch {
         &self.objects
     }
 
@@ -171,7 +174,8 @@ impl ObjectData {
     ) -> Result<impl Iterator<Item = Result<(KitchenId, Vec<BrandId>)>>> {
         let brands: Vec<_> = self
             .iter_ids()?
-            .filter(|&(id, _, label)| (label == Some(ObjectLabel::Brand.as_ref()) && id.is_some())).map(|(id, _, label)| uuid::Uuid::from_slice(id.unwrap()).map(|id| id.into()))
+            .filter(|&(id, _, label)| (label == Some(ObjectLabel::Brand.as_ref()) && id.is_some()))
+            .map(|(id, _, _)| uuid::Uuid::from_slice(id.unwrap()).map(|id| id.into()))
             .try_collect()?;
         Ok(self.iter_ids()?.filter_map(move |(id, parent_id, label)| {
             id.and_then(|id| {

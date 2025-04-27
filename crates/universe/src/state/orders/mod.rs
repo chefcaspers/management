@@ -5,7 +5,6 @@ use arrow_array::types::Float64Type;
 use arrow_array::{RecordBatch, StringArray, cast::AsArray as _};
 use arrow_ord::partition::partition;
 use arrow_select::concat::concat_batches;
-use counter::Counter;
 use h3o::LatLng;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
@@ -51,25 +50,6 @@ pub enum OrderLineStatus {
     Delivered,
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct OrderDataStats {
-    total_orders: usize,
-    total_lines: usize,
-    status: Counter<OrderStatus>,
-}
-
-impl std::ops::Add for OrderDataStats {
-    type Output = Self;
-
-    fn add(self, other: Self) -> Self {
-        OrderDataStats {
-            total_orders: self.total_orders + other.total_orders,
-            total_lines: self.total_lines + other.total_lines,
-            status: self.status + other.status,
-        }
-    }
-}
-
 pub struct OrderData {
     orders: RecordBatch,
     lines: RecordBatch,
@@ -81,6 +61,15 @@ pub struct OrderData {
 }
 
 impl OrderData {
+    pub(crate) fn empty() -> Self {
+        Self {
+            orders: RecordBatch::new_empty(builder::ORDER_SCHEMA.clone()),
+            lines: RecordBatch::new_empty(builder::ORDER_LINE_SCHEMA.clone()),
+            index: IndexMap::new(),
+            lines_index: IndexSet::new(),
+        }
+    }
+
     fn try_new(orders: RecordBatch, lines: RecordBatch) -> Result<Self> {
         if orders.schema().as_ref() != builder::ORDER_SCHEMA.as_ref() {
             return Err(Error::invalid_data("expected orders to have schema").into());
@@ -93,12 +82,7 @@ impl OrderData {
         }
 
         if orders.num_rows() == 0 && lines.num_rows() == 0 {
-            return Ok(Self {
-                orders,
-                lines,
-                index: IndexMap::new(),
-                lines_index: IndexSet::new(),
-            });
+            return Ok(Self::empty());
         }
 
         let Some((order_id_idx, _)) = lines.schema().column_with_name("order_id") else {
@@ -150,48 +134,24 @@ impl OrderData {
         &self.lines
     }
 
-    pub fn num_orders(&self) -> usize {
-        self.orders.num_rows()
-    }
-
-    pub fn num_lines(&self) -> usize {
-        self.lines.num_rows()
-    }
-
-    pub fn stats(&self) -> OrderDataStats {
-        let mut stats = Counter::new();
-        for order in self.orders() {
-            for line in order.lines() {
-                let status = line.status().parse().unwrap();
-                stats[&status] += 1;
-            }
-        }
-        OrderDataStats {
-            total_orders: self.num_orders(),
-            total_lines: self.num_lines(),
-            status: stats,
-        }
-    }
-
-    pub fn order(&self, order_id: &OrderId) -> Option<OrderView<'_>> {
+    pub(crate) fn order(&self, order_id: &OrderId) -> Option<OrderView<'_>> {
         self.index
             .get_key_value(order_id)
             .map(|(id, (idx, _))| OrderView::new(id, self, *idx))
     }
 
-    pub fn orders(&self) -> impl Iterator<Item = OrderView<'_>> {
+    pub(crate) fn orders(&self) -> impl Iterator<Item = OrderView<'_>> {
         self.index
             .iter()
             .map(|(id, (idx, _))| OrderView::new(id, self, *idx))
     }
 
-    pub fn orders_with_status(&self, status: &OrderStatus) -> impl Iterator<Item = OrderView<'_>> {
+    pub(crate) fn orders_with_status(
+        &self,
+        status: &OrderStatus,
+    ) -> impl Iterator<Item = OrderView<'_>> {
         self.orders()
             .filter(|order| order.status() == status.as_ref())
-    }
-
-    pub fn into_parts(self) -> (RecordBatch, RecordBatch) {
-        (self.orders, self.lines)
     }
 
     pub(crate) fn merge(&self, other: Self) -> Result<Self> {
@@ -207,9 +167,9 @@ impl OrderData {
     ///
     /// This will update the status of the order lines and recompute the order status
     /// based on the aggregate status of the order lines.
-    pub(crate) fn update_order_lines(
+    pub(crate) fn update_order_lines<'a>(
         &mut self,
-        updates: impl IntoIterator<Item = (OrderLineId, OrderLineStatus)>,
+        updates: impl IntoIterator<Item = (OrderLineId, &'a OrderLineStatus)>,
     ) -> Result<()> {
         let mut current = self
             .lines
@@ -234,7 +194,8 @@ impl OrderData {
             .lines
             .columns()
             .iter()
-            .take(self.lines.num_columns() - 1).cloned()
+            .take(self.lines.num_columns() - 1)
+            .cloned()
             .collect_vec();
         arrays.push(new_array);
         self.lines = RecordBatch::try_new(builder::ORDER_LINE_SCHEMA.clone(), arrays)?;
@@ -247,7 +208,8 @@ impl OrderData {
             .orders
             .columns()
             .iter()
-            .take(self.orders.num_columns() - 1).cloned()
+            .take(self.orders.num_columns() - 1)
+            .cloned()
             .collect_vec();
         arrays.push(status_arr);
         self.orders = RecordBatch::try_new(builder::ORDER_SCHEMA.clone(), arrays)?;
@@ -256,11 +218,11 @@ impl OrderData {
     }
 
     /// Update the status of orders.
-    pub(crate) fn update_orders(
+    pub(crate) fn update_orders<'a>(
         &mut self,
-        updates: impl IntoIterator<Item = (OrderId, OrderStatus)>,
+        updates: impl IntoIterator<Item = (OrderId, &'a OrderStatus)>,
     ) -> Result<()> {
-        let update_map: HashMap<OrderId, OrderStatus> = updates.into_iter().collect();
+        let update_map: HashMap<OrderId, &OrderStatus> = updates.into_iter().collect();
         let mut statuses = Vec::with_capacity(self.orders.num_rows());
         for order in self.orders() {
             if let Some(status) = update_map.get(order.id()) {
@@ -274,7 +236,8 @@ impl OrderData {
             .orders
             .columns()
             .iter()
-            .take(self.orders.num_columns() - 1).cloned()
+            .take(self.orders.num_columns() - 1)
+            .cloned()
             .collect_vec();
         arrays.push(status_arr);
         self.orders = RecordBatch::try_new(builder::ORDER_SCHEMA.clone(), arrays)?;
@@ -315,15 +278,25 @@ impl<'a> OrderView<'a> {
             .parse()
             .unwrap_or(OrderStatus::Unknown(self.status().to_string()));
         match status {
-            OrderStatus::Submitted => if self
-                .is_processing() { OrderStatus::Processing } else { status },
-            OrderStatus::Processing => if self
-                .is_ready() { OrderStatus::Ready } else { status },
+            OrderStatus::Submitted => {
+                if self.is_processing() {
+                    OrderStatus::Processing
+                } else {
+                    status
+                }
+            }
+            OrderStatus::Processing => {
+                if self.is_ready() {
+                    OrderStatus::Ready
+                } else {
+                    status
+                }
+            }
             _ => status,
         }
     }
 
-    pub fn lines(&self) -> impl Iterator<Item = OrderLineView<'_>> {
+    pub(crate) fn lines(&self) -> impl Iterator<Item = OrderLineView<'_>> {
         let (_order_idx, (offset, len)) = self.data.index.get(self.order_id).unwrap();
         self.data
             .lines_index
@@ -333,24 +306,17 @@ impl<'a> OrderView<'a> {
             .map(|line_id| OrderLineView::new(self.order_id, line_id, self.data))
     }
 
-    pub fn is_processing(&self) -> bool {
+    pub(crate) fn is_processing(&self) -> bool {
         self.lines()
             .any(|line| line.status() == OrderLineStatus::Processing.as_ref())
     }
 
-    pub fn is_ready(&self) -> bool {
+    pub(crate) fn is_ready(&self) -> bool {
         self.lines()
             .all(|line| line.status() == OrderLineStatus::Ready.as_ref())
     }
 
-    pub fn line(&self, line_id: &OrderLineId) -> Option<OrderLineView<'_>> {
-        let (_order_idx, (offset, len)) = self.data.index.get(self.order_id)?;
-        let (line_idx, line_id) = self.data.lines_index.get_full(line_id)?;
-        (line_idx >= *offset && line_idx < *offset + *len)
-            .then(|| OrderLineView::new(self.order_id, line_id, self.data))
-    }
-
-    pub fn destination(&self) -> Result<LatLng> {
+    pub(crate) fn destination(&self) -> Result<LatLng> {
         let (order_idx, _) = self.data.index.get(self.order_id).unwrap();
         let pos = self
             .data

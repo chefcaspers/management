@@ -7,8 +7,7 @@ use datafusion::dataframe::DataFrameWriteOptions;
 use datafusion::prelude::*;
 use geo::Point;
 use geo_traits::PointTrait;
-use geoarrow::trait_::NativeScalar;
-use h3o::{LatLng, Resolution};
+use itertools::Itertools;
 use rand::Rng;
 use tokio::runtime::Runtime;
 use uuid::Uuid;
@@ -16,14 +15,16 @@ use uuid::Uuid;
 use self::movement::JourneyPlanner;
 use super::{EventPayload, SimulationConfig};
 use crate::error::Result;
-use crate::idents::*;
 use crate::models::{Brand, Site};
+use crate::{OrderCreatedPayload, OrderLineUpdatedPayload, OrderUpdatedPayload, idents::*};
 
 pub(crate) use self::movement::RoutingData;
 pub(crate) use self::objects::{ObjectData, ObjectDataBuilder, ObjectLabel};
-pub(crate) use self::orders::{OrderData, OrderDataBuilder, OrderLineStatus, OrderStatus};
+pub(crate) use self::orders::{
+    OrderData, OrderDataBuilder, OrderLineStatus, OrderStatus, OrderView,
+};
 pub(crate) use self::population::{
-    PersonRole, PersonStatus, PersonView, PopulationData, PopulationDataBuilder,
+    PersonRole, PersonStatus, PopulationData, PopulationDataBuilder,
 };
 
 mod movement;
@@ -64,6 +65,9 @@ pub struct State {
 
     /// Routing data
     routing: JourneyPlanner,
+
+    /// Order data
+    orders: OrderData,
 }
 
 impl State {
@@ -96,6 +100,7 @@ impl State {
             objects: ObjectData::try_new(vendors)?,
             routing: routing.into_trip_planner(),
             config,
+            orders: OrderData::empty(),
         })
     }
 
@@ -115,7 +120,7 @@ impl State {
         self.population.people()
     }
 
-    pub fn object_data(&self) -> &ObjectData {
+    pub fn objects(&self) -> &ObjectData {
         &self.objects
     }
 
@@ -123,33 +128,66 @@ impl State {
         &self.population
     }
 
+    pub fn orders(&self) -> &OrderData {
+        &self.orders
+    }
+
+    pub fn update_order_lines<'a>(
+        &mut self,
+        updates: impl IntoIterator<Item = &'a OrderLineUpdatedPayload>,
+    ) -> Result<()> {
+        self.orders.update_order_lines(
+            updates
+                .into_iter()
+                .map(|payload| (payload.order_line_id, &payload.status)),
+        )?;
+        Ok(())
+    }
+
+    pub fn update_orders<'a>(
+        &mut self,
+        updates: impl IntoIterator<Item = &'a OrderUpdatedPayload>,
+    ) -> Result<()> {
+        self.orders.update_orders(
+            updates
+                .into_iter()
+                .map(|payload| (payload.order_id, &payload.status)),
+        )?;
+        Ok(())
+    }
+
     pub fn trip_planner(&self) -> &JourneyPlanner {
         &self.routing
     }
 
-    pub(crate) fn orders_for_site(&self, site_id: &SiteId) -> Result<OrderData> {
-        let site = self.objects.site(site_id)?;
-        let props = site.properties()?;
-        let lat_lng = LatLng::new(props.latitude, props.longitude)?;
-
-        self.population
-            // NB: resolution 6 corresponds to a cell size of approximately 36 km2
-            .idle_people_in_cell(lat_lng.to_cell(Resolution::Six), &PersonRole::Customer)
-            .filter_map(|person| person.create_order(self).map(|items| (person, items)))
-            .fold(OrderDataBuilder::new(), |builder, (person, items)| {
+    pub(crate) fn process_orders<'a>(
+        &mut self,
+        orders: impl IntoIterator<Item = &'a OrderCreatedPayload>,
+    ) -> Result<Vec<OrderId>> {
+        let order_data = orders
+            .into_iter()
+            .fold(OrderDataBuilder::new(), |builder, order| {
                 builder.add_order(
-                    &person,
-                    person
-                        .position()
+                    &order.person_id,
+                    order
+                        .destination
                         .coord()
                         .unwrap()
-                        .to_geo()
+                        .clone()
                         .try_into()
                         .unwrap(),
-                    &items,
+                    &order.items,
                 )
             })
-            .finish()
+            .finish()?;
+        tracing::info!(
+            "Processing {} orders with {} lines",
+            order_data.batch_orders().num_rows(),
+            order_data.batch_lines().num_rows()
+        );
+        let order_ids = order_data.orders().map(|o| *o.id()).collect_vec();
+        self.orders = self.orders.merge(order_data)?;
+        Ok(order_ids)
     }
 
     pub fn time_step(&self) -> Duration {
@@ -185,6 +223,14 @@ impl State {
         self.time += self.time_step;
 
         Ok(())
+    }
+
+    /// Create a new session context with the current state of the simulation.
+    pub(crate) fn snapshot_session(&self, rt: &Runtime) -> Result<SessionContext> {
+        let ctx = SessionContext::new();
+        ctx.register_batch("population", self.population.people_full().clone())?;
+        ctx.register_batch("objects", self.objects.objects().clone())?;
+        Ok(ctx)
     }
 
     pub(crate) fn snapshot(&self, base_path: &url::Url) -> Result<()> {

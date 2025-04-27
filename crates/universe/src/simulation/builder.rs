@@ -175,7 +175,7 @@ impl SimulationBuilder {
         let state = State::try_new(brands, sites, routing, Some(config))?;
 
         let site_runners = state
-            .object_data()
+            .objects()
             .sites()?
             .map(|site| {
                 Ok::<_, Box<dyn std::error::Error>>((

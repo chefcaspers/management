@@ -9,8 +9,7 @@ use h3o::LatLng;
 
 use super::{OrderData, OrderLineStatus, OrderStatus};
 use crate::error::Result;
-use crate::idents::{BrandId, MenuItemId, OrderId, OrderLineId};
-use crate::state::PersonView;
+use crate::idents::{BrandId, MenuItemId, OrderId, OrderLineId, PersonId};
 
 pub struct OrderDataBuilder {
     orders: OrderBuilder,
@@ -27,11 +26,11 @@ impl OrderDataBuilder {
 
     pub fn add_order(
         mut self,
-        person: &PersonView,
+        person_id: &PersonId,
         destination: LatLng,
         order: &[(BrandId, MenuItemId)],
     ) -> Self {
-        let order_id = self.orders.add_order(person.id(), destination).unwrap();
+        let order_id = self.orders.add_order(*person_id, destination).unwrap();
         for (brand_id, menu_item_id) in order {
             self.lines
                 .add_line(order_id, brand_id, menu_item_id)
@@ -88,8 +87,7 @@ impl OrderLineBuilder {
         self.order_ids.append_value(order_id)?;
         self.brand_ids.append_value(brand_id)?;
         self.menu_item_ids.append_value(menu_item_id)?;
-        self.statuses
-            .append_value(OrderLineStatus::Submitted);
+        self.statuses.append_value(OrderLineStatus::Submitted);
         Ok(id)
     }
 

@@ -98,7 +98,7 @@ impl KitchenRunner {
         let mut to_update = Vec::new();
 
         for (order_line_id, progress) in self.in_progress.iter() {
-            let menu_item = ctx.object_data().menu_item(&progress.order_line.item.1)?;
+            let menu_item = ctx.objects().menu_item(&progress.order_line.item.1)?;
             match &progress.status {
                 OrderLineProcessingStatus::Processing(instruction_idx, stated_time) => {
                     let expected_duration = menu_item.instructions[*instruction_idx]
@@ -193,7 +193,7 @@ impl KitchenRunner {
         state: &State,
     ) -> Result<Self> {
         let stations = state
-            .object_data()
+            .objects()
             .kitchen_stations(&id)?
             .map_ok(|(station_id, station)| StationRunner::new(station_id, station))
             .try_collect()?;
@@ -217,7 +217,7 @@ impl KitchenRunner {
 
     fn start_order_line(&mut self, ctx: &State) -> Result<bool> {
         if let Some(order_line) = self.queue.pop_front() {
-            let menu_item = ctx.object_data().menu_item(&order_line.item.1)?;
+            let menu_item = ctx.objects().menu_item(&order_line.item.1)?;
             // Check if we can start the first step
             let step = &menu_item.instructions[0];
             if let Some(asset_idx) = take_station(&self.stations, &step.required_station) {
