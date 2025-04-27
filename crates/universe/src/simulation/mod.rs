@@ -84,7 +84,7 @@ impl Simulation {
 
         // move people
         let movements = self.state.move_people()?;
-        tracing::info!(target: "simulation", "Moved {} people.", movements.len());
+        tracing::debug!(target: "simulation", "Moved {} people.", movements.len());
 
         // generate orders for each site
         let orders: HashMap<_, _> = self
@@ -135,7 +135,7 @@ impl Simulation {
             }
         }
 
-        tracing::info!(target: "simulation", "Collected {} events.", events.len());
+        tracing::debug!(target: "simulation", "Collected {} events.", events.len());
 
         // update the state with the collected events
         self.state.step(events)?;

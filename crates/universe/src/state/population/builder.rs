@@ -4,11 +4,10 @@ use arrow_array::RecordBatch;
 use arrow_array::builder::{FixedSizeBinaryBuilder, StringBuilder};
 use arrow_schema::{DataType, Field, Schema, SchemaRef};
 use fake::Fake;
-use geo::Centroid;
-use geo::{BoundingRect, LineString, Point, Polygon};
+use geo::{BoundingRect, Centroid, Contains, Point};
 use geoarrow::array::PointBuilder;
 use geoarrow_schema::Dimension;
-use h3o::{LatLng, Resolution};
+use h3o::{LatLng, Resolution, geom::SolventBuilder};
 use rand::distr::{Distribution, Uniform};
 use rand::rngs::ThreadRng;
 
@@ -76,11 +75,12 @@ impl PopulationDataBuilder {
         }
 
         let latlng = LatLng::new(site.latitude, site.longitude)?;
-        let cell_index = latlng.to_cell(Resolution::Six);
-        let boundary: LineString = cell_index.boundary().iter().cloned().collect();
-        let polygon = Polygon::new(boundary, Vec::new());
+        let cell_index = latlng.to_cell(Resolution::Nine);
+        let cells = cell_index.grid_disk::<Vec<_>>(10);
+        let solvent = SolventBuilder::new().build();
+        let geom = solvent.dissolve(cells)?;
 
-        let bounding_rect = polygon.bounding_rect().unwrap();
+        let bounding_rect = geom.bounding_rect().unwrap();
         let (maxx, maxy) = bounding_rect.max().x_y();
         let (minx, miny) = bounding_rect.min().x_y();
 
@@ -88,15 +88,19 @@ impl PopulationDataBuilder {
         let y_range = Uniform::new(miny, maxy)?;
         x_range
             .sample_iter(rand::rng())
+            .zip(y_range.sample_iter(rand::rng()))
+            .filter_map(|(x, y)| {
+                let p = Point::new(x, y);
+                geom.contains(&p).then_some(p)
+            })
             .take(n_people)
-            .zip(y_range.sample_iter(rand::rng()).take(n_people))
-            .for_each(|(x, y)| {
-                self.positions.push_point(Some(&Point::new(x, y)));
+            .for_each(|p| {
+                self.positions.push_point(Some(&p));
             });
 
         let n_couriers = n_people / 10;
         tracing::info!("Adding {} couriers", n_couriers);
-        let loc = polygon.centroid().unwrap();
+        let loc = geom.centroid().unwrap();
         for _ in 0..n_couriers {
             let id = PersonId::new();
             self.ids.append_value(id)?;

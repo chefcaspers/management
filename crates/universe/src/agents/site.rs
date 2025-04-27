@@ -218,13 +218,14 @@ impl SiteRunner {
         };
 
         let couriers = ctx.population().idle_people_in_cell(
-            site_location.to_cell(Resolution::Nine),
+            site_location.to_cell(Resolution::Eight),
             &PersonRole::Courier,
         );
         let orders = ctx.orders().orders_with_status(&OrderStatus::Ready);
+
         let mut router = ctx.trip_planner().get_router();
-        let order_queue = couriers.zip(orders);
-        for (courier, order) in order_queue {
+        let order_queue = orders.zip(couriers);
+        for (order, courier) in order_queue {
             let destination = order.destination()?;
 
             // Generate the delivery route for the courier
@@ -241,6 +242,8 @@ impl SiteRunner {
                 events.push(EventPayload::order_failed(*order.id(), None));
                 continue;
             };
+
+            tracing::debug!(target: "agents", "Courier {:?} is delivering order {:?}", courier.id(), order.id());
             events.push(EventPayload::person_updated(
                 *courier.id(),
                 PersonStatus::Delivering(*order.id(), journey),

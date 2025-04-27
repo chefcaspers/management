@@ -158,7 +158,8 @@ impl State {
                 )
             })
             .finish()?;
-        tracing::info!(
+        tracing::debug!(
+            target: "state",
             "Processing {} orders with {} lines",
             order_data.batch_orders().num_rows(),
             order_data.batch_lines().num_rows()
@@ -183,6 +184,13 @@ impl State {
     /// Advance people's journeys and update their statuses on arrival at their destination.
     pub(super) fn move_people(&mut self) -> Result<Vec<(PersonId, Vec<Point>)>> {
         let (movements, status_updates) = self.population.update_journeys(self.time_step)?;
+        tracing::debug!(
+            target: "state",
+            "Moved {} people with {} status updates",
+            movements.len(),
+            status_updates.len()
+        );
+
         // update person statuses after positions have been updated.
         for (person_id, status) in status_updates.into_iter() {
             self.population.update_person_status(&person_id, status)?;
