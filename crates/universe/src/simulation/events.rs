@@ -1,5 +1,5 @@
-use super::state::{OrderLineStatus, OrderStatus, PersonStatus};
 use crate::idents::{KitchenId, OrderId, OrderLineId, PersonId};
+use crate::state::{OrderLineStatus, OrderStatus, PersonStatus};
 
 pub struct PersonUpdatedPayload {
     pub person_id: PersonId,

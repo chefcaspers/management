@@ -105,6 +105,12 @@ impl_id_type!(StationId);
 #[serde(transparent)]
 pub struct OrderId(Uuid);
 
+impl Default for OrderId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OrderId {
     pub fn new() -> Self {
         OrderId(Uuid::now_v7())
@@ -116,6 +122,12 @@ impl_id_type!(OrderId);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct OrderLineId(Uuid);
+
+impl Default for OrderLineId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl OrderLineId {
     pub fn new() -> Self {
@@ -152,6 +164,12 @@ impl_id_type!(MenuItemId);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct PersonId(pub(crate) Uuid);
+
+impl Default for PersonId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl PersonId {
     pub fn new() -> Self {

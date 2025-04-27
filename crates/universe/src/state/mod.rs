@@ -112,7 +112,7 @@ impl State {
     }
 
     pub fn people(&self) -> &RecordBatch {
-        &self.population.people()
+        self.population.people()
     }
 
     pub fn object_data(&self) -> &ObjectData {
@@ -176,12 +176,9 @@ impl State {
 
     pub(super) fn step(&mut self, events: impl IntoIterator<Item = EventPayload>) -> Result<()> {
         for event in events.into_iter() {
-            match event {
-                EventPayload::PersonUpdated(payload) => {
-                    self.population
-                        .update_person_status(&payload.person_id, payload.status)?;
-                }
-                _ => {}
+            if let EventPayload::PersonUpdated(payload) = event {
+                self.population
+                    .update_person_status(&payload.person_id, payload.status)?;
             }
         }
 

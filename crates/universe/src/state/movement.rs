@@ -92,7 +92,7 @@ impl Journey {
 
             if leg.distance_m as f64 <= distance_remaining {
                 // We completed this leg, add the destination point
-                traversed_points.push(leg.destination.clone());
+                traversed_points.push(leg.destination);
                 distance_remaining -= leg.distance_m as f64;
             } else {
                 // We didn't complete this leg, calculate the intermediate point
@@ -112,7 +112,7 @@ impl Journey {
                     traversed_points.push(intermediate_point);
                 } else {
                     // If there's no previous point, just add the destination
-                    traversed_points.push(leg.destination.clone());
+                    traversed_points.push(leg.destination);
                 }
 
                 // Add the leg back with reduced distance
@@ -347,13 +347,11 @@ impl RoutingData {
 
     pub fn nodes(&self) -> impl ExactSizeIterator<Item = StreetNode<'_>> {
         (0..self.nodes.num_rows())
-            .into_iter()
             .map(|i| StreetNode::new(self, i))
     }
 
     pub fn edges(&self) -> impl ExactSizeIterator<Item = StreetEdge<'_>> {
         (0..self.edges.num_rows())
-            .into_iter()
             .map(|i| StreetEdge::new(self, i))
     }
 

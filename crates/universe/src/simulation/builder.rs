@@ -7,12 +7,12 @@ use geoarrow_geoparquet::GeoParquetRecordBatchReaderBuilder;
 use itertools::Itertools;
 use url::Url;
 
-use super::state::RoutingData;
-use super::{Simulation, SimulationConfig, State, state::EntityView};
 use crate::SiteRunner;
 use crate::error::Result;
 use crate::idents::{BrandId, SiteId};
 use crate::models::{Brand, Site};
+use crate::simulation::{Simulation, SimulationConfig};
+use crate::state::{EntityView, RoutingData, State};
 
 pub struct SimulationBuilder {
     brands: Vec<Brand>,
@@ -131,9 +131,9 @@ impl SimulationBuilder {
             .into_iter()
             .map(|(name, latitude, longitude)| {
                 (
-                    SiteId::from_uri_ref(&format!("sites/{}", name)),
+                    SiteId::from_uri_ref(format!("sites/{}", name)),
                     Site {
-                        id: SiteId::from_uri_ref(&format!("sites/{}", name)).to_string(),
+                        id: SiteId::from_uri_ref(format!("sites/{}", name)).to_string(),
                         name: name.to_string(),
                         latitude,
                         longitude,

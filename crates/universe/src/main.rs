@@ -29,7 +29,8 @@ fn main() -> Result<()> {
         simulation.with_brand(brand);
     }
 
-    for (name, (lat, long)) in [("london", (51.518898098201326, -0.13381370382489707))] {
+    {
+        let (name, (lat, long)) = ("london", (51.518898098201326, -0.13381370382489707));
         simulation.with_site(name, lat, long);
     }
     let mut simulation = simulation.build()?;

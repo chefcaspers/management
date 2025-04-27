@@ -233,9 +233,8 @@ impl OrderData {
         let mut arrays = self
             .lines
             .columns()
-            .into_iter()
-            .cloned()
-            .take(self.lines.num_columns() - 1)
+            .iter()
+            .take(self.lines.num_columns() - 1).cloned()
             .collect_vec();
         arrays.push(new_array);
         self.lines = RecordBatch::try_new(builder::ORDER_LINE_SCHEMA.clone(), arrays)?;
@@ -247,9 +246,8 @@ impl OrderData {
         let mut arrays = self
             .orders
             .columns()
-            .into_iter()
-            .cloned()
-            .take(self.orders.num_columns() - 1)
+            .iter()
+            .take(self.orders.num_columns() - 1).cloned()
             .collect_vec();
         arrays.push(status_arr);
         self.orders = RecordBatch::try_new(builder::ORDER_SCHEMA.clone(), arrays)?;
@@ -275,9 +273,8 @@ impl OrderData {
         let mut arrays = self
             .orders
             .columns()
-            .into_iter()
-            .cloned()
-            .take(self.orders.num_columns() - 1)
+            .iter()
+            .take(self.orders.num_columns() - 1).cloned()
             .collect_vec();
         arrays.push(status_arr);
         self.orders = RecordBatch::try_new(builder::ORDER_SCHEMA.clone(), arrays)?;
@@ -318,14 +315,10 @@ impl<'a> OrderView<'a> {
             .parse()
             .unwrap_or(OrderStatus::Unknown(self.status().to_string()));
         match status {
-            OrderStatus::Submitted => self
-                .is_processing()
-                .then(|| OrderStatus::Processing)
-                .unwrap_or(status),
-            OrderStatus::Processing => self
-                .is_ready()
-                .then(|| OrderStatus::Ready)
-                .unwrap_or(status),
+            OrderStatus::Submitted => if self
+                .is_processing() { OrderStatus::Processing } else { status },
+            OrderStatus::Processing => if self
+                .is_ready() { OrderStatus::Ready } else { status },
             _ => status,
         }
     }

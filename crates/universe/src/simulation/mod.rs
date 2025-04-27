@@ -6,15 +6,14 @@ use url::Url;
 use crate::agents::SiteRunner;
 use crate::error::Result;
 use crate::idents::{SiteId, TypedId};
+use crate::state::State;
 
 pub use self::builder::SimulationBuilder;
 pub use self::events::*;
-pub use self::state::State;
 
 mod builder;
 pub mod events;
 mod execution;
-pub mod state;
 
 /// Core trait that any simulatable entity must implement
 pub trait Entity: Send + Sync + 'static {
@@ -27,21 +26,21 @@ pub trait Entity: Send + Sync + 'static {
 /// Trait for entities that need to be updated each simulation step
 pub trait Simulatable: Entity {
     /// Update the entity state based on the current simulation context
-    fn step(&mut self, context: &state::State) -> Result<Vec<EventPayload>>;
+    fn step(&mut self, context: &State) -> Result<Vec<EventPayload>>;
 }
 
 /// Configuration for the simulation engine
 pub(crate) struct SimulationConfig {
     /// all ghost kitchen sites.
-    simulation_start: DateTime<Utc>,
+    pub(crate) simulation_start: DateTime<Utc>,
 
     /// time increment for simulation steps
-    time_increment: Duration,
+    pub(crate) time_increment: Duration,
 
     /// location to store simulation results
-    result_storage_location: Option<Url>,
+    pub(crate) result_storage_location: Option<Url>,
 
-    snapshot_interval: Option<Duration>,
+    pub(crate) snapshot_interval: Option<Duration>,
 }
 
 impl Default for SimulationConfig {

@@ -77,7 +77,7 @@ impl PopulationDataBuilder {
 
         let latlng = LatLng::new(site.latitude, site.longitude)?;
         let cell_index = latlng.to_cell(Resolution::Six);
-        let boundary: LineString = cell_index.boundary().into_iter().cloned().collect();
+        let boundary: LineString = cell_index.boundary().iter().cloned().collect();
         let polygon = Polygon::new(boundary, Vec::new());
 
         let bounding_rect = polygon.bounding_rect().unwrap();

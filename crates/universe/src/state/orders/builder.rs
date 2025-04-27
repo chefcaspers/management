@@ -10,7 +10,7 @@ use h3o::LatLng;
 use super::{OrderData, OrderLineStatus, OrderStatus};
 use crate::error::Result;
 use crate::idents::{BrandId, MenuItemId, OrderId, OrderLineId};
-use crate::simulation::state::PersonView;
+use crate::state::PersonView;
 
 pub struct OrderDataBuilder {
     orders: OrderBuilder,
@@ -34,7 +34,7 @@ impl OrderDataBuilder {
         let order_id = self.orders.add_order(person.id(), destination).unwrap();
         for (brand_id, menu_item_id) in order {
             self.lines
-                .add_line(&order_id, brand_id, menu_item_id)
+                .add_line(order_id, brand_id, menu_item_id)
                 .unwrap();
         }
         self
@@ -89,12 +89,12 @@ impl OrderLineBuilder {
         self.brand_ids.append_value(brand_id)?;
         self.menu_item_ids.append_value(menu_item_id)?;
         self.statuses
-            .append_value(OrderLineStatus::Submitted.to_string());
+            .append_value(OrderLineStatus::Submitted);
         Ok(id)
     }
 
     pub fn finish(mut self) -> Result<RecordBatch, ArrowError> {
-        Ok(RecordBatch::try_new(
+        RecordBatch::try_new(
             ORDER_LINE_SCHEMA.clone(),
             vec![
                 Arc::new(self.ids.finish()),
@@ -103,7 +103,7 @@ impl OrderLineBuilder {
                 Arc::new(self.menu_item_ids.finish()),
                 Arc::new(self.statuses.finish()),
             ],
-        )?)
+        )
     }
 }
 
@@ -161,7 +161,7 @@ impl OrderBuilder {
     }
 
     pub fn finish(mut self) -> Result<RecordBatch, ArrowError> {
-        Ok(RecordBatch::try_new(
+        RecordBatch::try_new(
             ORDER_SCHEMA.clone(),
             vec![
                 Arc::new(self.ids.finish()),
@@ -169,7 +169,7 @@ impl OrderBuilder {
                 Arc::new(self.destination.finish()),
                 Arc::new(self.statuses.finish()),
             ],
-        )?)
+        )
     }
 }
 

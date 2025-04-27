@@ -18,9 +18,9 @@ use serde::{Deserialize, Serialize};
 use strum::AsRefStr;
 use uuid::Uuid;
 
+use super::EntityView;
 use crate::error::{Error, Result};
 use crate::idents::{BrandId, MenuItemId, OrderId, PersonId};
-use crate::simulation::state::EntityView;
 
 use super::State;
 use super::movement::{Journey, Transport};
@@ -30,7 +30,9 @@ pub use builder::PopulationDataBuilder;
 mod builder;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum PersonStatus {
+    #[default]
     Idle,
     AwaitingOrder(OrderId),
     Eating(DateTime<Utc>),
@@ -39,11 +41,6 @@ pub enum PersonStatus {
     WaitingForCustomer(OrderId),
 }
 
-impl Default for PersonStatus {
-    fn default() -> Self {
-        PersonStatus::Idle
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct PersonState {
@@ -106,7 +103,7 @@ impl PopulationData {
                 false,
             ))))
             .collect_vec();
-        let mut columns = people.columns().into_iter().cloned().collect_vec();
+        let mut columns = people.columns().iter().cloned().collect_vec();
         columns.push(positions);
         RecordBatch::try_new(Arc::new(Schema::new(full_schema)), columns).unwrap()
     }
@@ -128,12 +125,12 @@ impl PopulationData {
             let (progress, next_status) = match &mut state.status {
                 PersonStatus::Moving(journey) => {
                     let progress = journey.advance(&Transport::Bicycle, time_step);
-                    let next_status = journey.is_done().then(|| PersonStatus::Idle);
+                    let next_status = journey.is_done().then_some(PersonStatus::Idle);
                     (Some(progress), next_status)
                 }
                 PersonStatus::Delivering(_, journey) => {
                     let progress = journey.advance(&Transport::Bicycle, time_step);
-                    let next_status = journey.is_done().then(|| PersonStatus::Idle);
+                    let next_status = journey.is_done().then_some(PersonStatus::Idle);
                     (Some(progress), next_status)
                 }
                 _ => (None, None),
@@ -146,7 +143,7 @@ impl PopulationData {
             match progress {
                 Some(slice) => {
                     if let Some(last_pos) = slice.last() {
-                        new_positions.push(last_pos.clone());
+                        new_positions.push(*last_pos);
                     }
                     journey_slices.push((*person_id, slice));
                 }
@@ -174,7 +171,7 @@ impl PopulationData {
             (person.is_idle()
                 && person.has_role(role)
                 && person.cell(cell_index.resolution()).ok()? == cell_index)
-                .then(|| person)
+                .then_some(person)
         })
     }
 

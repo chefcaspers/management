@@ -6,7 +6,7 @@ use arrow_array::RecordBatch;
 use crate::error::Result;
 use crate::idents::{BrandId, MenuItemId, SiteId};
 use crate::models::{Brand, MenuItem, Site};
-use crate::simulation::state::ObjectDataBuilder;
+use crate::state::ObjectDataBuilder;
 
 static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
     let mut brands = Vec::new();

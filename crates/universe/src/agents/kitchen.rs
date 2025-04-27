@@ -8,8 +8,8 @@ use super::OrderLine;
 use crate::error::Result;
 use crate::idents::*;
 use crate::models::{KitchenStation, Station};
-use crate::simulation::state::OrderLineStatus;
-use crate::{Entity, EventPayload, State};
+use crate::state::{OrderLineStatus, State};
+use crate::{Entity, EventPayload};
 
 #[derive(Clone)]
 enum StationStatus {

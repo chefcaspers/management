@@ -9,10 +9,10 @@ use tabled::Tabled;
 use super::kitchen::{KitchenRunner, KitchenStats};
 use crate::idents::*;
 use crate::simulation::events::EventPayload;
-use crate::simulation::state::{
-    EntityView, OrderData, OrderLineStatus, OrderStatus, PersonRole, PersonStatus,
+use crate::state::{
+    EntityView, OrderData, OrderLineStatus, OrderStatus, PersonRole, PersonStatus, State,
 };
-use crate::{Entity, Error, Result, Simulatable, State};
+use crate::{Entity, Error, Result, Simulatable};
 
 // TODO: Move order data management to simulation level.
 
@@ -128,7 +128,7 @@ impl Simulatable for SiteRunner {
         events.extend(self.handle_order_pickup(ctx)?);
 
         let order_updates = events.iter().filter_map(|event| match event {
-            OrderUpdated(payload) => Some((payload.order_id.clone(), payload.status.clone())),
+            OrderUpdated(payload) => Some((payload.order_id, payload.status.clone())),
             _ => None,
         });
         self.order_data.update_orders(order_updates)?;
@@ -283,32 +283,32 @@ impl SiteRunner {
         );
         let orders = self.order_data.orders_with_status(&OrderStatus::Ready);
         let mut router = ctx.trip_planner().get_router();
-        let mut order_queue = couriers.zip(orders);
-        while let Some((courier, order)) = order_queue.next() {
+        let order_queue = couriers.zip(orders);
+        for (courier, order) in order_queue {
             let destination = order.destination()?;
 
             // Generate the delivery route for the courier
             let Some(destination_node) = ctx.trip_planner().nearest_node(&destination) else {
                 tracing::error!("Failed to find a node for order {:?}", order.id());
-                events.push(EventPayload::order_failed(order.id().clone(), None));
+                events.push(EventPayload::order_failed(*order.id(), None));
                 continue;
             };
             let Some(journey) =
                 ctx.trip_planner()
-                    .plan(&mut router, &site_location_node, &destination_node)
+                    .plan(&mut router, site_location_node, destination_node)
             else {
                 tracing::error!("Failed to find a route for order {:?}", order.id());
-                events.push(EventPayload::order_failed(order.id().clone(), None));
+                events.push(EventPayload::order_failed(*order.id(), None));
                 continue;
             };
             events.push(EventPayload::person_updated(
-                courier.id().clone(),
-                PersonStatus::Delivering(order.id().clone(), journey),
+                *courier.id(),
+                PersonStatus::Delivering(*order.id(), journey),
             ));
             events.push(EventPayload::order_updated(
-                order.id().clone(),
+                *order.id(),
                 OrderStatus::PickedUp,
-                Some(courier.id().clone()),
+                Some(*courier.id()),
             ));
         }
 

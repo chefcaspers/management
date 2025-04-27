@@ -67,11 +67,7 @@ impl ObjectData {
         let menu_item_idx = self
             .iter_ids()?
             .enumerate()
-            .filter_map(|(idx, (id, _parent_id, label))| {
-                (label == Some(ObjectLabel::MenuItem.as_ref()))
-                    .then(|| id.and_then(|id| Some((id.try_into().ok()?, idx))))
-            })
-            .flatten()
+            .filter(|&(idx, (id, _parent_id, label))| (label == Some(ObjectLabel::MenuItem.as_ref()))).filter_map(|(idx, (id, _parent_id, label))| id.and_then(|id| Some((id.try_into().ok()?, idx))))
             .collect();
         self.menu_item_idx = menu_item_idx;
         Ok(self)
@@ -116,10 +112,10 @@ impl ObjectData {
         }
         let view = self
             .menu_item_data(item_id)
-            .ok_or_else(|| VendorDataError::NotFound)?;
+            .ok_or(VendorDataError::NotFound)?;
         let properties = view.properties()?;
         self.menu_items.insert(*item_id, properties.clone());
-        return Ok(self.menu_items.get(item_id).unwrap());
+        Ok(self.menu_items.get(item_id).unwrap())
     }
 
     pub(crate) fn menu_item_data(&self, item_id: &MenuItemId) -> Option<MenuItemView<'_>> {
@@ -148,7 +144,7 @@ impl ObjectData {
             .enumerate()
             .filter_map(|(index, (id, _parent_id, label))| {
                 id.and_then(|_| {
-                    (label == Some(ObjectLabel::Site.as_ref())).then(|| SiteView {
+                    (label == Some(ObjectLabel::Site.as_ref())).then_some(SiteView {
                         data: self,
                         valid_index: index,
                     })
@@ -175,10 +171,7 @@ impl ObjectData {
     ) -> Result<impl Iterator<Item = Result<(KitchenId, Vec<BrandId>)>>> {
         let brands: Vec<_> = self
             .iter_ids()?
-            .filter_map(|(id, _, label)| {
-                (label == Some(ObjectLabel::Brand.as_ref()) && id.is_some())
-                    .then(|| uuid::Uuid::from_slice(id.unwrap()).map(|id| id.into()))
-            })
+            .filter(|&(id, _, label)| (label == Some(ObjectLabel::Brand.as_ref()) && id.is_some())).map(|(id, _, label)| uuid::Uuid::from_slice(id.unwrap()).map(|id| id.into()))
             .try_collect()?;
         Ok(self.iter_ids()?.filter_map(move |(id, parent_id, label)| {
             id.and_then(|id| {
@@ -236,7 +229,7 @@ impl EntityView for MenuItemView<'_> {
     }
 
     fn data(&self) -> &ObjectData {
-        &self.data
+        self.data
     }
 
     fn valid_index(&self) -> usize {
@@ -276,7 +269,7 @@ impl EntityView for SiteView<'_> {
     type Properties = Site;
 
     fn data(&self) -> &ObjectData {
-        &self.data
+        self.data
     }
 
     fn valid_index(&self) -> usize {
