@@ -142,9 +142,10 @@ impl SimulationBuilder {
             })
             .collect_vec();
 
-        let file =
-            std::fs::File::open("/Users/robert.pack/code/management/notebooks/edges.parquet")
-                .unwrap();
+        let file = std::fs::File::open(
+            "/Users/robert.pack/code/management/notebooks/sites/london/edges.parquet",
+        )
+        .unwrap();
         let reader = GeoParquetRecordBatchReaderBuilder::try_new(file)
             .unwrap()
             .build()
@@ -153,9 +154,10 @@ impl SimulationBuilder {
         let batches: Vec<_> = reader.into_iter().try_collect().unwrap();
         let edges = concat_batches(&schema, &batches).unwrap();
 
-        let file =
-            std::fs::File::open("/Users/robert.pack/code/management/notebooks/nodes.parquet")
-                .unwrap();
+        let file = std::fs::File::open(
+            "/Users/robert.pack/code/management/notebooks/sites/london/nodes.parquet",
+        )
+        .unwrap();
         let reader = GeoParquetRecordBatchReaderBuilder::try_new(file)
             .unwrap()
             .build()
@@ -191,6 +193,7 @@ impl SimulationBuilder {
 
         Ok(Simulation {
             rt,
+            initialized: false,
             last_snapshot_time: state.current_time(),
             state,
             sites: site_runners,

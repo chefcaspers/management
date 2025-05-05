@@ -151,7 +151,12 @@ impl PopulationData {
                 }
                 PersonStatus::Delivering(_, journey) => {
                     let progress = journey.advance(&Transport::Bicycle, time_step);
-                    let next_status = journey.is_done().then_some(PersonStatus::Idle);
+                    let next_status = journey.is_done().then_some({
+                        // couriers need to reverse their journey when they're done delivering
+                        let mut journey = journey.clone();
+                        journey.reset_reverse();
+                        PersonStatus::Moving(journey)
+                    });
                     (Some(progress), next_status)
                 }
                 _ => (None, None),

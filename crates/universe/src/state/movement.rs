@@ -69,7 +69,12 @@ impl<T: Into<Point>> From<(T, usize)> for JourneyLeg {
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Journey {
-    legs: VecDeque<JourneyLeg>,
+    // Store all legs for the full journey history
+    legs: Vec<JourneyLeg>,
+    // Track progress through the journey
+    current_leg_index: usize,
+    // Track progress within the current leg (0.0 to 1.0)
+    current_leg_progress: f64,
 }
 
 impl Journey {
@@ -78,31 +83,45 @@ impl Journey {
     }
 
     pub fn is_done(&self) -> bool {
-        self.legs.is_empty()
+        self.current_leg_index >= self.legs.len()
+    }
+
+    pub fn reset_reverse(&mut self) {
+        self.legs.reverse();
+        self.current_leg_index = 0;
+        self.current_leg_progress = 0.0;
     }
 
     pub fn advance(&mut self, transport: &Transport, time_step: std::time::Duration) -> Vec<Point> {
+        if self.is_done() {
+            return Vec::new();
+        }
+
         let velocity_m_s = transport.default_velocity_m_s();
         let distance_m = velocity_m_s * time_step.as_secs_f64();
         let mut distance_remaining = distance_m;
         let mut traversed_points = Vec::new();
 
-        while distance_remaining > 0. && !self.legs.is_empty() {
-            let leg = self.legs.pop_front().unwrap();
+        while distance_remaining > 0. && !self.is_done() {
+            let current_leg = &self.legs[self.current_leg_index];
+            let leg_distance_remaining =
+                current_leg.distance_m as f64 * (1.0 - self.current_leg_progress);
 
-            if leg.distance_m as f64 <= distance_remaining {
-                // We completed this leg, add the destination point
-                traversed_points.push(leg.destination);
-                distance_remaining -= leg.distance_m as f64;
+            if leg_distance_remaining <= distance_remaining {
+                // We completed this leg
+                traversed_points.push(current_leg.destination);
+                distance_remaining -= leg_distance_remaining;
+                self.current_leg_index += 1;
+                self.current_leg_progress = 0.0;
             } else {
                 // We didn't complete this leg, calculate the intermediate point
-                // along the current line based on how far we got
-                let progress_ratio = distance_remaining / leg.distance_m as f64;
+                let progress_ratio = distance_remaining / current_leg.distance_m as f64;
+                self.current_leg_progress += progress_ratio;
 
                 // If we have a previous point, interpolate between it and the destination
                 if let Some(prev_point) = traversed_points.last() {
-                    let dx = leg.destination.x() - prev_point.x();
-                    let dy = leg.destination.y() - prev_point.y();
+                    let dx = current_leg.destination.x() - prev_point.x();
+                    let dy = current_leg.destination.y() - prev_point.y();
 
                     let intermediate_point = Point::new(
                         prev_point.x() + dx * progress_ratio,
@@ -112,19 +131,87 @@ impl Journey {
                     traversed_points.push(intermediate_point);
                 } else {
                     // If there's no previous point, just add the destination
-                    traversed_points.push(leg.destination);
+                    traversed_points.push(current_leg.destination);
                 }
 
-                // Add the leg back with reduced distance
-                self.legs.push_front(JourneyLeg {
-                    destination: leg.destination,
-                    distance_m: leg.distance_m - distance_remaining.round() as usize,
-                });
                 break;
             }
         }
 
         traversed_points
+    }
+
+    // New method to get the full journey history
+    pub fn full_journey(&self) -> &[JourneyLeg] {
+        &self.legs
+    }
+
+    // New method to get the current progress
+    pub fn progress(&self) -> (usize, f64) {
+        (self.current_leg_index, self.current_leg_progress)
+    }
+
+    /// Returns the total distance of the journey in meters
+    pub(crate) fn total_distance_m(&self) -> usize {
+        self.legs.iter().map(|leg| leg.distance_m).sum()
+    }
+
+    /// Returns the distance completed so far in meters
+    pub(crate) fn distance_completed_m(&self) -> f64 {
+        if self.is_done() {
+            return self.total_distance_m() as f64;
+        }
+
+        let completed_legs_distance: usize = self.legs[..self.current_leg_index]
+            .iter()
+            .map(|leg| leg.distance_m)
+            .sum();
+
+        let current_leg_distance = if self.current_leg_index < self.legs.len() {
+            self.legs[self.current_leg_index].distance_m as f64 * self.current_leg_progress
+        } else {
+            0.0
+        };
+
+        completed_legs_distance as f64 + current_leg_distance
+    }
+
+    /// Returns the distance remaining in meters
+    pub(crate) fn distance_remaining_m(&self) -> f64 {
+        self.total_distance_m() as f64 - self.distance_completed_m()
+    }
+
+    /// Returns the progress percentage of the entire journey (0.0 to 1.0)
+    pub(crate) fn progress_percentage(&self) -> f64 {
+        if self.total_distance_m() == 0 {
+            return 1.0;
+        }
+        self.distance_completed_m() / self.total_distance_m() as f64
+    }
+
+    /// Returns the current leg if there is one
+    pub(crate) fn current_leg(&self) -> Option<&JourneyLeg> {
+        self.legs.get(self.current_leg_index)
+    }
+
+    /// Returns the next leg if there is one
+    pub(crate) fn next_leg(&self) -> Option<&JourneyLeg> {
+        self.legs.get(self.current_leg_index + 1)
+    }
+
+    /// Returns the number of legs completed
+    pub(crate) fn legs_completed(&self) -> usize {
+        self.current_leg_index
+    }
+
+    /// Returns the number of legs remaining
+    pub(crate) fn legs_remaining(&self) -> usize {
+        self.legs.len().saturating_sub(self.current_leg_index)
+    }
+
+    /// Returns the estimated time remaining in seconds based on the given transport
+    pub(crate) fn estimated_time_remaining_s(&self, transport: &Transport) -> f64 {
+        self.distance_remaining_m() / transport.default_velocity_m_s()
     }
 }
 
@@ -132,6 +219,8 @@ impl<T: Into<JourneyLeg>> FromIterator<T> for Journey {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         Journey {
             legs: iter.into_iter().map(Into::into).collect(),
+            current_leg_index: 0,
+            current_leg_progress: 0.0,
         }
     }
 }
@@ -346,13 +435,11 @@ impl RoutingData {
     }
 
     pub fn nodes(&self) -> impl ExactSizeIterator<Item = StreetNode<'_>> {
-        (0..self.nodes.num_rows())
-            .map(|i| StreetNode::new(self, i))
+        (0..self.nodes.num_rows()).map(|i| StreetNode::new(self, i))
     }
 
     pub fn edges(&self) -> impl ExactSizeIterator<Item = StreetEdge<'_>> {
-        (0..self.edges.num_rows())
-            .map(|i| StreetEdge::new(self, i))
+        (0..self.edges.num_rows()).map(|i| StreetEdge::new(self, i))
     }
 
     fn edge(&self, index: usize) -> StreetEdge<'_> {
@@ -457,64 +544,9 @@ impl<'a> StreetEdge<'a> {
 
 #[cfg(test)]
 mod tests {
+    use approx::assert_abs_diff_eq;
+
     use super::*;
-    use arrow::compute::concat_batches;
-    use arrow_array::RecordBatchReader;
-    use geoarrow_geoparquet::GeoParquetRecordBatchReaderBuilder;
-    use itertools::Itertools;
-
-    #[test_log::test]
-    fn test_osm_node_properties() {
-        let file = std::fs::File::open("../../notebooks/edges.parquet").unwrap();
-        let reader = GeoParquetRecordBatchReaderBuilder::try_new(file)
-            .unwrap()
-            .build()
-            .unwrap();
-        let schema = reader.schema();
-        let batches: Vec<_> = reader.into_iter().try_collect().unwrap();
-        let edges = concat_batches(&schema, &batches).unwrap();
-
-        let file = std::fs::File::open("../../notebooks/nodes.parquet").unwrap();
-        let reader = GeoParquetRecordBatchReaderBuilder::try_new(file)
-            .unwrap()
-            .build()
-            .unwrap();
-        let schema = reader.schema();
-        let batches: Vec<_> = reader.into_iter().try_collect().unwrap();
-        let nodes = concat_batches(&schema, &batches).unwrap();
-
-        let routing = RoutingData::try_new(nodes, edges).unwrap();
-        let planner = routing.into_trip_planner();
-        let ids = planner.routing.nodes.column(1).as_fixed_size_binary();
-
-        let mut router = planner.get_router();
-        let journey = planner
-            .plan(
-                &mut router,
-                Uuid::from_slice(ids.value(1)).unwrap(),
-                Uuid::from_slice(ids.value(20)).unwrap(),
-            )
-            .unwrap();
-
-        println!("journey: {:#?}", journey);
-
-        //let (fast_graph, _) = process_road_network(&nodes, &edges);
-        //
-        //let mut file = std::fs::File::create("../../notebooks/london.bin").unwrap();
-        //let serialized = bincode::serde::encode_into_std_write(
-        //    &fast_graph,
-        //    &mut file,
-        //    bincode::config::standard(),
-        //)
-        //.unwrap();
-        //
-        //println!("serialized: {:?}", serialized);
-
-        //let deserialized: FastGraph =
-        //    bincode::serde::decode_from_slice(&serialized, bincode::config::standard())
-        //        .unwrap()
-        //        .0;
-    }
 
     #[test_log::test]
     fn test_journey() {
@@ -536,9 +568,9 @@ mod tests {
                     destination: Point::new(-0.1557318, 51.5455873),
                     distance_m: 10,
                 },
-            ]
-            .into_iter()
-            .collect(),
+            ],
+            current_leg_index: 0,
+            current_leg_progress: 0.0,
         };
 
         // Test advancing a journey with a single time step that completes all legs
@@ -550,7 +582,7 @@ mod tests {
 
         // We should have traversed all points
         assert_eq!(traversed_points.len(), journey.legs.len());
-        assert!(journey1.legs.is_empty(), "All legs should be completed");
+        assert!(journey1.is_done(), "All legs should be completed");
 
         // Test advancing a journey with multiple time steps
         let mut journey2 = journey.clone();
@@ -565,9 +597,12 @@ mod tests {
             "Should have one intermediate point"
         );
         assert_eq!(
-            journey2.legs.len(),
-            4,
-            "Should have 4 legs remaining, first partial"
+            journey2.current_leg_index, 0,
+            "Should still be on the first leg"
+        );
+        assert!(
+            journey2.current_leg_progress > 0.0,
+            "Should have made progress on the first leg"
         );
 
         // Second step should complete the first leg and start on the second
@@ -577,10 +612,10 @@ mod tests {
             2,
             "Should have traversed one point, and started on the second leg"
         );
-        assert_eq!(
-            journey2.legs.len(),
-            3,
-            "Should have 3 legs remaining, second leg partial"
+        assert_eq!(journey2.current_leg_index, 1, "Should be on the second leg");
+        assert!(
+            journey2.current_leg_progress > 0.0,
+            "Should have made progress on the second leg"
         );
 
         // Test with zero time step
@@ -591,9 +626,12 @@ mod tests {
             "Zero time step should not traverse any points"
         );
         assert_eq!(
-            journey3.legs.len(),
-            journey.legs.len(),
-            "No legs should be completed"
+            journey3.current_leg_index, 0,
+            "Should still be on the first leg"
+        );
+        assert_eq!(
+            journey3.current_leg_progress, 0.0,
+            "Should not have made any progress"
         );
 
         // Test with empty journey
@@ -603,5 +641,132 @@ mod tests {
             traversed_points.is_empty(),
             "Empty journey should not traverse any points"
         );
+        assert!(empty_journey.is_done(), "Empty journey should be done");
+    }
+
+    #[test_log::test]
+    fn test_journey_progress_tracking() {
+        // Create a journey with 4 legs of different lengths
+        let journey = Journey {
+            legs: vec![
+                JourneyLeg {
+                    destination: Point::new(-0.1553777, 51.5453468),
+                    distance_m: 100, // 100m
+                },
+                JourneyLeg {
+                    destination: Point::new(-0.1556396, 51.5455222),
+                    distance_m: 200, // 200m
+                },
+                JourneyLeg {
+                    destination: Point::new(-0.1556897, 51.5455559),
+                    distance_m: 150, // 150m
+                },
+                JourneyLeg {
+                    destination: Point::new(-0.1557318, 51.5455873),
+                    distance_m: 50, // 50m
+                },
+            ],
+            current_leg_index: 0,
+            current_leg_progress: 0.0,
+        };
+
+        // Test initial state
+        assert_eq!(journey.total_distance_m(), 500);
+        assert_eq!(journey.distance_completed_m(), 0.0);
+        assert_eq!(journey.distance_remaining_m(), 500.0);
+        assert_eq!(journey.progress_percentage(), 0.0);
+        assert_eq!(journey.legs_completed(), 0);
+        assert_eq!(journey.legs_remaining(), 4);
+        assert!(journey.current_leg().is_some());
+        assert!(journey.next_leg().is_some());
+        assert!(!journey.is_done());
+
+        // Test after completing first leg
+        let mut journey = journey;
+        let transport = Transport::Foot;
+        let time_step = std::time::Duration::from_secs(72); // 72s at 5km/h = 100m
+        journey.advance(&transport, time_step);
+
+        assert_eq!(journey.current_leg_index, 1);
+        assert_eq!(journey.current_leg_progress, 0.0);
+        assert_eq!(journey.distance_completed_m(), 100.0);
+        assert_eq!(journey.distance_remaining_m(), 400.0);
+        assert_eq!(journey.progress_percentage(), 0.2);
+        assert_eq!(journey.legs_completed(), 1);
+        assert_eq!(journey.legs_remaining(), 3);
+
+        // Test partial progress in second leg
+        let time_step = std::time::Duration::from_secs(36); // 36s at 5km/h = 50m
+        journey.advance(&transport, time_step);
+
+        assert_eq!(journey.current_leg_index, 1);
+        assert_eq!(journey.current_leg_progress, 0.25); // 50m/200m
+        assert_eq!(journey.distance_completed_m(), 150.0);
+        assert_eq!(journey.distance_remaining_m(), 350.0);
+        assert_eq!(journey.progress_percentage(), 0.3);
+        assert_eq!(journey.legs_completed(), 1);
+        assert_eq!(journey.legs_remaining(), 3);
+
+        // Test completing the journey
+        let time_step = std::time::Duration::from_secs(252); // 252s at 5km/h = 350m
+        journey.advance(&transport, time_step);
+
+        assert!(journey.is_done());
+        assert_eq!(journey.distance_completed_m(), 500.0);
+        assert_eq!(journey.distance_remaining_m(), 0.0);
+        assert_eq!(journey.progress_percentage(), 1.0);
+        assert_eq!(journey.legs_completed(), 4);
+        assert_eq!(journey.legs_remaining(), 0);
+        assert!(journey.current_leg().is_none());
+        assert!(journey.next_leg().is_none());
+
+        // Test estimated time remaining
+        let mut journey = Journey {
+            legs: vec![JourneyLeg {
+                destination: Point::new(0.0, 0.0),
+                distance_m: 1000,
+            }],
+            current_leg_index: 0,
+            current_leg_progress: 0.0,
+        };
+
+        // Test with car (60 km/h)
+        let car = Transport::Car;
+        assert_abs_diff_eq!(
+            journey.estimated_time_remaining_s(&car),
+            60.0,
+            epsilon = 0.0001
+        ); // 1km at 60km/h = 60s
+
+        // Test with bicycle (15 km/h)
+        let bicycle = Transport::Bicycle;
+        assert_abs_diff_eq!(
+            journey.estimated_time_remaining_s(&bicycle),
+            240.0,
+            epsilon = 0.0001
+        ); // 1km at 15km/h = 240s
+
+        // Test with foot (5 km/h)
+        let foot = Transport::Foot;
+        assert_abs_diff_eq!(
+            journey.estimated_time_remaining_s(&foot),
+            720.0,
+            epsilon = 0.0001
+        ); // 1km at 5km/h = 720s
+    }
+
+    #[test_log::test]
+    fn test_empty_journey() {
+        let journey = Journey::default();
+
+        assert_eq!(journey.total_distance_m(), 0);
+        assert_eq!(journey.distance_completed_m(), 0.0);
+        assert_eq!(journey.distance_remaining_m(), 0.0);
+        assert_eq!(journey.progress_percentage(), 1.0);
+        assert_eq!(journey.legs_completed(), 0);
+        assert_eq!(journey.legs_remaining(), 0);
+        assert!(journey.current_leg().is_none());
+        assert!(journey.next_leg().is_none());
+        assert!(journey.is_done());
     }
 }

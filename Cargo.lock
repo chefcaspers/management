@@ -589,6 +589,7 @@ dependencies = [
 name = "caspers-universe"
 version = "0.1.0"
 dependencies = [
+ "approx",
  "arrow",
  "arrow-arith",
  "arrow-array",

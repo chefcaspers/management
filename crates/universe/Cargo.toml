@@ -65,5 +65,6 @@ fast_paths = "1.0.0"
 bincode = { version = "2", features = ["serde"] }
 
 [dev-dependencies]
+approx = "0.5.1"
 arrow = { workspace = true }
 test-log = "0.2.17"

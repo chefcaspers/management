@@ -71,7 +71,7 @@ impl State {
     ) -> Result<Self> {
         let mut builder = PopulationDataBuilder::new();
         for (_site_id, site) in &sites {
-            let n_people = rand::rng().random_range(100..1000);
+            let n_people = rand::rng().random_range(500..1500);
             builder.add_site(site, n_people)?;
         }
 

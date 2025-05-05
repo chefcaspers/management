@@ -75,6 +75,12 @@ pub struct Simulation {
     sites: HashMap<SiteId, SiteRunner>,
 
     last_snapshot_time: DateTime<Utc>,
+
+    /// whether the simulation has been initialized
+    ///
+    /// This is used to ensure that the simulation is only initialized once.
+    /// e.g. we only create a population once, and load it in subsequent runs.
+    initialized: bool,
 }
 
 impl Simulation {
@@ -98,9 +104,6 @@ impl Simulation {
             .collect();
 
         // process orders for each site
-        // for orders in orders.values() {
-        //     self.state.process_orders(orders)?;
-        // }
         let orders: HashMap<_, _> = orders
             .into_iter()
             .flat_map(|(site_id, orders)| Some((site_id, self.state.process_orders(&orders).ok()?)))
@@ -159,55 +162,86 @@ impl Simulation {
         let base_url = self.state.config().result_storage_location.as_ref();
         let interval = self.state.config().snapshot_interval;
 
-        if let (Some(base_path), Some(interval)) = (base_url, interval) {
-            let diff = self.state.current_time() - self.last_snapshot_time;
-            if diff.num_seconds() > interval.num_seconds() {
-                let ts = self.state.current_time().timestamp();
-                let path =
-                    |name: &str| base_path.join(&format!("{}/{}.parquet", name, ts)).unwrap();
+        // we have no place to store results
+        let (Some(base_path), Some(interval)) = (base_url, interval) else {
+            return Ok(());
+        };
 
-                let people_path = path("population");
-                let objects_path = path("objects");
-                let orders_path = path("orders");
-                let order_lines_path = path("order_lines");
+        // we don't need to snapshot more often than the interval
+        let should_snapshot = self.state.current_time() - self.last_snapshot_time >= interval;
 
-                let timestamp = self.state.current_time().to_rfc3339();
-                let query = |name: &str| {
-                    format!(
-                        "SELECT '{}'::timestamp(6) as timestamp, * FROM {}",
-                        timestamp, name
-                    )
-                };
+        // create helper functions to create paths and queries
+        let ts = self.state.current_time().timestamp();
+        let path = |name: &str| {
+            base_path
+                .join(&format!("{}/snapshot-{}.parquet", name, ts))
+                .unwrap()
+        };
 
-                let ctx = self.state.snapshot_session()?;
+        let timestamp = self.state.current_time().to_rfc3339();
+        let query = |name: &str| {
+            format!(
+                "SELECT '{}'::timestamp(6) as timestamp, * FROM {}",
+                timestamp, name
+            )
+        };
 
-                self.rt.block_on(async {
-                    let df = ctx.sql(&query("population")).await?;
-                    df.write_parquet(people_path.as_str(), DataFrameWriteOptions::new(), None)
-                        .await?;
+        // create storage paths for each table
+        let people_path = path("population/people");
+        let positions_path = path("population/positions");
+        let objects_path = path("objects");
+        let orders_path = path("orders");
+        let order_lines_path = path("order_lines");
 
-                    let df = ctx.sql(&query("objects")).await?;
-                    df.write_parquet(objects_path.as_str(), DataFrameWriteOptions::new(), None)
-                        .await?;
+        let ctx = self.state.snapshot_session()?;
 
-                    let df = ctx.sql(&query("orders")).await?;
-                    df.write_parquet(orders_path.as_str(), DataFrameWriteOptions::new(), None)
-                        .await?;
-
-                    let df = ctx.sql(&query("order_lines")).await?;
-                    df.write_parquet(
-                        order_lines_path.as_str(),
-                        DataFrameWriteOptions::new(),
-                        None,
-                    )
+        self.rt.block_on(async {
+            // people are only written once
+            if !self.initialized {
+                let df = ctx.sql(&query("population")).await?;
+                df.write_parquet(people_path.as_str(), DataFrameWriteOptions::new(), None)
                     .await?;
 
-                    Ok::<_, Box<dyn std::error::Error>>(())
-                })?;
-
-                self.last_snapshot_time = self.state.current_time();
+                // TODO: once we allow adding more brands etc. we need to make this more dynamic.
+                // or rather this information should be written from outside the simulation.
+                let df = ctx.sql(&query("objects")).await?;
+                df.write_parquet(objects_path.as_str(), DataFrameWriteOptions::new(), None)
+                    .await?;
             }
+
+            if should_snapshot {
+                let df = ctx.sql(&query("orders")).await?;
+                df.write_parquet(orders_path.as_str(), DataFrameWriteOptions::new(), None)
+                    .await?;    
+
+                let df = ctx.sql(&query("order_lines")).await?;
+                df.write_parquet(
+                    order_lines_path.as_str(),
+                    DataFrameWriteOptions::new(),
+                    None,
+                )
+                .await?;
+            }
+
+            // write courier positions at every call.
+            let df = ctx
+                .sql(&format!(
+                    "SELECT id, '{}'::timestamp(6) as timestamp, position FROM population WHERE role = 'courier'",
+                    timestamp
+                ))
+                .await?;
+            df.write_parquet(positions_path.as_str(), DataFrameWriteOptions::new(), None)
+                .await?;
+
+            Ok::<_, Box<dyn std::error::Error>>(())
+        })?;
+
+        if should_snapshot {
+            self.last_snapshot_time = self.state.current_time();
         }
+
+        self.initialized = true;
+
         Ok(())
     }
 
