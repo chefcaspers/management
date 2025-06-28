@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::sync::LazyLock;
 
 use arrow_array::cast::AsArray as _;

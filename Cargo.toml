@@ -22,30 +22,30 @@ url = { version = "2.5.2", features = [
 uuid = { version = "1", features = ["serde"] }
 
 # arrow
-arrow = { version = "54" }
-arrow-arith = { version = "54" }
-arrow-array = { version = "54", features = ["chrono-tz"] }
-arrow-buffer = { version = "54" }
-arrow-cast = { version = "54" }
-arrow-ipc = { version = "54" }
-arrow-json = { version = "54" }
-arrow-ord = { version = "54" }
-arrow-row = { version = "54" }
-arrow-schema = { version = "54" }
-arrow-select = { version = "54" }
+arrow = { version = "55" }
+arrow-arith = { version = "55" }
+arrow-array = { version = "55", features = ["chrono-tz"] }
+arrow-buffer = { version = "55" }
+arrow-cast = { version = "55" }
+arrow-ipc = { version = "55" }
+arrow-json = { version = "55" }
+arrow-ord = { version = "55" }
+arrow-row = { version = "55" }
+arrow-schema = { version = "55" }
+arrow-select = { version = "55" }
 
 # datafusion
-datafusion = "46"
-datafusion-expr = "46"
-datafusion-common = "46"
-datafusion-execution = "46"
-datafusion-ffi = "46"
-datafusion-functions = "46"
-datafusion-functions-aggregate = "46"
-datafusion-physical-expr = "46"
-datafusion-physical-plan = "46"
-datafusion-proto = "46"
-datafusion-sql = "46"
+datafusion = "47"
+datafusion-expr = "47"
+datafusion-common = "47"
+datafusion-execution = "47"
+datafusion-ffi = "47"
+datafusion-functions = "47"
+datafusion-functions-aggregate = "47"
+datafusion-physical-expr = "47"
+datafusion-physical-plan = "47"
+datafusion-proto = "47"
+datafusion-sql = "47"
 
 geoarrow = { path = "../geoarrow-rs/rust/geoarrow" }
 geoarrow-geoparquet = { path = "../geoarrow-rs/rust/geoarrow-geoparquet" }
