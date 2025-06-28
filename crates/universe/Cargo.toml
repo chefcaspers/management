@@ -35,8 +35,8 @@ arrow-json = { workspace = true }
 arrow-ord = { workspace = true }
 arrow-row = { workspace = true }
 arrow-schema = { workspace = true, features = [
-    "serde",
-    "canonical_extension_types",
+  "serde",
+  "canonical_extension_types",
 ] }
 arrow-select = { workspace = true }
 

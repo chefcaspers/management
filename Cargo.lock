@@ -1915,6 +1915,7 @@ dependencies = [
 [[package]]
 name = "geoarrow"
 version = "0.4.0-beta.4"
+source = "git+https://github.com/geoarrow/geoarrow-rs.git?rev=e075dd5dcfdf86d900fe4b76f849d2f4d8071f68#e075dd5dcfdf86d900fe4b76f849d2f4d8071f68"
 dependencies = [
  "arrow",
  "arrow-array",
@@ -1942,12 +1943,13 @@ dependencies = [
  "shapefile",
  "thiserror 1.0.69",
  "wkb",
- "wkt 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wkt 0.12.0",
 ]
 
 [[package]]
 name = "geoarrow-array"
 version = "0.1.0-dev"
+source = "git+https://github.com/geoarrow/geoarrow-rs.git?rev=e075dd5dcfdf86d900fe4b76f849d2f4d8071f68#e075dd5dcfdf86d900fe4b76f849d2f4d8071f68"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
@@ -1958,12 +1960,13 @@ dependencies = [
  "serde_json",
  "thiserror 1.0.69",
  "wkb",
- "wkt 0.12.0 (git+https://github.com/georust/wkt?rev=270ffe0eaf5ba5255c364dbade39c451562a9e9b)",
+ "wkt 0.13.0",
 ]
 
 [[package]]
 name = "geoarrow-geoparquet"
 version = "0.1.0-dev"
+source = "git+https://github.com/geoarrow/geoarrow-rs.git?rev=e075dd5dcfdf86d900fe4b76f849d2f4d8071f68#e075dd5dcfdf86d900fe4b76f849d2f4d8071f68"
 dependencies = [
  "arrow-arith",
  "arrow-array",
@@ -1983,6 +1986,7 @@ dependencies = [
 [[package]]
 name = "geoarrow-schema"
 version = "0.1.0-dev"
+source = "git+https://github.com/geoarrow/geoarrow-rs.git?rev=e075dd5dcfdf86d900fe4b76f849d2f4d8071f68#e075dd5dcfdf86d900fe4b76f849d2f4d8071f68"
 dependencies = [
  "arrow-schema",
  "geo-traits",
@@ -4501,8 +4505,9 @@ dependencies = [
 
 [[package]]
 name = "wkt"
-version = "0.12.0"
-source = "git+https://github.com/georust/wkt?rev=270ffe0eaf5ba5255c364dbade39c451562a9e9b#270ffe0eaf5ba5255c364dbade39c451562a9e9b"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c505a1a3f6ebda15c778ffa0317b583b10b2393a5506281132a2eef6880a691"
 dependencies = [
  "geo-traits",
  "geo-types",

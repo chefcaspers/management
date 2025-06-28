@@ -47,6 +47,6 @@ datafusion-physical-plan = "47"
 datafusion-proto = "47"
 datafusion-sql = "47"
 
-geoarrow = { path = "../geoarrow-rs/rust/geoarrow" }
-geoarrow-geoparquet = { path = "../geoarrow-rs/rust/geoarrow-geoparquet" }
-geoarrow-schema = { path = "../geoarrow-rs/rust/geoarrow-schema" }
+geoarrow = { git = "https://github.com/geoarrow/geoarrow-rs.git", rev = "e075dd5dcfdf86d900fe4b76f849d2f4d8071f68" }
+geoarrow-geoparquet = { git = "https://github.com/geoarrow/geoarrow-rs.git", rev = "e075dd5dcfdf86d900fe4b76f849d2f4d8071f68" }
+geoarrow-schema = { git = "https://github.com/geoarrow/geoarrow-rs.git", rev = "e075dd5dcfdf86d900fe4b76f849d2f4d8071f68" }
