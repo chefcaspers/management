@@ -1,0 +1,203 @@
+syntax = "proto3";
+
+package caspers.core.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/duration.proto";
+
+// Physical locations where kitchens operate
+//
+// Multiple kitchens are located within each location.
+message Site {
+  // Unique identifier for the location
+  string id = 1 [(buf.validate.field).string.uuid = true];
+
+  // Name of the location
+  string name = 2 [
+    (buf.validate.field).string.min_len = 3,
+    (buf.validate.field).string.max_len = 255
+  ];
+
+  double latitude = 3 [
+    (buf.validate.field).double.gte = -90.0,
+    (buf.validate.field).double.lte = 90.0
+  ];
+
+  double longitude = 4 [
+    (buf.validate.field).double.gte = -180.0,
+    (buf.validate.field).double.lte = 180.0
+  ];
+
+  // City of the location
+  // string city = 3 [(buf.validate.field).string.min_len = 1];
+
+  // State of the location
+  // string state = 4 [(buf.validate.field).string.min_len = 1];
+
+  // Zip code of the location
+  // string zip_code = 5 [(buf.validate.field).string.min_len = 1];
+
+  // Street address of the location
+  // string street = 6 [
+  //   (buf.validate.field).string.min_len = 3,
+  //   (buf.validate.field).string.max_len = 255
+  // ];
+}
+
+// A company that owns and operates brands and kitchens
+message Vendor {
+  // Unique identifier for the vendor
+  string id = 1 [(buf.validate.field).string.uuid = true];
+
+  // Name of the vendor
+  string name = 2 [
+    (buf.validate.field).string.min_len = 3,
+    (buf.validate.field).string.max_len = 255
+  ];
+
+  optional string logo_url = 3 [(buf.validate.field).string.uri = true];
+}
+
+// Physical cooking spaces within locations, operated by vendors
+message Kitchen {
+  // Unique identifier for the kitchen
+  string id = 1 [(buf.validate.field).string.uuid = true];
+
+  // Name of the kitchen
+  string name = 2 [
+    (buf.validate.field).string.min_len = 3,
+    (buf.validate.field).string.max_len = 255
+  ];
+}
+
+enum KitchenStation {
+  KITCHEN_STATION_UNSPECIFIED = 0;
+  KITCHEN_STATION_WORKSTATION = 1;
+  KITCHEN_STATION_STOVE = 2;
+  KITCHEN_STATION_OVEN = 3;
+}
+
+message Station {
+  // Unique identifier for the station
+  optional string id = 1 [(buf.validate.field).string.uuid = true];
+
+  // Name of the station
+  string name = 2 [
+    (buf.validate.field).string.min_len = 3,
+    (buf.validate.field).string.max_len = 255
+  ];
+
+  // Type of station
+  KitchenStation station_type = 3 [(buf.validate.field).enum = {
+    not_in: [0]
+  }];
+}
+
+message Ingredient {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+
+  string name = 2 [
+    (buf.validate.field).string.min_len = 3,
+    (buf.validate.field).string.max_len = 255
+  ];
+
+  string description = 3 [
+    (buf.validate.field).string.min_len = 3,
+    (buf.validate.field).string.max_len = 255
+  ];
+
+  double price = 4 [
+    (buf.validate.field).double.gte = 0.01,
+    (buf.validate.field).double.lte = 10000.00
+  ];
+
+  string image_url = 5 [(buf.validate.field).string.uri = true];
+}
+
+// Distinct restaurant brands
+//
+// Brands are owned by vendors and operate in specific kitchens
+message Brand {
+  string name = 1 [
+    (buf.validate.field).string.min_len = 3,
+    (buf.validate.field).string.max_len = 255
+  ];
+
+  string description = 2 [
+    (buf.validate.field).string.min_len = 3,
+    (buf.validate.field).string.max_len = 255
+  ];
+
+  string category = 3 [
+    (buf.validate.field).string.min_len = 3,
+    (buf.validate.field).string.max_len = 255
+  ];
+
+  repeated MenuItem items = 4 [
+    (buf.validate.field).repeated.min_items = 1,
+    (buf.validate.field).repeated.max_items = 1000
+  ];
+
+  optional string id = 5 [(buf.validate.field).string.uuid = true];
+}
+
+// Menu items are individual dishes within a menu
+//
+// Individual food/drink products with details like price, description, and images
+message MenuItem {
+  // Unique identifier for the menu item
+  string id = 1 [(buf.validate.field).string.uuid = true];
+
+  // Name of the menu item
+  string name = 2 [(buf.validate.field).string.uri_ref = true];
+
+  // description of the menu item
+  string description = 3 [
+    (buf.validate.field).string.min_len = 3,
+    (buf.validate.field).string.max_len = 255
+  ];
+
+  // Price of the menu item in USD
+  double price = 4 [
+    (buf.validate.field).double.gte = 0.01,
+    (buf.validate.field).double.lte = 10000.00
+  ];
+
+  // URL to an image representing the menu item
+  optional string image_url = 5 [(buf.validate.field).string.uri = true];
+
+  // Ingredients required to prepare the menu item
+  repeated IngredientQuantity ingredients = 6 [
+    (buf.validate.field).repeated.min_items = 1,
+    (buf.validate.field).repeated.max_items = 1000
+  ];
+
+  // Instructions required to prepare the menu item
+  repeated Instruction instructions = 7 [
+    (buf.validate.field).repeated.min_items = 1,
+    (buf.validate.field).repeated.max_items = 1000
+  ];
+}
+
+message IngredientQuantity {
+  string ingredient_ref = 1 [(buf.validate.field).string.uri_ref = true];
+  string quantity = 2 [(buf.validate.field).string.min_len = 1];
+}
+
+// An instruction describes a step in the preparation of a menu item.
+message Instruction {
+  // Name of the step
+  string step = 1 [
+    (buf.validate.field).string.min_len = 3,
+    (buf.validate.field).string.max_len = 255
+  ];
+
+  // Free text description on how to perform the step
+  string description = 2;
+
+  // The kitchen asset required to perform the step
+  KitchenStation required_station = 3;
+
+  // Estimated duration to perform the step
+  google.protobuf.Duration expected_duration = 4;
+}

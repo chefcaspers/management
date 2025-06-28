@@ -1,0 +1,51 @@
+# EditorConfig is awesome: https://EditorConfig.org
+
+root = true
+
+[*]
+indent_style = space
+indent_size = 2
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+[*.{py,pyi}]
+indent_size = 4
+max_line_length = 100
+multi_line_output = 3
+include_trailing_comma = True
+force_grid_wrap = 0
+use_parentheses = True
+ensure_newline_before_comments = True
+
+[*.rs]
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.json]
+indent_size = 2
+insert_final_newline = ignore
+
+[*.proto]
+indent_size = 2
+indent_style = space
+insert_final_newline = true
+
+# Minified JavaScript files shouldn't be changed
+[**.min.js]
+indent_style = ignore
+insert_final_newline = ignore
+
+[*.md]
+trim_trailing_whitespace = true
+insert_final_newline = false
+
+[*.cmd]
+end_of_line = crlf
+
+[*.env]
+end_of_line = crlf

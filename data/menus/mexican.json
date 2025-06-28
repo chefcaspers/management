@@ -1,0 +1,110 @@
+[
+  {
+    "name": "Chicken Tacos",
+    "description": "Soft corn tortillas filled with seasoned chicken, lettuce, and salsa.",
+    "price": 12.99,
+    "ingredients": [
+      {
+        "ingredientRef": "ingredients/chicken",
+        "display_name": "Chicken Breast",
+        "description": "Grilled and sliced chicken breast",
+        "quantity": "120g"
+      },
+      {
+        "ingredientRef": "ingredients/lettuce",
+        "display_name": "Lettuce",
+        "description": "Shredded lettuce",
+        "quantity": "40g"
+      },
+      {
+        "ingredientRef": "ingredients/tortilla",
+        "display_name": "Corn Tortilla",
+        "description": "Soft corn tortillas",
+        "quantity": "2"
+      },
+      {
+        "ingredientRef": "ingredients/garlic",
+        "display_name": "Garlic",
+        "description": "Minced garlic cloves",
+        "quantity": "1 clove"
+      },
+      {
+        "ingredientRef": "ingredients/salsa",
+        "display_name": "Salsa",
+        "description": "Fresh tomato salsa",
+        "quantity": "2 tbsp"
+      }
+    ],
+    "instructions": [
+      {
+        "step": "cook-chicken",
+        "required_station": "KITCHEN_STATION_STOVE",
+        "expected_duration": "600s",
+        "description": "Season and cook chicken with garlic until done, then slice."
+      },
+      {
+        "step": "warm-tortillas",
+        "required_station": "KITCHEN_STATION_STOVE",
+        "expected_duration": "120s",
+        "description": "Warm tortillas on a skillet."
+      },
+      {
+        "step": "assemble",
+        "required_station": "KITCHEN_STATION_WORKSTATION",
+        "expected_duration": "180s",
+        "description": "Fill tortillas with chicken, lettuce, and salsa."
+      }
+    ]
+  },
+  {
+    "name": "Vegetarian Quesadilla",
+    "description": "Grilled flour tortilla filled with cheese, beans, and green onion.",
+    "price": 10.99,
+    "ingredients": [
+      {
+        "ingredientRef": "ingredients/tortilla",
+        "display_name": "Flour Tortilla",
+        "description": "Large flour tortilla",
+        "quantity": "1"
+      },
+      {
+        "ingredientRef": "ingredients/cheese",
+        "display_name": "Cheddar Cheese",
+        "description": "Shredded cheddar cheese",
+        "quantity": "50g"
+      },
+      {
+        "ingredientRef": "ingredients/beans",
+        "display_name": "Black Beans",
+        "description": "Cooked black beans",
+        "quantity": "60g"
+      },
+      {
+        "ingredientRef": "ingredients/green_onion",
+        "display_name": "Green Onion",
+        "description": "Chopped green onions",
+        "quantity": "1 stalk"
+      }
+    ],
+    "instructions": [
+      {
+        "step": "assemble",
+        "required_station": "KITCHEN_STATION_WORKSTATION",
+        "expected_duration": "120s",
+        "description": "Spread beans, cheese, and green onion on half the tortilla."
+      },
+      {
+        "step": "grill",
+        "required_station": "KITCHEN_STATION_STOVE",
+        "expected_duration": "300s",
+        "description": "Fold and grill until golden and cheese is melted."
+      },
+      {
+        "step": "serve",
+        "required_station": "KITCHEN_STATION_WORKSTATION",
+        "expected_duration": "60s",
+        "description": "Slice and serve hot."
+      }
+    ]
+  }
+]

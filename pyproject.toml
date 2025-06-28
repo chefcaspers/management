@@ -1,0 +1,31 @@
+[project]
+name = "management"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "daft>=0.4.14",
+    "deltalake>=0.25.5",
+    "duckdb>=1.2.2",
+    "folium>=0.19.5",
+    "geoarrow-pandas>=0.1.1",
+    "geoarrow-pyarrow>=0.1.2",
+    "geoarrow-rust-core>=0.3.0",
+    "geoarrow-rust-io>=0.3.0",
+    "geojson>=3.2.0",
+    "geopandas>=1.0.1",
+    "geoplot>=0.5.1",
+    "geopy>=2.4.1",
+    "h3>=4.2.2",
+    "ipykernel>=6.29.5",
+    "matplotlib>=3.10.1",
+    "memory-profiler>=0.61.0",
+    "nbformat>=5.10.4",
+    "osmnx>=2.0.2",
+    "pint>=0.24.4",
+    "plotly>=6.0.1",
+    "pyarrow>=19.0.1",
+    "pyarrow-stubs>=19.1",
+    "shapely>=2.1.0",
+]

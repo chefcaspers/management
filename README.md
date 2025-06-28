@@ -2,7 +2,10 @@
 
 ## Overview
 
-Chef Casper's Management System is a comprehensive restaurant management application designed for multi-brand food service operations. It provides an intuitive interface for managing menus, inventory, orders, and brand-specific configurations across multiple restaurant brands under one management system.
+Chef Casper's Management System is a comprehensive restaurant management application
+designed for multi-brand food service operations. It provides an intuitive interface
+for managing menus, inventory, orders, and brand-specific configurations across multiple
+restaurant brands under one management system.
 
 ## Entities and Relationships
 

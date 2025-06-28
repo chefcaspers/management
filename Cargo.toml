@@ -1,0 +1,52 @@
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.dependencies]
+async-trait = { version = "0.1.83" }
+bytes = { version = "1.1" }
+chrono = { version = "^0.4.40", features = ["serde"] }
+itertools = { version = "0.14.0" }
+pbjson = { version = "0.7" }
+pbjson-types = { version = "0.7" }
+prost = { version = "0.13.3" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0" }
+strum = { version = "0.27", features = ["derive"] }
+thiserror = { version = "2" }
+tracing = { version = "0.1", features = ["log"] }
+url = { version = "2.5.2", features = [
+  "serde",
+  "std",
+], default-features = false }
+uuid = { version = "1", features = ["serde"] }
+
+# arrow
+arrow = { version = "55" }
+arrow-arith = { version = "55" }
+arrow-array = { version = "55", features = ["chrono-tz"] }
+arrow-buffer = { version = "55" }
+arrow-cast = { version = "55" }
+arrow-ipc = { version = "55" }
+arrow-json = { version = "55" }
+arrow-ord = { version = "55" }
+arrow-row = { version = "55" }
+arrow-schema = { version = "55" }
+arrow-select = { version = "55" }
+
+# datafusion
+datafusion = "47"
+datafusion-expr = "47"
+datafusion-common = "47"
+datafusion-execution = "47"
+datafusion-ffi = "47"
+datafusion-functions = "47"
+datafusion-functions-aggregate = "47"
+datafusion-physical-expr = "47"
+datafusion-physical-plan = "47"
+datafusion-proto = "47"
+datafusion-sql = "47"
+
+geoarrow = { path = "../geoarrow-rs/rust/geoarrow" }
+geoarrow-geoparquet = { path = "../geoarrow-rs/rust/geoarrow-geoparquet" }
+geoarrow-schema = { path = "../geoarrow-rs/rust/geoarrow-schema" }

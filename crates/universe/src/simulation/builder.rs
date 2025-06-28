@@ -1,0 +1,202 @@
+use std::collections::HashMap;
+
+use arrow_array::RecordBatchReader;
+use arrow_select::concat::concat_batches;
+use chrono::{DateTime, Duration, Utc};
+use geoarrow_geoparquet::GeoParquetRecordBatchReaderBuilder;
+use itertools::Itertools;
+use url::Url;
+
+use crate::SiteRunner;
+use crate::error::Result;
+use crate::idents::{BrandId, SiteId};
+use crate::models::{Brand, Site};
+use crate::simulation::{Simulation, SimulationConfig};
+use crate::state::{EntityView, RoutingData, State};
+
+pub struct SimulationBuilder {
+    brands: Vec<Brand>,
+
+    sites: Vec<(String, f64, f64)>,
+
+    /// Size of the simulated population
+    population_size: usize,
+
+    /// Time resolution for simulation steps
+    time_increment: Duration,
+
+    /// Start time for the simulation
+    start_time: DateTime<Utc>,
+
+    /// location to store simulation results
+    result_storage_location: Option<Url>,
+
+    /// Interval at which to take snapshots of the simulation state
+    snapshot_interval: Option<Duration>,
+
+    /// Routing nodes and edges
+    routing_nodes: Option<Url>,
+    routing_edges: Option<Url>,
+}
+
+impl Default for SimulationBuilder {
+    fn default() -> Self {
+        Self {
+            brands: Vec::new(),
+            sites: Vec::new(),
+            population_size: 1000,
+            time_increment: Duration::seconds(60),
+            start_time: Utc::now(),
+            result_storage_location: None,
+            snapshot_interval: None,
+            routing_nodes: None,
+            routing_edges: None,
+        }
+    }
+}
+
+impl SimulationBuilder {
+    /// Create a new simulation builder with default parameters
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Add a brand to the simulation
+    pub fn with_brand(&mut self, brand: Brand) -> &mut Self {
+        self.brands.push(brand);
+        self
+    }
+
+    /// Add a site to the simulation
+    pub fn with_site(&mut self, name: impl ToString, longitude: f64, latitude: f64) -> &mut Self {
+        self.sites.push((name.to_string(), longitude, latitude));
+        self
+    }
+
+    /// Set the population size for the simulation
+    pub fn with_population_size(&mut self, population_size: usize) -> &mut Self {
+        self.population_size = population_size;
+        self
+    }
+
+    /// Set the start time for the simulation
+    pub fn with_start_time(&mut self, start_time: DateTime<Utc>) -> &mut Self {
+        self.start_time = start_time;
+        self
+    }
+
+    /// Set the time increment for the simulation
+    pub fn with_time_increment(&mut self, time_increment: Duration) -> &mut Self {
+        self.time_increment = time_increment;
+        self
+    }
+
+    /// Set the result storage location for the simulation
+    pub fn with_result_storage_location(
+        &mut self,
+        result_storage_location: impl Into<Url>,
+    ) -> &mut Self {
+        self.result_storage_location = Some(result_storage_location.into());
+        self
+    }
+
+    pub fn with_snapshot_interval(&mut self, snapshot_interval: Duration) -> &mut Self {
+        self.snapshot_interval = Some(snapshot_interval);
+        self
+    }
+
+    pub fn with_routing_nodes(&mut self, routing_nodes: Url) -> &mut Self {
+        self.routing_nodes = Some(routing_nodes);
+        self
+    }
+
+    pub fn with_routing_edges(&mut self, routing_edges: Url) -> &mut Self {
+        self.routing_edges = Some(routing_edges);
+        self
+    }
+
+    /// Build the simulation with the given initial conditions
+    pub fn build(self) -> Result<Simulation> {
+        let brands: HashMap<BrandId, _> = self
+            .brands
+            .into_iter()
+            .map(|brand| {
+                let brand_id = BrandId::from_uri_ref(format!("brands/{}", brand.name));
+                Ok::<_, Box<dyn std::error::Error>>((brand_id, brand))
+            })
+            .try_collect()?;
+
+        let sites = self
+            .sites
+            .into_iter()
+            .map(|(name, latitude, longitude)| {
+                (
+                    SiteId::from_uri_ref(format!("sites/{}", name)),
+                    Site {
+                        id: SiteId::from_uri_ref(format!("sites/{}", name)).to_string(),
+                        name: name.to_string(),
+                        latitude,
+                        longitude,
+                    },
+                )
+            })
+            .collect_vec();
+
+        let file = std::fs::File::open(
+            "/Users/robert.pack/code/management/notebooks/sites/london/edges.parquet",
+        )
+        .unwrap();
+        let reader = GeoParquetRecordBatchReaderBuilder::try_new(file)
+            .unwrap()
+            .build()
+            .unwrap();
+        let schema = reader.schema();
+        let batches: Vec<_> = reader.into_iter().try_collect().unwrap();
+        let edges = concat_batches(&schema, &batches).unwrap();
+
+        let file = std::fs::File::open(
+            "/Users/robert.pack/code/management/notebooks/sites/london/nodes.parquet",
+        )
+        .unwrap();
+        let reader = GeoParquetRecordBatchReaderBuilder::try_new(file)
+            .unwrap()
+            .build()
+            .unwrap();
+        let schema = reader.schema();
+        let batches: Vec<_> = reader.into_iter().try_collect().unwrap();
+        let nodes = concat_batches(&schema, &batches).unwrap();
+
+        let routing = RoutingData::try_new(nodes, edges).unwrap();
+
+        let config = SimulationConfig {
+            simulation_start: self.start_time,
+            time_increment: self.time_increment,
+            result_storage_location: self.result_storage_location,
+            snapshot_interval: self.snapshot_interval,
+        };
+        let state = State::try_new(brands, sites, routing, Some(config))?;
+
+        let site_runners = state
+            .objects()
+            .sites()?
+            .map(|site| {
+                Ok::<_, Box<dyn std::error::Error>>((
+                    site.id(),
+                    SiteRunner::try_new(site.id(), &state)?,
+                ))
+            })
+            .try_collect()?;
+
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+
+        Ok(Simulation {
+            rt,
+            initialized: false,
+            last_snapshot_time: state.current_time(),
+            state,
+            sites: site_runners,
+        })
+    }
+}

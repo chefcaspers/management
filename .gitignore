@@ -7,6 +7,7 @@
 # IDE/Editors
 .idea/
 .vscode/
+.zed/
 *.swp
 *.swo
 *~
@@ -35,5 +36,9 @@ pip-delete-this-directory.txt
 coverage/
 .nyc_output/
 
-# Poetry
-poetry.lock
+# Rust
+.cargo/
+target/
+
+# environment variables
+.env
