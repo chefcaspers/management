@@ -313,11 +313,9 @@ impl RoutingData {
         let mut node_map = IndexSet::new();
 
         let ids = nodes.column(1).as_fixed_size_binary();
-        for id in ids.iter() {
-            if let Some(id) = id {
-                let id = Uuid::from_slice(id).unwrap();
-                node_map.insert(id);
-            }
+        for id in ids.iter().flatten() {
+            let id = Uuid::from_slice(id).unwrap();
+            node_map.insert(id);
         }
 
         let mut edge_map = HashMap::new();

@@ -40,7 +40,7 @@ arrow-schema = { workspace = true, features = [
 ] }
 arrow-select = { workspace = true }
 datafusion = { workspace = true }
-
+parquet = { workspace = true }
 geoarrow = { workspace = true }
 geoarrow-array = { workspace = true }
 geoarrow-schema = { workspace = true }
