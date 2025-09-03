@@ -22,31 +22,34 @@ url = { version = "2.5.2", features = [
 uuid = { version = "1", features = ["serde"] }
 
 # arrow
-arrow = { version = "55" }
-arrow-arith = { version = "55" }
-arrow-array = { version = "55", features = ["chrono-tz"] }
-arrow-buffer = { version = "55" }
-arrow-cast = { version = "55" }
-arrow-ipc = { version = "55" }
-arrow-json = { version = "55" }
-arrow-ord = { version = "55" }
-arrow-row = { version = "55" }
-arrow-schema = { version = "55" }
-arrow-select = { version = "55" }
+arrow = { version = "56" }
+arrow-arith = { version = "56" }
+arrow-array = { version = "56", features = ["chrono-tz"] }
+arrow-buffer = { version = "56" }
+arrow-cast = { version = "56" }
+arrow-ipc = { version = "56" }
+arrow-json = { version = "56" }
+arrow-ord = { version = "56" }
+arrow-row = { version = "56" }
+arrow-schema = { version = "56" }
+arrow-select = { version = "56" }
+parquet = { version = "56" }
 
 # datafusion
-datafusion = "47"
-datafusion-expr = "47"
-datafusion-common = "47"
-datafusion-execution = "47"
-datafusion-ffi = "47"
-datafusion-functions = "47"
-datafusion-functions-aggregate = "47"
-datafusion-physical-expr = "47"
-datafusion-physical-plan = "47"
-datafusion-proto = "47"
-datafusion-sql = "47"
+# datafusion = "49"
+datafusion = { git = "https://github.com/apache/datafusion", rev = "fa1f8c192dd531d3f2fca61885eafa3e9002f0dd" }
+# datafusion-expr = "49"
+# datafusion-common = "49"
+# datafusion-execution = "49"
+# datafusion-ffi = "49"
+# datafusion-functions = "49"
+# datafusion-functions-aggregate = "49"
+# datafusion-physical-expr = "49"
+# datafusion-physical-plan = "49"
+# datafusion-proto = "49"
+# datafusion-sql = "49"
 
-geoarrow = { path = "../geoarrow-rs/rust/geoarrow" }
-geoarrow-geoparquet = { path = "../geoarrow-rs/rust/geoarrow-geoparquet" }
-geoarrow-schema = { path = "../geoarrow-rs/rust/geoarrow-schema" }
+geoarrow = { version = "0.5.0" }
+geoarrow-array = { version = "0.5.0" }
+geoparquet = { version = "0.5.0" }
+geoarrow-schema = { version = "0.5.0" }

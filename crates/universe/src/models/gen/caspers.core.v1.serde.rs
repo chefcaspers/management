@@ -71,7 +71,7 @@ impl<'de> serde::Deserialize<'de> for Brand {
             {
                 struct GeneratedVisitor;
 
-                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
                     type Value = GeneratedField;
 
                     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -235,7 +235,7 @@ impl<'de> serde::Deserialize<'de> for Ingredient {
             {
                 struct GeneratedVisitor;
 
-                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
                     type Value = GeneratedField;
 
                     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -377,7 +377,7 @@ impl<'de> serde::Deserialize<'de> for IngredientQuantity {
             {
                 struct GeneratedVisitor;
 
-                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
                     type Value = GeneratedField;
 
                     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -509,7 +509,7 @@ impl<'de> serde::Deserialize<'de> for Instruction {
             {
                 struct GeneratedVisitor;
 
-                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
                     type Value = GeneratedField;
 
                     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -639,7 +639,7 @@ impl<'de> serde::Deserialize<'de> for Kitchen {
             {
                 struct GeneratedVisitor;
 
-                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
                     type Value = GeneratedField;
 
                     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -703,6 +703,118 @@ impl<'de> serde::Deserialize<'de> for Kitchen {
         deserializer.deserialize_struct("caspers.core.v1.Kitchen", FIELDS, GeneratedVisitor)
     }
 }
+impl serde::Serialize for KitchenSetup {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.info.is_some() {
+            len += 1;
+        }
+        if !self.stations.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("caspers.core.v1.KitchenSetup", len)?;
+        if let Some(v) = self.info.as_ref() {
+            struct_ser.serialize_field("info", v)?;
+        }
+        if !self.stations.is_empty() {
+            struct_ser.serialize_field("stations", &self.stations)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for KitchenSetup {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "info",
+            "stations",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Info,
+            Stations,
+            __SkipField__,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "info" => Ok(GeneratedField::Info),
+                            "stations" => Ok(GeneratedField::Stations),
+                            _ => Ok(GeneratedField::__SkipField__),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = KitchenSetup;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct caspers.core.v1.KitchenSetup")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<KitchenSetup, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut info__ = None;
+                let mut stations__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Info => {
+                            if info__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("info"));
+                            }
+                            info__ = map_.next_value()?;
+                        }
+                        GeneratedField::Stations => {
+                            if stations__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("stations"));
+                            }
+                            stations__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::__SkipField__ => {
+                            let _ = map_.next_value::<serde::de::IgnoredAny>()?;
+                        }
+                    }
+                }
+                Ok(KitchenSetup {
+                    info: info__,
+                    stations: stations__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("caspers.core.v1.KitchenSetup", FIELDS, GeneratedVisitor)
+    }
+}
 impl serde::Serialize for KitchenStation {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -733,7 +845,7 @@ impl<'de> serde::Deserialize<'de> for KitchenStation {
 
         struct GeneratedVisitor;
 
-        impl serde::de::Visitor<'_> for GeneratedVisitor {
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
             type Value = KitchenStation;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -869,7 +981,7 @@ impl<'de> serde::Deserialize<'de> for MenuItem {
             {
                 struct GeneratedVisitor;
 
-                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
                     type Value = GeneratedField;
 
                     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1044,7 +1156,7 @@ impl<'de> serde::Deserialize<'de> for Site {
             {
                 struct GeneratedVisitor;
 
-                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
                     type Value = GeneratedField;
 
                     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1130,6 +1242,118 @@ impl<'de> serde::Deserialize<'de> for Site {
         deserializer.deserialize_struct("caspers.core.v1.Site", FIELDS, GeneratedVisitor)
     }
 }
+impl serde::Serialize for SiteSetup {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.info.is_some() {
+            len += 1;
+        }
+        if !self.kitchens.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("caspers.core.v1.SiteSetup", len)?;
+        if let Some(v) = self.info.as_ref() {
+            struct_ser.serialize_field("info", v)?;
+        }
+        if !self.kitchens.is_empty() {
+            struct_ser.serialize_field("kitchens", &self.kitchens)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for SiteSetup {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "info",
+            "kitchens",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Info,
+            Kitchens,
+            __SkipField__,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "info" => Ok(GeneratedField::Info),
+                            "kitchens" => Ok(GeneratedField::Kitchens),
+                            _ => Ok(GeneratedField::__SkipField__),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = SiteSetup;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct caspers.core.v1.SiteSetup")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<SiteSetup, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut info__ = None;
+                let mut kitchens__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Info => {
+                            if info__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("info"));
+                            }
+                            info__ = map_.next_value()?;
+                        }
+                        GeneratedField::Kitchens => {
+                            if kitchens__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("kitchens"));
+                            }
+                            kitchens__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::__SkipField__ => {
+                            let _ = map_.next_value::<serde::de::IgnoredAny>()?;
+                        }
+                    }
+                }
+                Ok(SiteSetup {
+                    info: info__,
+                    kitchens: kitchens__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("caspers.core.v1.SiteSetup", FIELDS, GeneratedVisitor)
+    }
+}
 impl serde::Serialize for Station {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -1189,7 +1413,7 @@ impl<'de> serde::Deserialize<'de> for Station {
             {
                 struct GeneratedVisitor;
 
-                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
                     type Value = GeneratedField;
 
                     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1319,7 +1543,7 @@ impl<'de> serde::Deserialize<'de> for Vendor {
             {
                 struct GeneratedVisitor;
 
-                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
                     type Value = GeneratedField;
 
                     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1390,5 +1614,117 @@ impl<'de> serde::Deserialize<'de> for Vendor {
             }
         }
         deserializer.deserialize_struct("caspers.core.v1.Vendor", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for VendorSetup {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.info.is_some() {
+            len += 1;
+        }
+        if !self.brands.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("caspers.core.v1.VendorSetup", len)?;
+        if let Some(v) = self.info.as_ref() {
+            struct_ser.serialize_field("info", v)?;
+        }
+        if !self.brands.is_empty() {
+            struct_ser.serialize_field("brands", &self.brands)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for VendorSetup {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "info",
+            "brands",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Info,
+            Brands,
+            __SkipField__,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "info" => Ok(GeneratedField::Info),
+                            "brands" => Ok(GeneratedField::Brands),
+                            _ => Ok(GeneratedField::__SkipField__),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = VendorSetup;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct caspers.core.v1.VendorSetup")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<VendorSetup, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut info__ = None;
+                let mut brands__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Info => {
+                            if info__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("info"));
+                            }
+                            info__ = map_.next_value()?;
+                        }
+                        GeneratedField::Brands => {
+                            if brands__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("brands"));
+                            }
+                            brands__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::__SkipField__ => {
+                            let _ = map_.next_value::<serde::de::IgnoredAny>()?;
+                        }
+                    }
+                }
+                Ok(VendorSetup {
+                    info: info__,
+                    brands: brands__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("caspers.core.v1.VendorSetup", FIELDS, GeneratedVisitor)
     }
 }

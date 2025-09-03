@@ -6,7 +6,7 @@ use arrow_schema::{DataType, Field, Schema, SchemaRef};
 use fake::Fake;
 use geo::{BoundingRect, Centroid, Contains, Point};
 use geoarrow::array::PointBuilder;
-use geoarrow_schema::Dimension;
+use geoarrow_schema::{Dimension, PointType};
 use h3o::{LatLng, Resolution, geom::SolventBuilder};
 use rand::distr::{Distribution, Uniform};
 use rand::rngs::ThreadRng;
@@ -48,7 +48,7 @@ impl PopulationDataBuilder {
             emails: StringBuilder::new(),
             cc_numbers: StringBuilder::new(),
             roles: StringBuilder::new(),
-            positions: PointBuilder::new(Dimension::XY),
+            positions: PointBuilder::new(PointType::new(Dimension::XY, Default::default())),
             rng: rand::rng(),
         }
     }

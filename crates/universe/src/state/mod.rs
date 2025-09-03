@@ -76,6 +76,7 @@ impl State {
         }
 
         let brands: HashMap<_, _> = brands.into_iter().collect();
+
         let vendors = crate::init::generate_objects(&brands, sites)?;
 
         let config = config.unwrap_or_default();
@@ -147,13 +148,7 @@ impl State {
             .fold(OrderDataBuilder::new(), |builder, order| {
                 builder.add_order(
                     &order.person_id,
-                    order
-                        .destination
-                        .coord()
-                        .unwrap()
-                        .clone()
-                        .try_into()
-                        .unwrap(),
+                    order.destination.coord().unwrap().try_into().unwrap(),
                     &order.items,
                 )
             })

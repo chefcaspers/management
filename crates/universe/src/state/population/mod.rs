@@ -5,11 +5,11 @@ use arrow_array::{RecordBatch, cast::AsArray as _};
 use arrow_schema::{Field, Schema};
 use chrono::{DateTime, Utc};
 use geo::Point;
-use geo_traits::PointTrait;
-use geoarrow::array::PointArray;
-use geoarrow::trait_::{ArrayAccessor, IntoArrow, NativeScalar};
-use geoarrow::{ArrayBase, scalar::Point as ArrowPoint};
-use geoarrow_schema::Dimension;
+use geo_traits::PointTrait as _;
+use geo_traits::to_geo::ToGeoCoord;
+use geoarrow::array::{PointArray, PointBuilder};
+use geoarrow_array::{GeoArrowArray, GeoArrowArrayAccessor as _, IntoArrow};
+use geoarrow_schema::{Dimension, PointType};
 use h3o::{CellIndex, LatLng, Resolution};
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -138,7 +138,8 @@ impl PopulationData {
         &mut self,
         time_step: std::time::Duration,
     ) -> Result<(Vec<(PersonId, Vec<Point>)>, Vec<(PersonId, PersonStatus)>)> {
-        let mut new_positions = Vec::new();
+        let mut new_positions =
+            PointBuilder::new(PointType::new(Dimension::XY, Default::default()));
         let mut journey_slices = Vec::new();
         let mut status_updates = Vec::new();
 
@@ -169,15 +170,15 @@ impl PopulationData {
             match progress {
                 Some(slice) => {
                     if let Some(last_pos) = slice.last() {
-                        new_positions.push(*last_pos);
+                        new_positions.push_point(Some(last_pos));
                     }
                     journey_slices.push((*person_id, slice));
                 }
-                None => new_positions.push(self.positions.value(idx).to_geo()),
+                None => new_positions.push_point(Some(&self.positions.value(idx)?)),
             }
         }
 
-        self.positions = (new_positions.as_slice(), Dimension::XY).into();
+        self.positions = new_positions.finish();
 
         Ok((journey_slices, status_updates))
     }
@@ -202,8 +203,8 @@ impl<'a> PersonView<'a> {
         self.id
     }
 
-    pub fn position(&self) -> ArrowPoint {
-        self.data.positions.value(self.valid_index)
+    pub fn position(&self) -> Result<geoarrow_array::scalar::Point<'a>> {
+        Ok(self.data.positions.value(self.valid_index)?)
     }
 
     pub fn has_role(&self, role: &PersonRole) -> bool {
@@ -216,8 +217,8 @@ impl<'a> PersonView<'a> {
     }
 
     pub fn cell(&self, resolution: Resolution) -> Result<CellIndex> {
-        let coords = self.position().coord().unwrap();
-        let lat_lng: LatLng = coords.to_geo().try_into()?;
+        let coords = self.position()?.coord().unwrap();
+        let lat_lng: LatLng = coords.to_coord().try_into()?;
         Ok(lat_lng.to_cell(resolution))
     }
 

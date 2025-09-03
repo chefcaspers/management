@@ -6,8 +6,8 @@ use std::{
 
 use arrow_array::RecordBatch;
 use arrow_schema::{DataType, Field, Schema, SchemaRef, TimeUnit, UnionFields, UnionMode};
-use datafusion_common::DataFusionError;
-use datafusion_execution::RecordBatchStream;
+use datafusion::common::DataFusionError;
+use datafusion::execution::RecordBatchStream;
 use futures::Stream;
 
 // TODO(): The way we represent the actual message data / payload

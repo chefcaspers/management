@@ -273,14 +273,12 @@ fn take_station(assets: &[StationRunner], asset_type: &i32) -> Option<usize> {
 
 fn release_station(assets: &mut Vec<StationRunner>, asset_type: &i32, recipe_id: &OrderLineId) {
     for asset in assets {
-        if &(asset.station_type as i32) == asset_type {
-            if let StationStatus::Busy(id) = &asset.status {
-                if id == recipe_id {
+        if &(asset.station_type as i32) == asset_type
+            && let StationStatus::Busy(id) = &asset.status
+                && id == recipe_id {
                     asset.status = StationStatus::Available;
                     break;
                 }
-            }
-        }
     }
 }
 
