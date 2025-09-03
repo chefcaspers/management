@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, Duration, Utc};
 use datafusion::dataframe::DataFrameWriteOptions;
-use geoarrow::trait_::NativeScalar;
+use geo_traits::to_geo::ToGeoPoint;
 use h3o::{LatLng, Resolution};
 use itertools::Itertools;
 use rand::Rng;
@@ -174,17 +174,13 @@ impl Simulation {
         let ts = self.state.current_time().timestamp();
         let path = |name: &str| {
             base_path
-                .join(&format!("{}/snapshot-{}.parquet", name, ts))
+                .join(&format!("{name}/snapshot-{ts}.parquet"))
                 .unwrap()
         };
 
         let timestamp = self.state.current_time().to_rfc3339();
-        let query = |name: &str| {
-            format!(
-                "SELECT '{}'::timestamp(6) as timestamp, * FROM {}",
-                timestamp, name
-            )
-        };
+        let query =
+            |name: &str| format!("SELECT '{timestamp}'::timestamp(6) as timestamp, * FROM {name}");
 
         // create storage paths for each table
         let people_path = path("population/people");
@@ -212,7 +208,7 @@ impl Simulation {
             if should_snapshot {
                 let df = ctx.sql(&query("orders")).await?;
                 df.write_parquet(orders_path.as_str(), DataFrameWriteOptions::new(), None)
-                    .await?;    
+                    .await?;
 
                 let df = ctx.sql(&query("order_lines")).await?;
                 df.write_parquet(
@@ -226,8 +222,7 @@ impl Simulation {
             // write courier positions at every call.
             let df = ctx
                 .sql(&format!(
-                    "SELECT id, '{}'::timestamp(6) as timestamp, position FROM population WHERE role = 'courier'",
-                    timestamp
+                    "SELECT id, '{timestamp}'::timestamp(6) as timestamp, position FROM population WHERE role = 'courier'"
                 ))
                 .await?;
             df.write_parquet(positions_path.as_str(), DataFrameWriteOptions::new(), None)
@@ -259,10 +254,12 @@ impl Simulation {
             // NB: resolution 6 corresponds to a cell size of approximately 36 km2
             .idle_people_in_cell(lat_lng.to_cell(Resolution::Six), &PersonRole::Customer)
             .filter_map(|person| create_order(&self.state).map(|items| (person, items)))
-            .map(|(person, items)| OrderCreatedPayload {
-                person_id: *person.id(),
-                items,
-                destination: person.position().to_geo(),
+            .flat_map(|(person, items)| {
+                Some(OrderCreatedPayload {
+                    person_id: *person.id(),
+                    items,
+                    destination: person.position().ok()?.to_point(),
+                })
             }))
     }
 }

@@ -4,16 +4,15 @@ use std::sync::LazyLock;
 use arrow_array::cast::AsArray as _;
 use arrow_array::{RecordBatch, types::Float64Type};
 use arrow_schema::{DataType, Field, Schema, SchemaRef};
-use datafusion_common::SchemaExt;
+use datafusion::common::SchemaExt;
 use fast_paths::{FastGraph, InputGraph, PathCalculator};
 use geo::Point;
 use geo_traits::PointTrait;
-use geo_traits::to_geo::ToGeoLineString;
+use geo_traits::to_geo::{ToGeoCoord, ToGeoLineString};
 use geoarrow::array::{LineStringArray, PointArray};
-use geoarrow::scalar::{LineString as ArrowLineString, Point as ArrowPoint};
-use geoarrow::trait_::ArrayAccessor as _;
-use geoarrow::trait_::NativeScalar;
-use geoarrow_schema::{CoordType, Dimension, LineStringType, PointType};
+use geoarrow_array::GeoArrowArrayAccessor as _;
+use geoarrow_array::scalar::{LineString as ArrowLineString, Point as ArrowPoint};
+use geoarrow_schema::{Dimension, LineStringType, PointType};
 use h3o::{CellIndex, LatLng, Resolution};
 use indexmap::IndexSet;
 use itertools::Itertools;
@@ -271,6 +270,7 @@ impl JourneyPlanner {
                     let edge = self.routing.edge(*edge);
                     let legs = edge
                         .geometry()
+                        .unwrap()
                         .to_line_string()
                         .points()
                         .tuple_windows()
@@ -333,8 +333,16 @@ impl RoutingData {
             }
         }
 
-        let node_positions = (nodes.column(3).as_struct(), Dimension::XY).try_into()?;
-        let edge_positions = (edges.column(4).as_list::<i32>(), Dimension::XY).try_into()?;
+        let node_positions = (
+            nodes.column(3).as_struct(),
+            PointType::new(Dimension::XY, Default::default()),
+        )
+            .try_into()?;
+        let edge_positions = (
+            edges.column(4).as_list::<i32>(),
+            LineStringType::new(Dimension::XY, Default::default()),
+        )
+            .try_into()?;
 
         Ok(Self {
             nodes: nodes.project(&[0, 1, 2])?,
@@ -379,11 +387,7 @@ impl RoutingData {
                     ),
                     true,
                 )
-                .with_extension_type(PointType::new(
-                    CoordType::Separated,
-                    Dimension::XY,
-                    Default::default(),
-                )),
+                .with_extension_type(PointType::new(Dimension::XY, Default::default())),
             ]))
         });
         NODE_SCHEMA.clone()
@@ -424,11 +428,7 @@ impl RoutingData {
                     ),
                     true,
                 )
-                .with_extension_type(LineStringType::new(
-                    CoordType::Separated,
-                    Dimension::XY,
-                    Default::default(),
-                )),
+                .with_extension_type(LineStringType::new(Dimension::XY, Default::default())),
             ]))
         });
         EDGE_SCHEMA.clone()
@@ -491,13 +491,13 @@ impl<'a> StreetNode<'a> {
     }
 
     pub fn cell(&self, resolution: Resolution) -> Option<CellIndex> {
-        let coords = self.geometry().coord()?;
-        let lat_lng: LatLng = coords.to_geo().try_into().ok()?;
+        let coords = self.geometry().ok()?.coord()?;
+        let lat_lng: LatLng = coords.to_coord().try_into().ok()?;
         Some(lat_lng.to_cell(resolution))
     }
 
-    pub fn geometry(&self) -> ArrowPoint<'_> {
-        self.data.node_positions.value(self.valid_index)
+    pub fn geometry(&self) -> Result<ArrowPoint<'_>> {
+        Ok(self.data.node_positions.value(self.valid_index)?)
     }
 }
 
@@ -537,8 +537,8 @@ impl<'a> StreetEdge<'a> {
             .value(self.valid_index)
     }
 
-    pub fn geometry(&self) -> ArrowLineString<'_> {
-        self.data.edge_positions.value(self.valid_index)
+    pub fn geometry(&self) -> Result<ArrowLineString<'_>> {
+        Ok(self.data.edge_positions.value(self.valid_index)?)
     }
 }
 
@@ -721,7 +721,7 @@ mod tests {
         assert!(journey.next_leg().is_none());
 
         // Test estimated time remaining
-        let mut journey = Journey {
+        let journey = Journey {
             legs: vec![JourneyLeg {
                 destination: Point::new(0.0, 0.0),
                 distance_m: 1000,

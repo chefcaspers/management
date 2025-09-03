@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use arrow_array::RecordBatchReader;
 use arrow_select::concat::concat_batches;
 use chrono::{DateTime, Duration, Utc};
-use geoarrow_geoparquet::GeoParquetRecordBatchReaderBuilder;
 use itertools::Itertools;
+use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use url::Url;
 
 use crate::SiteRunner;
@@ -131,9 +131,9 @@ impl SimulationBuilder {
             .into_iter()
             .map(|(name, latitude, longitude)| {
                 (
-                    SiteId::from_uri_ref(format!("sites/{}", name)),
+                    SiteId::from_uri_ref(format!("sites/{name}")),
                     Site {
-                        id: SiteId::from_uri_ref(format!("sites/{}", name)).to_string(),
+                        id: SiteId::from_uri_ref(format!("sites/{name}")).to_string(),
                         name: name.to_string(),
                         latitude,
                         longitude,
@@ -146,7 +146,7 @@ impl SimulationBuilder {
             "/Users/robert.pack/code/management/notebooks/sites/london/edges.parquet",
         )
         .unwrap();
-        let reader = GeoParquetRecordBatchReaderBuilder::try_new(file)
+        let reader = ParquetRecordBatchReaderBuilder::try_new(file)
             .unwrap()
             .build()
             .unwrap();
@@ -158,7 +158,7 @@ impl SimulationBuilder {
             "/Users/robert.pack/code/management/notebooks/sites/london/nodes.parquet",
         )
         .unwrap();
-        let reader = GeoParquetRecordBatchReaderBuilder::try_new(file)
+        let reader = ParquetRecordBatchReaderBuilder::try_new(file)
             .unwrap()
             .build()
             .unwrap();

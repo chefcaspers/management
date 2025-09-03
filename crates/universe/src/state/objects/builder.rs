@@ -8,7 +8,7 @@ use arrow_schema::{DataType, Field, Schema, SchemaRef, TimeUnit};
 
 use crate::error::Result;
 use crate::idents::{BrandId, KitchenId, MenuItemId, SiteId, StationId};
-use crate::models::{Brand, KitchenStation, Site, Station};
+use crate::models::{Brand, KitchenStation, Site, SiteSetup, Station};
 use crate::state::ObjectLabel;
 
 static OBJECT_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
@@ -94,6 +94,66 @@ impl ObjectDataBuilder {
         }
     }
 
+    pub fn append_site_info(&mut self, site_id: SiteId, site: &SiteSetup) {
+        let site_info = site.info.as_ref().unwrap();
+
+        self.id.append_value(site_id).unwrap();
+        self.parent_id.append_null();
+        self.label.append_value(ObjectLabel::Site);
+        self.name
+            .append_value([Some("sites"), Some(&site_info.name)]);
+        self.properties
+            .append_value(serde_json::to_string(site_info).unwrap());
+        self.created_at
+            .append_value(chrono::Utc::now().timestamp_millis());
+        self.updated_at.append_null();
+
+        for kitchen in &site.kitchens {
+            let kitchen_info = kitchen.info.as_ref().unwrap();
+
+            let kitchen_id = KitchenId::from_uri_ref(format!(
+                "sites/{}/kitchens/{}",
+                site_info.name, kitchen_info.name
+            ));
+            self.id.append_value(kitchen_id).unwrap();
+            self.parent_id.append_value(site_id).unwrap();
+            self.label.append_value(ObjectLabel::Kitchen);
+            self.name.append_value([
+                Some("sites"),
+                Some(&site_info.name),
+                Some("kitchens"),
+                Some(&kitchen_info.name),
+            ]);
+            self.properties.append_null();
+            self.created_at
+                .append_value(chrono::Utc::now().timestamp_millis());
+            self.updated_at.append_null();
+
+            for station in &kitchen.stations {
+                let station_id = StationId::from_uri_ref(format!(
+                    "sites/{}/kitchens/{}/stations/{}",
+                    site_info.name, kitchen_info.name, station.name
+                ));
+                self.id.append_value(station_id).unwrap();
+                self.parent_id.append_value(kitchen_id).unwrap();
+                self.label.append_value(ObjectLabel::Station);
+                self.name.append_value([
+                    Some("sites"),
+                    Some(&site_info.name),
+                    Some("kitchens"),
+                    Some(&kitchen_info.name),
+                    Some("stations"),
+                    Some(&station.name),
+                ]);
+                self.properties
+                    .append_value(serde_json::to_string(station).unwrap());
+                self.created_at
+                    .append_value(chrono::Utc::now().timestamp_millis());
+                self.updated_at.append_null();
+            }
+        }
+    }
+
     pub fn append_site(&mut self, site_id: SiteId, site: &Site) {
         self.id.append_value(site_id).unwrap();
         self.parent_id.append_null();
@@ -106,7 +166,7 @@ impl ObjectDataBuilder {
         self.updated_at.append_null();
 
         for idx in 0..=5 {
-            let kitchen_name = format!("kitchen-{}", idx);
+            let kitchen_name = format!("kitchen-{idx}");
             let kitchen_id =
                 KitchenId::from_uri_ref(format!("sites/{}/kitchens/{}", site.name, kitchen_name));
             self.id.append_value(kitchen_id).unwrap();

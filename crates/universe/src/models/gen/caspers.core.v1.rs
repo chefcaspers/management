@@ -21,6 +21,42 @@ impl ::prost::Name for Site {
 const NAME: &'static str = "Site";
 const PACKAGE: &'static str = "caspers.core.v1";
 fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.Site".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.Site".into() }}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SiteSetup {
+    #[prost(message, optional, tag="1")]
+    pub info: ::core::option::Option<Site>,
+    #[prost(message, repeated, tag="2")]
+    pub kitchens: ::prost::alloc::vec::Vec<KitchenSetup>,
+}
+impl ::prost::Name for SiteSetup {
+const NAME: &'static str = "SiteSetup";
+const PACKAGE: &'static str = "caspers.core.v1";
+fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.SiteSetup".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.SiteSetup".into() }}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct KitchenSetup {
+    #[prost(message, optional, tag="1")]
+    pub info: ::core::option::Option<Kitchen>,
+    #[prost(message, repeated, tag="2")]
+    pub stations: ::prost::alloc::vec::Vec<Station>,
+}
+impl ::prost::Name for KitchenSetup {
+const NAME: &'static str = "KitchenSetup";
+const PACKAGE: &'static str = "caspers.core.v1";
+fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.KitchenSetup".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.KitchenSetup".into() }}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct VendorSetup {
+    #[prost(message, optional, tag="1")]
+    pub info: ::core::option::Option<Vendor>,
+    #[prost(message, repeated, tag="2")]
+    pub brands: ::prost::alloc::vec::Vec<Brand>,
+}
+impl ::prost::Name for VendorSetup {
+const NAME: &'static str = "VendorSetup";
+const PACKAGE: &'static str = "caspers.core.v1";
+fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.VendorSetup".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.VendorSetup".into() }}
 /// A company that owns and operates brands and kitchens
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]

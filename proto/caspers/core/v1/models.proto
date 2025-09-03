@@ -44,6 +44,21 @@ message Site {
   // ];
 }
 
+message SiteSetup {
+  Site info = 1;
+  repeated KitchenSetup kitchens = 2;
+}
+
+message KitchenSetup {
+  Kitchen info = 1;
+  repeated Station stations = 2;
+}
+
+message VendorSetup {
+  Vendor info = 1;
+  repeated Brand brands = 2;
+}
+
 // A company that owns and operates brands and kitchens
 message Vendor {
   // Unique identifier for the vendor
