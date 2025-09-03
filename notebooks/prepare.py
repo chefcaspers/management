@@ -111,7 +111,7 @@ def _(
 
             if "maxspeed" in meta:
                 if isinstance(meta["maxspeed"], list):
-                    try:    
+                    try:
                         properties["maxspeed_m_s"] = (
                             ureg(meta["maxspeed"][0]).to("m/s").magnitude
                         )
@@ -153,9 +153,9 @@ def _(
                 properties["highway"] = meta["highway"]
 
             properties["length"] = meta["length"] or 10.0
-            #properties["highway"] = meta["highway"]
-            #properties["access"] = meta.get("access")
-            #properties["oneway"] = meta["oneway"]
+            # properties["highway"] = meta["highway"]
+            # properties["access"] = meta.get("access")
+            # properties["oneway"] = meta["oneway"]
 
             props.append(properties)
             sources.append(source_uuid.bytes)
@@ -211,7 +211,6 @@ def _(lat, lng):
     m = folium.Map(location=[lat, lng], zoom_start=13, tiles="CartoDB dark_matter")
 
 
-
     cell = h3.latlng_to_cell(lat, lng, 9)
     location = h3.cells_to_geo([cell])
     folium.GeoJson(location).add_to(m)
@@ -235,7 +234,11 @@ def _(lat, lng):
             folium.Marker(
                 location=[row[0][1], row[0][0]],
                 popup="Person",
-                icon=folium.Icon(color="blue" if row[1] == "customer" else "red", icon="user", prefix="fa"),
+                icon=folium.Icon(
+                    color="blue" if row[1] == "customer" else "red",
+                    icon="user",
+                    prefix="fa",
+                ),
             ).add_to(m)
 
     m
@@ -245,7 +248,6 @@ def _(lat, lng):
 @app.cell
 def _(G, nx, pq, process_edges, process_nodes):
     def process(location: str, G: nx.MultiDiGraph):
-
         nodes = process_nodes(location, G)
         print(nodes.schema)
         pq.write_table(nodes, f"./sites/{location}/nodes.parquet")
@@ -253,6 +255,7 @@ def _(G, nx, pq, process_edges, process_nodes):
         edges = process_edges(location, G)
         print(edges.schema)
         pq.write_table(edges, f"./sites/{location}/edges.parquet")
+
 
     # process("london", G)
     process("amsterdam", G)

@@ -42,10 +42,18 @@ def _(pl):
     orders = pl.read_parquet("./data//orders")
     order_lines = pl.read_parquet("./data//order_lines")
 
-    orders_counts = pl.sql("SELECT status, count(*) as count FROM orders GROUP BY status").collect()
-    order_lines_counts = pl.sql("SELECT status, count(*) as count FROM order_lines GROUP BY status").collect()
-    people_counts = pl.sql("SELECT role, count(*) as count FROM people GROUP BY role").collect()
-    object_counts = pl.sql("SELECT label, count(*) as count FROM objects GROUP BY label").collect()
+    orders_counts = pl.sql(
+        "SELECT status, count(*) as count FROM orders GROUP BY status"
+    ).collect()
+    order_lines_counts = pl.sql(
+        "SELECT status, count(*) as count FROM order_lines GROUP BY status"
+    ).collect()
+    people_counts = pl.sql(
+        "SELECT role, count(*) as count FROM people GROUP BY role"
+    ).collect()
+    object_counts = pl.sql(
+        "SELECT label, count(*) as count FROM objects GROUP BY label"
+    ).collect()
     return object_counts, orders, people, people_counts, positions
 
 
@@ -115,24 +123,81 @@ def _(people, pl, positions):
 def _(people, pl, positions):
     from folium.plugins import TimestampedGeoJson
     import datetime
+
     epoch = datetime.datetime.fromtimestamp(0, datetime.timezone.utc)
-    _trips = people.select(['id', 'role']).filter(pl.col('role') == 'courier').join(positions, on='id', how='left').sort(['id', 'timestamp']).group_by('id', maintain_order=True)
+    _trips = (
+        people.select(["id", "role"])
+        .filter(pl.col("role") == "courier")
+        .join(positions, on="id", how="left")
+        .sort(["id", "timestamp"])
+        .group_by("id", maintain_order=True)
+    )
     routes = []
     _features = []
     for id, trip in _trips:
-        _poss = trip['position'].to_list()
-        _tss = trip['timestamp'].to_list()
-        feature = [{'type': 'Feature', 'geometry': {'type': 'LineString', 'coordinates': _poss[:idx]}, 'properties': {'times': [ts.isoformat() for ts in _tss[:idx]], 'icon': 'circle', 'iconstyle': {'fillColor': 'red', 'fillOpacity': 0.6, 'stroke': 'false', 'radius': 5}}} for idx in range(len(_poss))]
+        _poss = trip["position"].to_list()
+        _tss = trip["timestamp"].to_list()
+        feature = [
+            {
+                "type": "Feature",
+                "geometry": {"type": "LineString", "coordinates": _poss[:idx]},
+                "properties": {
+                    "times": [ts.isoformat() for ts in _tss[:idx]],
+                    "icon": "circle",
+                    "iconstyle": {
+                        "fillColor": "red",
+                        "fillOpacity": 0.6,
+                        "stroke": "false",
+                        "radius": 5,
+                    },
+                },
+            }
+            for idx in range(len(_poss))
+        ]
         _features.extend(feature)
-        routes.append({'type': 'Feature', 'geometry': {'type': 'LineString', 'coordinates': _poss}, 'properties': {'times': [ts.isoformat() for ts in _tss], 'style': {'color': 'blue', 'weight': 3, 'opacity': 0.6}, 'icon': 'circle', 'iconstyle': {'fillColor': 'red', 'fillOpacity': 0.6, 'stroke': 'false', 'radius': 5}}})
+        routes.append(
+            {
+                "type": "Feature",
+                "geometry": {"type": "LineString", "coordinates": _poss},
+                "properties": {
+                    "times": [ts.isoformat() for ts in _tss],
+                    "style": {"color": "blue", "weight": 3, "opacity": 0.6},
+                    "icon": "circle",
+                    "iconstyle": {
+                        "fillColor": "red",
+                        "fillOpacity": 0.6,
+                        "stroke": "false",
+                        "radius": 5,
+                    },
+                },
+            }
+        )
     return TimestampedGeoJson, routes, trip
 
 
 @app.cell
 def _(trip):
-    _poss = trip['position'].to_list()
-    _tss = trip['timestamp'].to_list()
-    _features = [{'type': 'Feature', 'geometry': {'type': 'LineString', 'coordinates': [pos0, pos1]}, 'properties': {'times': [ts0.isoformat(), ts1.isoformat()], 'icon': 'circle', 'iconstyle': {'fillColor': 'red', 'fillOpacity': 0.6, 'stroke': 'false', 'radius': 5}}} for (pos0, pos1), (ts0, ts1) in zip(zip(_poss[:-1], _poss[1:]), zip(_tss[:-1], _tss[1:]))]
+    _poss = trip["position"].to_list()
+    _tss = trip["timestamp"].to_list()
+    _features = [
+        {
+            "type": "Feature",
+            "geometry": {"type": "LineString", "coordinates": [pos0, pos1]},
+            "properties": {
+                "times": [ts0.isoformat(), ts1.isoformat()],
+                "icon": "circle",
+                "iconstyle": {
+                    "fillColor": "red",
+                    "fillOpacity": 0.6,
+                    "stroke": "false",
+                    "radius": 5,
+                },
+            },
+        }
+        for (pos0, pos1), (ts0, ts1) in zip(
+            zip(_poss[:-1], _poss[1:]), zip(_tss[:-1], _tss[1:])
+        )
+    ]
     return
 
 
