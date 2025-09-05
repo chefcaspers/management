@@ -8,11 +8,9 @@ app = marimo.App(width="medium")
 def _():
     import marimo as mo
     import pyarrow.parquet as pq
-    from caspers_universe.prepare import prepare_location
+    from caspers_universe import prepare_site, Site
     import polars as pl
-    import pyarrow as pa
-    import geoarrow.pyarrow as ga
-    return mo, pl, pq, prepare_location
+    return Site, mo, pl, pq, prepare_site
 
 
 @app.cell(hide_code=True)
@@ -36,46 +34,29 @@ def _(mo):
 
 
 @app.cell
-def _():
-    location_name = "london"
-    lng, lat = -0.13381370382489707, 51.518898098201326
-    resolution = 6
-
-    location_name = "amsterdam"
-    lng, lat = 4.888889169536197, 52.3358324410348
-    resolution = 6
-    return lat, lng, location_name
-
-
-@app.cell
-def _(lat, lng, location_name, pq, prepare_location):
-    nodes, edges = prepare_location(location_name, lat, lng)
-
-    pq.write_table(nodes, f"./sites/nodes/{location_name}.parquet")
-    pq.write_table(edges, f"./sites/edges/{location_name}.parquet")
-
-    print("done")
+def _(Site, pq, prepare_site):
     # this cell might error when marimo processes results,
     # the variables will still be assigned
-    return
 
+    sites = [
+        Site(
+            name="london",
+            latitude=51.518898098201326,
+            longitude=-0.13381370382489707,
+        ),
+        Site(
+            name="amsterdam",
+            latitude=52.3358324410348,
+            longitude=4.888889169536197,
+        ),
+    ]
 
-@app.cell
-def _(pq):
-    table_nodes = pq.read_table("./sites/nodes/")
-    table_edges = pq.read_table("./sites/edges/")
-    return table_edges, table_nodes
+    for site in sites:
+        nodes, edges = prepare_site(site)
+        pq.write_table(nodes, f"./sites/nodes/{site.name}.parquet")
+        pq.write_table(edges, f"./sites/edges/{site.name}.parquet")
 
-
-@app.cell
-def _(table_nodes):
-    table_nodes.schema
-    return
-
-
-@app.cell
-def _(table_edges):
-    table_edges.schema
+    print("done")
     return
 
 
@@ -121,6 +102,32 @@ def _(lat, lng, pl):
             ).add_to(m)
 
     m
+    return
+
+
+@app.cell
+def _(mo):
+    _df = mo.sql(
+        f"""
+        INSTALL spatial;
+
+        LOAD spatial;
+        """,
+        output=False
+    )
+    return
+
+
+@app.cell
+def _(mo):
+    _df = mo.sql(
+        f"""
+        SELECT location, properties, geometry
+        FROM './sites/nodes/*.parquet'
+        WHERE location = 'amsterdam'
+        LIMIT 10
+        """
+    )
     return
 
 

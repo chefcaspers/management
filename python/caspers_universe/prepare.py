@@ -9,6 +9,8 @@ import pyarrow as pa
 from pint import UnitRegistry
 from shapely.geometry import LineString, Point
 
+from caspers_universe._internal import Site
+
 _EDGE_SCHEMA = pa.schema(
     fields=[
         pa.field("location", pa.dictionary(pa.int32(), pa.string())),
@@ -52,7 +54,7 @@ _NODE_SCHEMA = pa.schema(
 )
 
 
-def process_nodes(location: str, G: nx.MultiDiGraph):
+def _process_nodes(location: str, G: nx.MultiDiGraph):
     node_ids = []
     node_coords = []
     node_props = []
@@ -80,7 +82,7 @@ def process_nodes(location: str, G: nx.MultiDiGraph):
     )
 
 
-def process_edges(location: str, G: nx.MultiDiGraph) -> pa.Table:
+def _process_edges(location: str, G: nx.MultiDiGraph) -> pa.Table:
     ureg = UnitRegistry()
 
     lines = []
@@ -165,14 +167,12 @@ def process_edges(location: str, G: nx.MultiDiGraph) -> pa.Table:
     )
 
 
-def prepare_location(
-    location: str,
-    lat: float,
-    lng: float,
+def prepare_site(
+    site: Site,
     network_type: Literal["bike", "drive", "walk"] = "bike",
     distance: int = 3000,
 ) -> tuple[pa.Table, pa.Table]:
-    """Prepare location data for Caspers Universe.
+    """Prepare site routing data for Caspers Universe.
 
     This downloads the street / path network around the given location
     and processes it for use in route planning within the simulation.
@@ -188,11 +188,11 @@ def prepare_location(
         tuple[pa.Table, pa.Table]: The nodes and edges tables.
     """
     neighbourhood = ox.graph_from_point(
-        (lat, lng),
+        (site.latitude, site.longitude),
         dist=distance,
         network_type=network_type,
     )
-    nodes = process_nodes(location, neighbourhood)
-    edges = process_edges(location, neighbourhood)
+    nodes = _process_nodes(site.name, neighbourhood)
+    edges = _process_edges(site.name, neighbourhood)
 
     return nodes, edges
