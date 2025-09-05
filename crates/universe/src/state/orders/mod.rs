@@ -72,13 +72,13 @@ impl OrderData {
 
     fn try_new(orders: RecordBatch, lines: RecordBatch) -> Result<Self> {
         if orders.schema().as_ref() != builder::ORDER_SCHEMA.as_ref() {
-            return Err(Error::invalid_data("expected orders to have schema").into());
+            return Err(Error::invalid_data("expected orders to have schema"));
         }
         if lines.schema().as_ref() != builder::ORDER_LINE_SCHEMA.as_ref() {
-            return Err(Error::invalid_data("expected lines to have schema").into());
+            return Err(Error::invalid_data("expected lines to have schema"));
         }
         if orders.num_rows() == 0 && lines.num_rows() > 0 {
-            return Err(Error::invalid_data("non-empty lines for empty orders").into());
+            return Err(Error::invalid_data("non-empty lines for empty orders"));
         }
 
         if orders.num_rows() == 0 && lines.num_rows() == 0 {
@@ -86,13 +86,13 @@ impl OrderData {
         }
 
         let Some((order_id_idx, _)) = lines.schema().column_with_name("order_id") else {
-            return Err(Error::invalid_data("expected column 'order_id'").into());
+            return Err(Error::invalid_data("expected column 'order_id'"));
         };
 
         // partition order lines by their order ids
         let partitions = partition(&lines.columns()[order_id_idx..order_id_idx + 1])?;
         if partitions.len() != orders.num_rows() {
-            return Err(Error::invalid_data("expected all orders to have matching lines").into());
+            return Err(Error::invalid_data("expected all orders to have matching lines"));
         }
 
         let order_id_col = orders.column_by_name("id").unwrap().as_fixed_size_binary();
@@ -115,7 +115,7 @@ impl OrderData {
             .try_collect()?;
 
         if lines_index.len() != lines.num_rows() {
-            return Err(Error::invalid_data("expected all lines to have matching ids").into());
+            return Err(Error::invalid_data("expected all lines to have matching ids"));
         }
 
         Ok(Self {
@@ -180,11 +180,11 @@ impl OrderData {
             .filter_map(|s| s.map(|s| s.to_string()))
             .collect_vec();
         if current.len() != self.lines.num_rows() {
-            return Err(Error::invalid_data("order line status mismatch").into());
+            return Err(Error::invalid_data("order line status mismatch"));
         }
         for (id, status) in updates {
             let Some(idx) = self.lines_index.get_index_of(&id) else {
-                return Err(Error::invalid_data("order line not found").into());
+                return Err(Error::invalid_data("order line not found"));
             };
             current[idx] = status.to_string();
         }

@@ -121,12 +121,7 @@ impl SiteRunner {
         let kitchens = state
             .objects()
             .kitchens(&id)?
-            .map_ok(|(id, brands)| {
-                Ok::<_, Box<dyn std::error::Error>>((
-                    id,
-                    KitchenRunner::try_new(id, brands, state)?,
-                ))
-            })
+            .map_ok(|(id, brands)| Ok::<_, Error>((id, KitchenRunner::try_new(id, brands, state)?)))
             .flatten()
             .try_collect()?;
 
@@ -214,7 +209,7 @@ impl SiteRunner {
         let site_location = ctx.objects().site(&self.id)?.properties()?.lat_lng()?;
         let Some(site_location_node) = ctx.trip_planner().nearest_node(&site_location) else {
             tracing::error!("No node found for site location");
-            return Err(Error::invalid_geometry("No node found for site location").into());
+            return Err(Error::invalid_geometry("No node found for site location"));
         };
 
         let couriers = ctx.population().idle_people_in_cell(

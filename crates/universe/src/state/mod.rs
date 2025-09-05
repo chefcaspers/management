@@ -14,7 +14,7 @@ use self::movement::JourneyPlanner;
 use super::{EventPayload, SimulationConfig};
 use crate::error::Result;
 use crate::models::{Brand, Site};
-use crate::{OrderCreatedPayload, OrderLineUpdatedPayload, OrderUpdatedPayload, idents::*};
+use crate::{Error, OrderCreatedPayload, OrderLineUpdatedPayload, OrderUpdatedPayload, idents::*};
 
 pub(crate) use self::movement::RoutingData;
 pub(crate) use self::objects::{ObjectData, ObjectDataBuilder, ObjectLabel};
@@ -35,6 +35,12 @@ enum StateError {
     // inconsistent data
     #[error("Inconsistent data")]
     InconsistentData,
+}
+
+impl From<StateError> for Error {
+    fn from(err: StateError) -> Self {
+        Error::InternalError(err.to_string())
+    }
 }
 
 // TODO:

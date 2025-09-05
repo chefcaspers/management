@@ -314,7 +314,7 @@ impl RoutingData {
 
         let ids = nodes.column(1).as_fixed_size_binary();
         for id in ids.iter().flatten() {
-            let id = Uuid::from_slice(id).unwrap();
+            let id = Uuid::from_slice(id)?;
             node_map.insert(id);
         }
 
@@ -323,8 +323,8 @@ impl RoutingData {
         let targets = edges.column(2).as_fixed_size_binary();
         for (index, (source, target)) in sources.iter().zip(targets.iter()).enumerate() {
             if let (Some(source), Some(target)) = (source, target) {
-                let source = Uuid::from_slice(source).unwrap();
-                let target = Uuid::from_slice(target).unwrap();
+                let source = Uuid::from_slice(source)?;
+                let target = Uuid::from_slice(target)?;
                 let source_index = node_map.get_index_of(&source).unwrap();
                 let target_index = node_map.get_index_of(&target).unwrap();
                 edge_map.insert((source_index, target_index), index);

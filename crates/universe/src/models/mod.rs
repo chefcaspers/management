@@ -22,6 +22,6 @@ pub mod caspers {
 impl Site {
     pub fn lat_lng(&self) -> Result<h3o::LatLng> {
         h3o::LatLng::new(self.latitude, self.longitude)
-            .map_err(|e| crate::error::Error::InvalidGeometry(e.to_string()).into())
+            .map_err(|e| crate::error::Error::InvalidGeometry(e.to_string()))
     }
 }

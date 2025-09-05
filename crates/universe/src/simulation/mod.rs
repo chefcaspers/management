@@ -9,6 +9,7 @@ use rand::Rng;
 use tokio::runtime::Runtime;
 use url::Url;
 
+use crate::Error;
 use crate::agents::SiteRunner;
 use crate::error::Result;
 use crate::idents::{BrandId, MenuItemId, SiteId, TypedId};
@@ -228,7 +229,7 @@ impl Simulation {
             df.write_parquet(positions_path.as_str(), DataFrameWriteOptions::new(), None)
                 .await?;
 
-            Ok::<_, Box<dyn std::error::Error>>(())
+            Ok::<_, Error>(())
         })?;
 
         if should_snapshot {

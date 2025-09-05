@@ -52,10 +52,13 @@ pub enum PersonRole {
 
 /// Population data.
 ///
-/// Holds information for all people in the simulation.
+/// Holds information for all people in the simulation as well as
+/// tracking their current locations and roles.
 pub struct PopulationData {
+    /// Metadata for individuals tracked in the simulation
     people: RecordBatch,
 
+    /// Current geo locations of people
     positions: PointArray,
 
     /// Lookup index for people.
@@ -70,7 +73,9 @@ pub struct PopulationData {
 impl PopulationData {
     pub(crate) fn try_new(people: RecordBatch, positions: PointArray) -> Result<Self> {
         if people.num_rows() != positions.len() {
-            return Err("people and positions data must have the same length".into());
+            return Err(Error::internal(
+                "people and positions data must have the same length",
+            ));
         }
         let lookup_index = lookup_index(&people)?;
         Ok(PopulationData {
@@ -288,12 +293,7 @@ fn lookup_index(batch: &RecordBatch) -> Result<IndexMap<PersonId, PersonState>> 
         .as_fixed_size_binary()
         .iter()
         .filter_map(|data| {
-            data.map(|data| {
-                (
-                    PersonId(Uuid::from_slice(data).unwrap()),
-                    Default::default(),
-                )
-            })
+            data.and_then(|data| Some((PersonId(Uuid::from_slice(data).ok()?), Default::default())))
         })
         .collect())
 }

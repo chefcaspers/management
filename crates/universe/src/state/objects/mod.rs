@@ -9,6 +9,7 @@ use itertools::Itertools;
 use rand::Rng as _;
 use strum::AsRefStr;
 
+use crate::Error;
 use crate::error::Result;
 use crate::idents::{BrandId, KitchenId, MenuItemId, SiteId, StationId};
 use crate::models::{MenuItem, Site, Station};
@@ -31,6 +32,16 @@ enum VendorDataError {
 
     #[error("Column not found")]
     ColumnNotFound(&'static str),
+}
+
+impl From<VendorDataError> for Error {
+    fn from(err: VendorDataError) -> Self {
+        match err {
+            VendorDataError::NotFound => Error::NotFound,
+            VendorDataError::InconsistentData => Error::InvalidData(err.to_string()),
+            VendorDataError::ColumnNotFound(_) => Error::InvalidData(err.to_string()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, AsRefStr)]

@@ -7,12 +7,12 @@ use itertools::Itertools;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use url::Url;
 
-use crate::SiteRunner;
 use crate::error::Result;
 use crate::idents::{BrandId, SiteId};
 use crate::models::{Brand, Site};
 use crate::simulation::{Simulation, SimulationConfig};
 use crate::state::{EntityView, RoutingData, State};
+use crate::{Error, SiteRunner};
 
 pub struct SimulationBuilder {
     brands: Vec<Brand>,
@@ -122,7 +122,7 @@ impl SimulationBuilder {
             .into_iter()
             .map(|brand| {
                 let brand_id = BrandId::from_uri_ref(format!("brands/{}", brand.name));
-                Ok::<_, Box<dyn std::error::Error>>((brand_id, brand))
+                Ok::<_, Error>((brand_id, brand))
             })
             .try_collect()?;
 
@@ -151,6 +151,12 @@ impl SimulationBuilder {
         let batches: Vec<_> = reader.into_iter().try_collect()?;
         let edges = concat_batches(&schema, &batches)?;
 
+        let Some(node_file) = self.routing_nodes else {
+            return Err(Error::MissingInput(
+                "Routing nodes file not found".to_string(),
+            ));
+        };
+
         let file = std::fs::File::open(
             "/Users/robert.pack/code/management/notebooks/sites/london/nodes.parquet",
         )
@@ -173,17 +179,13 @@ impl SimulationBuilder {
         let site_runners = state
             .objects()
             .sites()?
-            .map(|site| {
-                Ok::<_, Box<dyn std::error::Error>>((
-                    site.id(),
-                    SiteRunner::try_new(site.id(), &state)?,
-                ))
-            })
+            .map(|site| Ok::<_, Error>((site.id(), SiteRunner::try_new(site.id(), &state)?)))
             .try_collect()?;
 
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
-            .build()?;
+            .build()
+            .map_err(|e| Error::Generic(Box::new(e)))?;
 
         Ok(Simulation {
             rt,
