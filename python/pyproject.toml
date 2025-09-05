@@ -4,13 +4,23 @@ build-backend = "maturin"
 
 [project]
 name = "caspers-universe"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dynamic = ["version"]
+dependencies = [
+    "geoarrow-pyarrow>=0.1.2",
+    "geoarrow-rust-core>=0.3.0",
+    "geoarrow-rust-io>=0.3.0",
+    "networkx>=3.4.2",
+    "osmnx>=2.0.2",
+    "pint>=0.25",
+    "pyarrow>=19.0.1",
+    "shapely>=2.1.0",
+]
 
 [tool.maturin]
 module-name = "caspers_universe._internal"
