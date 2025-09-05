@@ -1,0 +1,14 @@
+[package]
+name = "caspers-universe-python"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "caspers-universe"
+crate-type = ["cdylib"]
+
+[dependencies]
+caspers-universe = { path = "../crates/universe" }
+
+pyo3 = "0.25.0"
