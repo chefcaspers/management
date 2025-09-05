@@ -5,10 +5,10 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
-name = "caspers-universe"
+name = "caspers_universe"
 crate-type = ["cdylib"]
 
 [dependencies]
-caspers-universe = { path = "../crates/universe" }
+caspers-universe = { path = "../crates/universe/" }
 
 pyo3 = "0.25.0"

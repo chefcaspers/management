@@ -2,6 +2,12 @@ version = 1
 revision = 3
 requires-python = ">=3.13"
 
+[manifest]
+members = [
+    "caspers-universe",
+    "management",
+]
+
 [[package]]
 name = "affine"
 version = "2.4.0"
@@ -127,6 +133,10 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/a3/5b/476c8f3a277d7c78e5a5318bd32f234b994bfdc5d7731ae84218f2fa8a8f/Cartopy-0.24.1-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:dfdde0a6e0e56c5fc46f4e7d332237eb31bbd9908417f0f190fda5d322754184", size = 11709060, upload-time = "2024-10-08T23:25:29.621Z" },
     { url = "https://files.pythonhosted.org/packages/93/31/50bf07ba820c5aa5d4e674d72cdb5da90bbd012ba1b9c6c95c3f96afe233/Cartopy-0.24.1-cp313-cp313-win_amd64.whl", hash = "sha256:b17cf23dd74d0a922c2a5682dacef3c0bf89fa8c0bd0eae96b87fb684f966b15", size = 10959830, upload-time = "2024-10-08T23:25:32.75Z" },
 ]
+
+[[package]]
+name = "caspers-universe"
+source = { editable = "python" }
 
 [[package]]
 name = "certifi"

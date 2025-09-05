@@ -13,4 +13,5 @@ classifiers = [
 dynamic = ["version"]
 
 [tool.maturin]
+module-name = "caspers_universe._internal"
 features = ["pyo3/extension-module"]

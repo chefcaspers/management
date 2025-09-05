@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/*"]
+members = ["crates/*", "python/"]
 
 [workspace.dependencies]
 async-trait = { version = "0.1.83" }
