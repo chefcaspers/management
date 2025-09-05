@@ -1,7 +1,7 @@
 import marimo
 
 __generated_with = "0.15.2"
-app = marimo.App()
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -115,7 +115,13 @@ def _(go, make_subplots, object_counts, people_counts):
 
 @app.cell
 def _(people, pl, positions):
-    _trips = people.select(['id', 'role']).filter(pl.col('role') == 'courier').join(positions, on='id', how='left').sort(['id', 'timestamp']).group_by('id', maintain_order=True)
+    _trips = (
+        people.select(["id", "role"])
+        .filter(pl.col("role") == "courier")
+        .join(positions, on="id", how="left")
+        .sort(["id", "timestamp"])
+        .group_by("id", maintain_order=True)
+    )
     return
 
 

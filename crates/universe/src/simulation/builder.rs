@@ -146,27 +146,21 @@ impl SimulationBuilder {
             "/Users/robert.pack/code/management/notebooks/sites/london/edges.parquet",
         )
         .unwrap();
-        let reader = ParquetRecordBatchReaderBuilder::try_new(file)
-            .unwrap()
-            .build()
-            .unwrap();
+        let reader = ParquetRecordBatchReaderBuilder::try_new(file)?.build()?;
         let schema = reader.schema();
-        let batches: Vec<_> = reader.into_iter().try_collect().unwrap();
-        let edges = concat_batches(&schema, &batches).unwrap();
+        let batches: Vec<_> = reader.into_iter().try_collect()?;
+        let edges = concat_batches(&schema, &batches)?;
 
         let file = std::fs::File::open(
             "/Users/robert.pack/code/management/notebooks/sites/london/nodes.parquet",
         )
         .unwrap();
-        let reader = ParquetRecordBatchReaderBuilder::try_new(file)
-            .unwrap()
-            .build()
-            .unwrap();
+        let reader = ParquetRecordBatchReaderBuilder::try_new(file)?.build()?;
         let schema = reader.schema();
-        let batches: Vec<_> = reader.into_iter().try_collect().unwrap();
-        let nodes = concat_batches(&schema, &batches).unwrap();
+        let batches: Vec<_> = reader.into_iter().try_collect()?;
+        let nodes = concat_batches(&schema, &batches)?;
 
-        let routing = RoutingData::try_new(nodes, edges).unwrap();
+        let routing = RoutingData::try_new(nodes, edges)?;
 
         let config = SimulationConfig {
             simulation_start: self.start_time,
