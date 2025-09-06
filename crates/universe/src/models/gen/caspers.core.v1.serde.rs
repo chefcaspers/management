@@ -182,7 +182,7 @@ impl serde::Serialize for Ingredient {
         if self.price != 0. {
             len += 1;
         }
-        if !self.image_url.is_empty() {
+        if self.image_url.is_some() {
             len += 1;
         }
         let mut struct_ser = serializer.serialize_struct("caspers.core.v1.Ingredient", len)?;
@@ -198,8 +198,8 @@ impl serde::Serialize for Ingredient {
         if self.price != 0. {
             struct_ser.serialize_field("price", &self.price)?;
         }
-        if !self.image_url.is_empty() {
-            struct_ser.serialize_field("imageUrl", &self.image_url)?;
+        if let Some(v) = self.image_url.as_ref() {
+            struct_ser.serialize_field("image_url", v)?;
         }
         struct_ser.end()
     }
@@ -309,7 +309,7 @@ impl<'de> serde::Deserialize<'de> for Ingredient {
                             if image_url__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("imageUrl"));
                             }
-                            image_url__ = Some(map_.next_value()?);
+                            image_url__ = map_.next_value()?;
                         }
                         GeneratedField::__SkipField__ => {
                             let _ = map_.next_value::<serde::de::IgnoredAny>()?;
@@ -321,7 +321,7 @@ impl<'de> serde::Deserialize<'de> for Ingredient {
                     name: name__.unwrap_or_default(),
                     description: description__.unwrap_or_default(),
                     price: price__.unwrap_or_default(),
-                    image_url: image_url__.unwrap_or_default(),
+                    image_url: image_url__,
                 })
             }
         }
@@ -344,7 +344,7 @@ impl serde::Serialize for IngredientQuantity {
         }
         let mut struct_ser = serializer.serialize_struct("caspers.core.v1.IngredientQuantity", len)?;
         if !self.ingredient_ref.is_empty() {
-            struct_ser.serialize_field("ingredientRef", &self.ingredient_ref)?;
+            struct_ser.serialize_field("ingredient_ref", &self.ingredient_ref)?;
         }
         if !self.quantity.is_empty() {
             struct_ser.serialize_field("quantity", &self.quantity)?;
@@ -458,7 +458,7 @@ impl serde::Serialize for Instruction {
         if self.required_station != 0 {
             len += 1;
         }
-        if self.expected_duration.is_some() {
+        if self.expected_duration != 0 {
             len += 1;
         }
         let mut struct_ser = serializer.serialize_struct("caspers.core.v1.Instruction", len)?;
@@ -471,10 +471,10 @@ impl serde::Serialize for Instruction {
         if self.required_station != 0 {
             let v = KitchenStation::try_from(self.required_station)
                 .map_err(|_| serde::ser::Error::custom(format!("Invalid variant {}", self.required_station)))?;
-            struct_ser.serialize_field("requiredStation", &v)?;
+            struct_ser.serialize_field("required_station", &v)?;
         }
-        if let Some(v) = self.expected_duration.as_ref() {
-            struct_ser.serialize_field("expectedDuration", v)?;
+        if self.expected_duration != 0 {
+            struct_ser.serialize_field("expected_duration", &self.expected_duration)?;
         }
         struct_ser.end()
     }
@@ -573,7 +573,9 @@ impl<'de> serde::Deserialize<'de> for Instruction {
                             if expected_duration__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("expectedDuration"));
                             }
-                            expected_duration__ = map_.next_value()?;
+                            expected_duration__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
                         }
                         GeneratedField::__SkipField__ => {
                             let _ = map_.next_value::<serde::de::IgnoredAny>()?;
@@ -584,7 +586,7 @@ impl<'de> serde::Deserialize<'de> for Instruction {
                     step: step__.unwrap_or_default(),
                     description: description__.unwrap_or_default(),
                     required_station: required_station__.unwrap_or_default(),
-                    expected_duration: expected_duration__,
+                    expected_duration: expected_duration__.unwrap_or_default(),
                 })
             }
         }
@@ -935,7 +937,7 @@ impl serde::Serialize for MenuItem {
             struct_ser.serialize_field("price", &self.price)?;
         }
         if let Some(v) = self.image_url.as_ref() {
-            struct_ser.serialize_field("imageUrl", v)?;
+            struct_ser.serialize_field("image_url", v)?;
         }
         if !self.ingredients.is_empty() {
             struct_ser.serialize_field("ingredients", &self.ingredients)?;
@@ -1362,7 +1364,7 @@ impl serde::Serialize for Station {
     {
         use serde::ser::SerializeStruct;
         let mut len = 0;
-        if self.id.is_some() {
+        if !self.id.is_empty() {
             len += 1;
         }
         if !self.name.is_empty() {
@@ -1372,8 +1374,8 @@ impl serde::Serialize for Station {
             len += 1;
         }
         let mut struct_ser = serializer.serialize_struct("caspers.core.v1.Station", len)?;
-        if let Some(v) = self.id.as_ref() {
-            struct_ser.serialize_field("id", v)?;
+        if !self.id.is_empty() {
+            struct_ser.serialize_field("id", &self.id)?;
         }
         if !self.name.is_empty() {
             struct_ser.serialize_field("name", &self.name)?;
@@ -1381,7 +1383,7 @@ impl serde::Serialize for Station {
         if self.station_type != 0 {
             let v = KitchenStation::try_from(self.station_type)
                 .map_err(|_| serde::ser::Error::custom(format!("Invalid variant {}", self.station_type)))?;
-            struct_ser.serialize_field("stationType", &v)?;
+            struct_ser.serialize_field("station_type", &v)?;
         }
         struct_ser.end()
     }
@@ -1457,7 +1459,7 @@ impl<'de> serde::Deserialize<'de> for Station {
                             if id__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("id"));
                             }
-                            id__ = map_.next_value()?;
+                            id__ = Some(map_.next_value()?);
                         }
                         GeneratedField::Name => {
                             if name__.is_some() {
@@ -1477,7 +1479,7 @@ impl<'de> serde::Deserialize<'de> for Station {
                     }
                 }
                 Ok(Station {
-                    id: id__,
+                    id: id__.unwrap_or_default(),
                     name: name__.unwrap_or_default(),
                     station_type: station_type__.unwrap_or_default(),
                 })
@@ -1511,7 +1513,7 @@ impl serde::Serialize for Vendor {
             struct_ser.serialize_field("name", &self.name)?;
         }
         if let Some(v) = self.logo_url.as_ref() {
-            struct_ser.serialize_field("logoUrl", v)?;
+            struct_ser.serialize_field("logo_url", v)?;
         }
         struct_ser.end()
     }

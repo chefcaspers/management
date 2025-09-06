@@ -623,6 +623,7 @@ dependencies = [
  "pbjson",
  "pbjson-types",
  "prost",
+ "pyo3",
  "rand",
  "serde",
  "serde_json",

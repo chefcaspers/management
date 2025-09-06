@@ -9,6 +9,6 @@ name = "caspers_universe"
 crate-type = ["cdylib"]
 
 [dependencies]
-caspers-universe = { path = "../crates/universe/" }
+caspers-universe = { path = "../crates/universe/", features = ["python"] }
 
 pyo3 = "0.25.0"

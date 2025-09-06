@@ -92,7 +92,9 @@ impl OrderData {
         // partition order lines by their order ids
         let partitions = partition(&lines.columns()[order_id_idx..order_id_idx + 1])?;
         if partitions.len() != orders.num_rows() {
-            return Err(Error::invalid_data("expected all orders to have matching lines"));
+            return Err(Error::invalid_data(
+                "expected all orders to have matching lines",
+            ));
         }
 
         let order_id_col = orders.column_by_name("id").unwrap().as_fixed_size_binary();
@@ -115,7 +117,9 @@ impl OrderData {
             .try_collect()?;
 
         if lines_index.len() != lines.num_rows() {
-            return Err(Error::invalid_data("expected all lines to have matching ids"));
+            return Err(Error::invalid_data(
+                "expected all lines to have matching ids",
+            ));
         }
 
         Ok(Self {

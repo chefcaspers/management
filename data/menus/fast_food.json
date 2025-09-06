@@ -5,19 +5,19 @@
     "price": 10.99,
     "ingredients": [
       {
-        "ingredientRef": "ingredients/beef",
+        "ingredient_ref": "ingredients/beef",
         "display_name": "Beef Patty",
         "description": "Delicious beef patty",
         "quantity": "130g"
       },
       {
-        "ingredientRef": "ingredients/lettuce",
+        "ingredient_ref": "ingredients/lettuce",
         "display_name": "Lettuce",
         "description": "Crunchy lettuce leaves",
         "quantity": "50g"
       },
       {
-        "ingredientRef": "ingredients/bun",
+        "ingredient_ref": "ingredients/bun",
         "display_name": "Burger Bun",
         "description": "Soft burger bun",
         "quantity": "1"
@@ -50,19 +50,19 @@
     "price": 8.99,
     "ingredients": [
       {
-        "ingredientRef": "ingredients/egg",
+        "ingredient_ref": "ingredients/egg",
         "display_name": "Egg",
         "description": "Boiled eggs",
         "quantity": "2"
       },
       {
-        "ingredientRef": "ingredients/bread",
+        "ingredient_ref": "ingredients/bread",
         "display_name": "Bread",
         "description": "Sliced sandwich bread",
         "quantity": "2 slices"
       },
       {
-        "ingredientRef": "ingredients/lettuce",
+        "ingredient_ref": "ingredients/lettuce",
         "display_name": "Lettuce",
         "description": "Crisp lettuce leaves",
         "quantity": "30g"

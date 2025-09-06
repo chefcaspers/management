@@ -10,12 +10,13 @@ plugins:
       - extern_path=.google.protobuf=::pbjson_types
       - file_descriptor_set=false
       - enable_type_names=true
+      - message_attribute=.caspers.core=#[cfg_attr(feature = "python"\, ::pyo3::pyclass(get_all\, set_all))]
+      - enum_attribute=.caspers.core=#[cfg_attr(feature = "python"\, ::pyo3::pyclass)]
   - remote: buf.build/community/neoeinstein-prost-serde:v0.3.1
     out: crates/universe/src/models/gen
     opt:
-      # useful to build reusable extractors for axum
       - ignore_unknown_fields=true
-      # - preserve_proto_field_names=true
+      - preserve_proto_field_names=true
   # - remote: buf.build/community/google-gnostic-openapi:v0.7.0
   #  out: openapi
   # - remote: buf.build/bufbuild/es:v2.2.3

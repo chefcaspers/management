@@ -10,7 +10,7 @@ def _():
     import pyarrow.parquet as pq
     from caspers_universe import prepare_site, Site
     import polars as pl
-    return Site, mo, pl, pq, prepare_site
+    return Site, mo, pq, prepare_site
 
 
 @app.cell(hide_code=True)
@@ -57,17 +57,19 @@ def _(Site, pq, prepare_site):
         pq.write_table(edges, f"./sites/edges/{site.name}.parquet")
 
     print("done")
-    return
+    return (sites,)
 
 
 @app.cell
-def _(lat, lng, pl):
+def _(sites):
     import folium
     import h3
 
 
     plot_people = False
-    population = pl.read_parquet("./data/population/1745768936.parquet")
+
+    site_idx = 1
+    lat, lng = sites[site_idx].latitude, sites[site_idx].longitude
 
     m = folium.Map(location=[lat, lng], zoom_start=13, tiles="CartoDB dark_matter")
 
@@ -89,17 +91,18 @@ def _(lat, lng, pl):
         icon=folium.Icon(color="red", icon="kitchen-set", prefix="fa"),
     ).add_to(m)
 
-    if plot_people:
-        for row in population.select(["position", "role"]).rows():
-            folium.Marker(
-                location=[row[0][1], row[0][0]],
-                popup="Person",
-                icon=folium.Icon(
-                    color="blue" if row[1] == "customer" else "red",
-                    icon="user",
-                    prefix="fa",
-                ),
-            ).add_to(m)
+    # population = pl.read_parquet("./data/population/1745768936.parquet")
+    # if plot_people:
+    #    for row in population.select(["position", "role"]).rows():
+    #         folium.Marker(
+    #             location=[row[0][1], row[0][0]],
+    #             popup="Person",
+    #             icon=folium.Icon(
+    #                 color="blue" if row[1] == "customer" else "red",
+    #                 icon="user",
+    #                 prefix="fa",
+    #             ),
+    #         ).add_to(m)
 
     m
     return
@@ -126,6 +129,16 @@ def _(mo):
         FROM './sites/nodes/*.parquet'
         WHERE location = 'amsterdam'
         LIMIT 10
+        """
+    )
+    return
+
+
+@app.cell
+def _(mo):
+    _df = mo.sql(
+        f"""
+        SELECT * FROM './data/population/positions/snapshot-1757106332.parquet' LIMIT 10;
         """
     )
     return

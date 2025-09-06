@@ -10,9 +10,6 @@ use datafusion::common::DataFusionError;
 use datafusion::execution::RecordBatchStream;
 use futures::Stream;
 
-// TODO(): The way we represent the actual message data / payload
-// is a great use case for variant data ... once that comes along
-
 static EVENT_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
     Arc::new(Schema::new(vec![
         Field::new("id", DataType::Utf8, false),

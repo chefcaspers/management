@@ -206,7 +206,7 @@ impl ObjectDataBuilder {
                 ]);
 
                 let station_props = Station {
-                    id: Some(station_id.to_string()),
+                    id: station_id.to_string(),
                     name: station_name.to_string(),
                     station_type: station as i32,
                 };

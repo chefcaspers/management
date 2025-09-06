@@ -6,31 +6,31 @@
     "price": 15.99,
     "ingredients": [
       {
-        "ingredientRef": "ingredients/beef",
+        "ingredient_ref": "ingredients/beef",
         "display_name": "Beef",
         "description": "Thinly sliced flank steak",
         "quantity": "150g"
       },
       {
-        "ingredientRef": "ingredients/broccoli",
+        "ingredient_ref": "ingredients/broccoli",
         "display_name": "Broccoli",
         "description": "Fresh broccoli florets",
         "quantity": "100g"
       },
       {
-        "ingredientRef": "ingredients/soy_sauce",
+        "ingredient_ref": "ingredients/soy_sauce",
         "display_name": "Soy Sauce",
         "description": "Salty, fermented soy sauce",
         "quantity": "2 tbsp"
       },
       {
-        "ingredientRef": "ingredients/garlic",
+        "ingredient_ref": "ingredients/garlic",
         "display_name": "Garlic",
         "description": "Minced garlic cloves",
         "quantity": "2 cloves"
       },
       {
-        "ingredientRef": "ingredients/rice",
+        "ingredient_ref": "ingredients/rice",
         "display_name": "Steamed Rice",
         "description": "Cooked white rice",
         "quantity": "150g"
@@ -70,31 +70,31 @@
     "price": 15.99,
     "ingredients": [
       {
-        "ingredientRef": "ingredients/rice",
+        "ingredient_ref": "ingredients/rice",
         "display_name": "Cooked Rice",
         "description": "Day-old white rice",
         "quantity": "180g"
       },
       {
-        "ingredientRef": "ingredients/egg",
+        "ingredient_ref": "ingredients/egg",
         "display_name": "Egg",
         "description": "Beaten egg",
         "quantity": "1"
       },
       {
-        "ingredientRef": "ingredients/soy_sauce",
+        "ingredient_ref": "ingredients/soy_sauce",
         "display_name": "Soy Sauce",
         "description": "Salty, fermented soy sauce",
         "quantity": "1.5 tbsp"
       },
       {
-        "ingredientRef": "ingredients/green_onion",
+        "ingredient_ref": "ingredients/green_onion",
         "display_name": "Green Onion",
         "description": "Chopped green onions",
         "quantity": "2 stalks"
       },
       {
-        "ingredientRef": "ingredients/garlic",
+        "ingredient_ref": "ingredients/garlic",
         "display_name": "Garlic",
         "description": "Minced garlic cloves",
         "quantity": "1 clove"

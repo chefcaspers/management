@@ -5,31 +5,31 @@
     "price": 12.99,
     "ingredients": [
       {
-        "ingredientRef": "ingredients/chicken",
+        "ingredient_ref": "ingredients/chicken",
         "display_name": "Chicken Breast",
         "description": "Grilled and sliced chicken breast",
         "quantity": "120g"
       },
       {
-        "ingredientRef": "ingredients/lettuce",
+        "ingredient_ref": "ingredients/lettuce",
         "display_name": "Lettuce",
         "description": "Shredded lettuce",
         "quantity": "40g"
       },
       {
-        "ingredientRef": "ingredients/tortilla",
+        "ingredient_ref": "ingredients/tortilla",
         "display_name": "Corn Tortilla",
         "description": "Soft corn tortillas",
         "quantity": "2"
       },
       {
-        "ingredientRef": "ingredients/garlic",
+        "ingredient_ref": "ingredients/garlic",
         "display_name": "Garlic",
         "description": "Minced garlic cloves",
         "quantity": "1 clove"
       },
       {
-        "ingredientRef": "ingredients/salsa",
+        "ingredient_ref": "ingredients/salsa",
         "display_name": "Salsa",
         "description": "Fresh tomato salsa",
         "quantity": "2 tbsp"
@@ -62,25 +62,25 @@
     "price": 10.99,
     "ingredients": [
       {
-        "ingredientRef": "ingredients/tortilla",
+        "ingredient_ref": "ingredients/tortilla",
         "display_name": "Flour Tortilla",
         "description": "Large flour tortilla",
         "quantity": "1"
       },
       {
-        "ingredientRef": "ingredients/cheese",
+        "ingredient_ref": "ingredients/cheese",
         "display_name": "Cheddar Cheese",
         "description": "Shredded cheddar cheese",
         "quantity": "50g"
       },
       {
-        "ingredientRef": "ingredients/beans",
+        "ingredient_ref": "ingredients/beans",
         "display_name": "Black Beans",
         "description": "Cooked black beans",
         "quantity": "60g"
       },
       {
-        "ingredientRef": "ingredients/green_onion",
+        "ingredient_ref": "ingredients/green_onion",
         "display_name": "Green Onion",
         "description": "Chopped green onions",
         "quantity": "1 stalk"

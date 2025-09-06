@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::str::FromStr;
 
 use arrow_array::RecordBatchReader;
 use arrow_select::concat::concat_batches;
@@ -6,18 +7,20 @@ use chrono::{DateTime, Duration, Utc};
 use itertools::Itertools;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use url::Url;
+use uuid::Uuid;
 
 use crate::error::Result;
-use crate::idents::{BrandId, SiteId};
+use crate::idents::BrandId;
 use crate::models::{Brand, Site};
 use crate::simulation::{Simulation, SimulationConfig};
 use crate::state::{EntityView, RoutingData, State};
 use crate::{Error, SiteRunner};
 
+/// Builder for creating a simulation instance.
 pub struct SimulationBuilder {
     brands: Vec<Brand>,
 
-    sites: Vec<(String, f64, f64)>,
+    sites: Vec<Site>,
 
     /// Size of the simulated population
     population_size: usize,
@@ -62,55 +65,52 @@ impl SimulationBuilder {
     }
 
     /// Add a brand to the simulation
-    pub fn with_brand(&mut self, brand: Brand) -> &mut Self {
+    pub fn with_brand(mut self, brand: Brand) -> Self {
         self.brands.push(brand);
         self
     }
 
     /// Add a site to the simulation
-    pub fn with_site(&mut self, name: impl ToString, longitude: f64, latitude: f64) -> &mut Self {
-        self.sites.push((name.to_string(), longitude, latitude));
+    pub fn with_site(mut self, site: Site) -> Self {
+        self.sites.push(site);
         self
     }
 
     /// Set the population size for the simulation
-    pub fn with_population_size(&mut self, population_size: usize) -> &mut Self {
+    pub fn with_population_size(mut self, population_size: usize) -> Self {
         self.population_size = population_size;
         self
     }
 
     /// Set the start time for the simulation
-    pub fn with_start_time(&mut self, start_time: DateTime<Utc>) -> &mut Self {
+    pub fn with_start_time(mut self, start_time: DateTime<Utc>) -> Self {
         self.start_time = start_time;
         self
     }
 
     /// Set the time increment for the simulation
-    pub fn with_time_increment(&mut self, time_increment: Duration) -> &mut Self {
+    pub fn with_time_increment(mut self, time_increment: Duration) -> Self {
         self.time_increment = time_increment;
         self
     }
 
     /// Set the result storage location for the simulation
-    pub fn with_result_storage_location(
-        &mut self,
-        result_storage_location: impl Into<Url>,
-    ) -> &mut Self {
+    pub fn with_result_storage_location(mut self, result_storage_location: impl Into<Url>) -> Self {
         self.result_storage_location = Some(result_storage_location.into());
         self
     }
 
-    pub fn with_snapshot_interval(&mut self, snapshot_interval: Duration) -> &mut Self {
+    pub fn with_snapshot_interval(mut self, snapshot_interval: Duration) -> Self {
         self.snapshot_interval = Some(snapshot_interval);
         self
     }
 
-    pub fn with_routing_nodes(&mut self, routing_nodes: Url) -> &mut Self {
+    pub fn with_routing_nodes(mut self, routing_nodes: Url) -> Self {
         self.routing_nodes = Some(routing_nodes);
         self
     }
 
-    pub fn with_routing_edges(&mut self, routing_edges: Url) -> &mut Self {
+    pub fn with_routing_edges(mut self, routing_edges: Url) -> Self {
         self.routing_edges = Some(routing_edges);
         self
     }
@@ -129,21 +129,11 @@ impl SimulationBuilder {
         let sites = self
             .sites
             .into_iter()
-            .map(|(name, latitude, longitude)| {
-                (
-                    SiteId::from_uri_ref(format!("sites/{name}")),
-                    Site {
-                        id: SiteId::from_uri_ref(format!("sites/{name}")).to_string(),
-                        name: name.to_string(),
-                        latitude,
-                        longitude,
-                    },
-                )
-            })
+            .map(|site| (Uuid::from_str(&site.id).unwrap().into(), site))
             .collect_vec();
 
         let file = std::fs::File::open(
-            "/Users/robert.pack/code/management/notebooks/sites/london/edges.parquet",
+            "/Users/robert.pack/code/management/notebooks/sites/edges/london.parquet",
         )
         .unwrap();
         let reader = ParquetRecordBatchReaderBuilder::try_new(file)?.build()?;
@@ -151,14 +141,14 @@ impl SimulationBuilder {
         let batches: Vec<_> = reader.into_iter().try_collect()?;
         let edges = concat_batches(&schema, &batches)?;
 
-        let Some(node_file) = self.routing_nodes else {
-            return Err(Error::MissingInput(
-                "Routing nodes file not found".to_string(),
-            ));
-        };
+        // let Some(node_file) = self.routing_nodes else {
+        //     return Err(Error::MissingInput(
+        //         "Routing nodes file not found".to_string(),
+        //     ));
+        // };
 
         let file = std::fs::File::open(
-            "/Users/robert.pack/code/management/notebooks/sites/london/nodes.parquet",
+            "/Users/robert.pack/code/management/notebooks/sites/nodes/london.parquet",
         )
         .unwrap();
         let reader = ParquetRecordBatchReaderBuilder::try_new(file)?.build()?;

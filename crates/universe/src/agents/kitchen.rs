@@ -101,13 +101,11 @@ impl KitchenRunner {
             let menu_item = ctx.objects().menu_item(&progress.order_line.item.1)?;
             match &progress.status {
                 OrderLineProcessingStatus::Processing(instruction_idx, stated_time) => {
-                    let expected_duration = menu_item.instructions[*instruction_idx]
-                        .expected_duration
-                        .map(|duration| duration.seconds)
-                        .unwrap_or(0);
+                    let expected_duration =
+                        menu_item.instructions[*instruction_idx].expected_duration;
 
                     // Check if the recipe will be completed within the current time step
-                    if (ctx.next_time() - stated_time).num_seconds() < expected_duration {
+                    if (ctx.next_time() - stated_time).num_seconds() < expected_duration as i64 {
                         continue;
                     }
 
