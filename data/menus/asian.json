@@ -40,25 +40,25 @@
       {
         "step": "marinate-beef",
         "required_station": "KITCHEN_STATION_WORKSTATION",
-        "expected_duration": "600s",
+        "expected_duration": 600,
         "description": "Marinate beef slices with 1 tbsp soy sauce and minced garlic."
       },
       {
         "step": "blanch-broccoli",
         "required_station": "KITCHEN_STATION_STOVE",
-        "expected_duration": "180s",
+        "expected_duration": 180,
         "description": "Blanch broccoli in boiling water, then drain."
       },
       {
         "step": "stir-fry",
         "required_station": "KITCHEN_STATION_STOVE",
-        "expected_duration": "560s",
+        "expected_duration": 560,
         "description": "Stir-fry beef, then add broccoli and remaining soy sauce. Cook until beef is done."
       },
       {
         "step": "serve",
         "required_station": "KITCHEN_STATION_WORKSTATION",
-        "expected_duration": "120s",
+        "expected_duration": 120,
         "description": "Serve hot with steamed rice."
       }
     ]
@@ -104,25 +104,25 @@
       {
         "step": "scramble-egg",
         "required_station": "KITCHEN_STATION_STOVE",
-        "expected_duration": "120s",
+        "expected_duration": 120,
         "description": "Scramble egg in a hot wok, then set aside."
       },
       {
         "step": "stir-fry-veggies",
         "required_station": "KITCHEN_STATION_STOVE",
-        "expected_duration": "180s",
+        "expected_duration": 180,
         "description": "Stir-fry green onion and garlic until fragrant."
       },
       {
         "step": "add-rice",
         "required_station": "KITCHEN_STATION_STOVE",
-        "expected_duration": "180s",
+        "expected_duration": 180,
         "description": "Add rice, stir-fry, and mix in soy sauce."
       },
       {
         "step": "combine",
         "required_station": "KITCHEN_STATION_STOVE",
-        "expected_duration": "120s",
+        "expected_duration": 120,
         "description": "Add scrambled egg back, mix well, and serve."
       }
     ]

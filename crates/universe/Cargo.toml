@@ -26,6 +26,7 @@ h3o = { version = "0.8.0", features = ["geo"] }
 tokio = { version = "1", features = ["full"] }
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 
+arrow = { workspace = true }
 arrow-arith = { workspace = true }
 arrow-array = { workspace = true, features = ["chrono-tz"] }
 arrow-buffer = { workspace = true }

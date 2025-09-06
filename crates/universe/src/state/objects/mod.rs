@@ -205,7 +205,7 @@ impl ObjectData {
             .objects
             .column_by_name("properties")
             .ok_or(VendorDataError::ColumnNotFound("properties"))?
-            .as_string::<i32>();
+            .as_string::<i64>();
         Ok(self.iter_ids()?.zip(properties.iter()).filter_map(
             |((id, parent_id, label), properties)| {
                 id.and_then(|id| {

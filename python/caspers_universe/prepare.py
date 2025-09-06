@@ -13,7 +13,7 @@ from caspers_universe._internal import Site
 
 _EDGE_SCHEMA = pa.schema(
     fields=[
-        pa.field("location", pa.dictionary(pa.int32(), pa.string())),
+        pa.field("location", pa.dictionary(pa.int16(), pa.string())),
         pa.field("source", pa.uuid()),
         pa.field("target", pa.uuid()),
         pa.field(
@@ -35,7 +35,7 @@ _EDGE_SCHEMA = pa.schema(
 
 _NODE_SCHEMA = pa.schema(
     fields=[
-        pa.field("location", pa.dictionary(pa.int32(), pa.string())),
+        pa.field("location", pa.dictionary(pa.int16(), pa.string())),
         pa.field("id", pa.uuid()),
         pa.field(
             "properties",

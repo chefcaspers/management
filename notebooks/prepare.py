@@ -125,9 +125,8 @@ def _(mo):
 def _(mo):
     _df = mo.sql(
         f"""
-        SELECT location, properties, geometry
-        FROM './sites/nodes/*.parquet'
-        WHERE location = 'amsterdam'
+        SELECT *
+        FROM './data/objects/snapshot-1757152376.parquet'
         LIMIT 10
         """
     )

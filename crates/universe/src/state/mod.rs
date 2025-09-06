@@ -1,3 +1,9 @@
+//! Internal state management for the simulation.
+//!
+//! This module provides structures and utilities to manage the internal state of the simulation.
+//! Whenever feasible, state is tracked as Arrow RecordBatches for seamless introp with
+//! external data storages that might be used to store the state.
+
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -42,9 +48,6 @@ impl From<StateError> for Error {
         Error::InternalError(err.to_string())
     }
 }
-
-// TODO:
-//   - order data by labels and track slices for fast lookups.
 
 pub struct State {
     config: SimulationConfig,
@@ -117,7 +120,23 @@ impl State {
         &self.orders
     }
 
-    pub fn update_order_lines<'a>(
+    pub fn trip_planner(&self) -> &JourneyPlanner {
+        &self.routing
+    }
+
+    pub fn current_time(&self) -> DateTime<Utc> {
+        self.time
+    }
+
+    pub fn time_step(&self) -> Duration {
+        self.time_step
+    }
+
+    pub(crate) fn next_time(&self) -> DateTime<Utc> {
+        self.time + self.time_step
+    }
+
+    pub(crate) fn update_order_lines<'a>(
         &mut self,
         updates: impl IntoIterator<Item = &'a OrderLineUpdatedPayload>,
     ) -> Result<()> {
@@ -129,7 +148,7 @@ impl State {
         Ok(())
     }
 
-    pub fn update_orders<'a>(
+    pub(crate) fn update_orders<'a>(
         &mut self,
         updates: impl IntoIterator<Item = &'a OrderUpdatedPayload>,
     ) -> Result<()> {
@@ -139,10 +158,6 @@ impl State {
                 .map(|payload| (payload.order_id, &payload.status)),
         )?;
         Ok(())
-    }
-
-    pub fn trip_planner(&self) -> &JourneyPlanner {
-        &self.routing
     }
 
     pub(crate) fn process_orders<'a>(
@@ -168,18 +183,6 @@ impl State {
         let order_ids = order_data.orders().map(|o| *o.id()).collect_vec();
         self.orders = self.orders.merge(order_data)?;
         Ok(order_ids)
-    }
-
-    pub fn time_step(&self) -> Duration {
-        self.time_step
-    }
-
-    pub fn current_time(&self) -> DateTime<Utc> {
-        self.time
-    }
-
-    pub(crate) fn next_time(&self) -> DateTime<Utc> {
-        self.time + self.time_step
     }
 
     /// Advance people's journeys and update their statuses on arrival at their destination.
@@ -250,7 +253,7 @@ pub trait EntityView {
             .objects()
             .column_by_name("properties")
             .ok_or(StateError::InconsistentData)?
-            .as_string::<i32>()
+            .as_string::<i64>()
             .value(self.valid_index());
         Ok(serde_json::from_str(raw)?)
     }

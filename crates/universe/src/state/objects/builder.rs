@@ -1,10 +1,11 @@
 use std::sync::{Arc, LazyLock};
 
-use arrow_array::RecordBatch;
-use arrow_array::builder::{
+use arrow::array::builder::{
     FixedSizeBinaryBuilder, ListBuilder, StringBuilder, TimestampMillisecondBuilder,
 };
-use arrow_schema::{DataType, Field, Schema, SchemaRef, TimeUnit};
+use arrow::array::{LargeStringBuilder, RecordBatch};
+use arrow::datatypes::{DataType, Field, Schema, SchemaRef, TimeUnit};
+use arrow_schema::extension::{Json as JsonExtension, Uuid as UuidExtension};
 
 use crate::error::Result;
 use crate::idents::{BrandId, KitchenId, MenuItemId, SiteId, StationId};
@@ -13,15 +14,17 @@ use crate::state::ObjectLabel;
 
 static OBJECT_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
     Arc::new(Schema::new(vec![
-        Field::new("id", DataType::FixedSizeBinary(16), false),
-        Field::new("parent_id", DataType::FixedSizeBinary(16), true),
+        Field::new("id", DataType::FixedSizeBinary(16), false).with_extension_type(UuidExtension),
+        Field::new("parent_id", DataType::FixedSizeBinary(16), true)
+            .with_extension_type(UuidExtension),
         Field::new("label", DataType::Utf8, false),
         Field::new(
             "name",
             DataType::List(Arc::new(Field::new_list_field(DataType::Utf8, true))),
             false,
         ),
-        Field::new("properties", DataType::Utf8, true),
+        Field::new("properties", DataType::LargeUtf8, true)
+            .with_extension_type(JsonExtension::default()),
         Field::new(
             "created_at",
             DataType::Timestamp(TimeUnit::Millisecond, Some("UTC".into())),
@@ -40,7 +43,7 @@ pub struct ObjectDataBuilder {
     parent_id: FixedSizeBinaryBuilder,
     name: ListBuilder<StringBuilder>,
     label: StringBuilder,
-    properties: StringBuilder,
+    properties: LargeStringBuilder,
     created_at: TimestampMillisecondBuilder,
     updated_at: TimestampMillisecondBuilder,
 }
@@ -58,7 +61,7 @@ impl ObjectDataBuilder {
             parent_id: FixedSizeBinaryBuilder::new(16),
             name: ListBuilder::new(StringBuilder::new()),
             label: StringBuilder::new(),
-            properties: StringBuilder::new(),
+            properties: LargeStringBuilder::new(),
             created_at: TimestampMillisecondBuilder::new().with_timezone("UTC"),
             updated_at: TimestampMillisecondBuilder::new().with_timezone("UTC"),
         }

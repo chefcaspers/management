@@ -129,7 +129,7 @@ impl SimulationBuilder {
         let sites = self
             .sites
             .into_iter()
-            .map(|site| (Uuid::from_str(&site.id).unwrap().into(), site))
+            .map(|site| (Uuid::parse_str(&site.id).unwrap().into(), site))
             .collect_vec();
 
         let file = std::fs::File::open(

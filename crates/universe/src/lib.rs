@@ -47,8 +47,6 @@ pub fn run_simulation(
     duration: usize,
     output_location: Url,
 ) -> Result<(), Error> {
-    tracing_subscriber::fmt::init();
-
     let simulation = SimulationBuilder::new()
         .with_result_storage_location(output_location)
         .with_snapshot_interval(Duration::minutes(10))
