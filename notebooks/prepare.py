@@ -34,10 +34,7 @@ def _(mo):
 
 
 @app.cell
-def _(Site, pq, prepare_site):
-    # this cell might error when marimo processes results,
-    # the variables will still be assigned
-
+def _(Site):
     sites = [
         Site(
             name="london",
@@ -50,46 +47,38 @@ def _(Site, pq, prepare_site):
             longitude=4.888889169536197,
         ),
     ]
+    return (sites,)
 
+
+@app.cell
+def routing_data(pq, prepare_site, sites):
+    # this cell might error when marimo processes results,
+    # the variables will still be assigned
     for site in sites:
         nodes, edges = prepare_site(site)
         pq.write_table(nodes, f"./sites/nodes/{site.name}.parquet")
         pq.write_table(edges, f"./sites/edges/{site.name}.parquet")
 
     print("done")
-    return (sites,)
+    return
 
 
-@app.cell
-def _(sites):
-    import folium
-    import h3
+@app.cell(hide_code=True)
+def site_input(mo):
+    dropdown = mo.ui.dropdown(
+        options={"london": 0, "amsterdam": 1},
+        value="london",
+        label="pick a location",
+    )
+    dropdown
+    return (dropdown,)
 
 
-    plot_people = False
+@app.cell(hide_code=True)
+def site_plot(dropdown, sites):
+    from caspers_universe import plot_site
 
-    site_idx = 1
-    lat, lng = sites[site_idx].latitude, sites[site_idx].longitude
-
-    m = folium.Map(location=[lat, lng], zoom_start=13, tiles="CartoDB dark_matter")
-
-    cell = h3.latlng_to_cell(lat, lng, 9)
-    location = h3.cells_to_geo([cell])
-    folium.GeoJson(location).add_to(m)
-
-    # cells = h3.grid_disk(cell, 1)
-    # pickup_area = h3.cells_to_geo(cells)
-    # folium.GeoJson(pickup_area).add_to(m)
-
-    cells = h3.grid_disk(cell, 10)
-    delivery_area = h3.cells_to_geo(cells)
-    folium.GeoJson(delivery_area).add_to(m)
-
-    folium.Marker(
-        location=[lat, lng],
-        popup="Chef Casper's Kitchen",
-        icon=folium.Icon(color="red", icon="kitchen-set", prefix="fa"),
-    ).add_to(m)
+    plot_site(sites[dropdown.value])
 
     # population = pl.read_parquet("./data/population/1745768936.parquet")
     # if plot_people:
@@ -103,43 +92,6 @@ def _(sites):
     #                 prefix="fa",
     #             ),
     #         ).add_to(m)
-
-    m
-    return
-
-
-@app.cell
-def _(mo):
-    _df = mo.sql(
-        f"""
-        INSTALL spatial;
-
-        LOAD spatial;
-        """,
-        output=False
-    )
-    return
-
-
-@app.cell
-def _(mo):
-    _df = mo.sql(
-        f"""
-        SELECT *
-        FROM './data/objects/snapshot-1757152376.parquet'
-        LIMIT 10
-        """
-    )
-    return
-
-
-@app.cell
-def _(mo):
-    _df = mo.sql(
-        f"""
-        SELECT * FROM './data/population/positions/snapshot-1757106332.parquet' LIMIT 10;
-        """
-    )
     return
 
 

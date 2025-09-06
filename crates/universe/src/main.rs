@@ -33,7 +33,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .collect();
 
-    run_simulation(sites, brands, 50, path)?;
+    run_simulation(sites, brands, 500, path)?;
 
     Ok(())
 }
