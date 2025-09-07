@@ -1,3 +1,9 @@
+//! Internal state management for the simulation.
+//!
+//! This module provides structures and utilities to manage the internal state of the simulation.
+//! Whenever feasible, state is tracked as Arrow RecordBatches for seamless introp with
+//! external data storages that might be used to store the state.
+
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -13,8 +19,10 @@ use uuid::Uuid;
 use self::movement::JourneyPlanner;
 use super::{EventPayload, SimulationConfig};
 use crate::error::Result;
-use crate::models::{Brand, Site};
-use crate::{OrderCreatedPayload, OrderLineUpdatedPayload, OrderUpdatedPayload, idents::*};
+use crate::models::Brand;
+use crate::{
+    Error, OrderCreatedPayload, OrderLineUpdatedPayload, OrderUpdatedPayload, SiteSetup, idents::*,
+};
 
 pub(crate) use self::movement::RoutingData;
 pub(crate) use self::objects::{ObjectData, ObjectDataBuilder, ObjectLabel};
@@ -37,8 +45,11 @@ enum StateError {
     InconsistentData,
 }
 
-// TODO:
-//   - order data by labels and track slices for fast lookups.
+impl From<StateError> for Error {
+    fn from(err: StateError) -> Self {
+        Error::InternalError(err.to_string())
+    }
+}
 
 pub struct State {
     config: SimulationConfig,
@@ -65,14 +76,19 @@ pub struct State {
 impl State {
     pub(crate) fn try_new(
         brands: impl IntoIterator<Item = (BrandId, Brand)>,
-        sites: Vec<(SiteId, Site)>,
+        sites: Vec<SiteSetup>,
         routing: RoutingData,
         config: Option<SimulationConfig>,
     ) -> Result<Self> {
         let mut builder = PopulationDataBuilder::new();
-        for (_site_id, site) in &sites {
+
+        for site in &sites {
             let n_people = rand::rng().random_range(500..1500);
-            builder.add_site(site, n_people)?;
+            let info = site
+                .info
+                .as_ref()
+                .ok_or(Error::invalid_data("expected site info"))?;
+            builder.add_site(info, n_people)?;
         }
 
         let brands: HashMap<_, _> = brands.into_iter().collect();
@@ -111,7 +127,23 @@ impl State {
         &self.orders
     }
 
-    pub fn update_order_lines<'a>(
+    pub fn trip_planner(&self) -> &JourneyPlanner {
+        &self.routing
+    }
+
+    pub fn current_time(&self) -> DateTime<Utc> {
+        self.time
+    }
+
+    pub fn time_step(&self) -> Duration {
+        self.time_step
+    }
+
+    pub(crate) fn next_time(&self) -> DateTime<Utc> {
+        self.time + self.time_step
+    }
+
+    pub(crate) fn update_order_lines<'a>(
         &mut self,
         updates: impl IntoIterator<Item = &'a OrderLineUpdatedPayload>,
     ) -> Result<()> {
@@ -123,7 +155,7 @@ impl State {
         Ok(())
     }
 
-    pub fn update_orders<'a>(
+    pub(crate) fn update_orders<'a>(
         &mut self,
         updates: impl IntoIterator<Item = &'a OrderUpdatedPayload>,
     ) -> Result<()> {
@@ -133,10 +165,6 @@ impl State {
                 .map(|payload| (payload.order_id, &payload.status)),
         )?;
         Ok(())
-    }
-
-    pub fn trip_planner(&self) -> &JourneyPlanner {
-        &self.routing
     }
 
     pub(crate) fn process_orders<'a>(
@@ -162,18 +190,6 @@ impl State {
         let order_ids = order_data.orders().map(|o| *o.id()).collect_vec();
         self.orders = self.orders.merge(order_data)?;
         Ok(order_ids)
-    }
-
-    pub fn time_step(&self) -> Duration {
-        self.time_step
-    }
-
-    pub fn current_time(&self) -> DateTime<Utc> {
-        self.time
-    }
-
-    pub(crate) fn next_time(&self) -> DateTime<Utc> {
-        self.time + self.time_step
     }
 
     /// Advance people's journeys and update their statuses on arrival at their destination.
@@ -244,7 +260,7 @@ pub trait EntityView {
             .objects()
             .column_by_name("properties")
             .ok_or(StateError::InconsistentData)?
-            .as_string::<i32>()
+            .as_string::<i64>()
             .value(self.valid_index());
         Ok(serde_json::from_str(raw)?)
     }

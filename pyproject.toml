@@ -8,7 +8,7 @@ dependencies = [
     "daft>=0.4.14",
     "deltalake>=0.25.5",
     "duckdb>=1.2.2",
-    "folium>=0.19.5",
+    "folium>=0.20.0",
     "geoarrow-pandas>=0.1.1",
     "geoarrow-pyarrow>=0.1.2",
     "geoarrow-rust-core>=0.3.0",
@@ -18,10 +18,9 @@ dependencies = [
     "geoplot>=0.5.1",
     "geopy>=2.4.1",
     "h3>=4.2.2",
-    "ipykernel>=6.29.5",
+    "marimo[recommended]>=0.15.2",
     "matplotlib>=3.10.1",
-    "memory-profiler>=0.61.0",
-    "nbformat>=5.10.4",
+    "networkx>=3.4.2",
     "osmnx>=2.0.2",
     "pint>=0.24.4",
     "plotly>=6.0.1",
@@ -29,3 +28,13 @@ dependencies = [
     "pyarrow-stubs>=19.1",
     "shapely>=2.1.0",
 ]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["python/"]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"

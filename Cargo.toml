@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/*"]
+members = ["crates/*", "python/"]
 
 [workspace.dependencies]
 async-trait = { version = "0.1.83" }
@@ -33,6 +33,7 @@ arrow-ord = { version = "56" }
 arrow-row = { version = "56" }
 arrow-schema = { version = "56" }
 arrow-select = { version = "56" }
+object_store = { version = "0.12.3" }
 parquet = { version = "56" }
 
 # datafusion

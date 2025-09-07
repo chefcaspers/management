@@ -1,8 +1,7 @@
-use chrono::Duration;
 use clap::Parser;
 use url::Url;
 
-use caspers_universe::{Result, SimulationBuilder};
+use caspers_universe::{Result, load_simulation_setup, run_simulation};
 
 #[derive(Debug, Clone, clap::Parser)]
 #[command(name = "caspers-universe", version, about = "Running Caspers Universe", long_about = None)]
@@ -12,33 +11,25 @@ struct Cli {
 
     #[arg(short, long, default_value_t = 1000)]
     population: u32,
+
+    #[arg(short, long, default_value_t = 100)]
+    duration: usize,
 }
 
-fn main() -> Result<()> {
+#[tokio::main(flavor = "multi_thread")]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
-    let _cli = Cli::parse();
+    let cli = Cli::parse();
 
-    let path = Url::parse("file:///Users/robert.pack/code/management/notebooks/data/")?;
-    let mut simulation = SimulationBuilder::new();
-    simulation
-        .with_result_storage_location(path)
-        .with_snapshot_interval(Duration::minutes(10))
-        .with_time_increment(Duration::minutes(1));
+    let path = Url::parse("file:///Users/robert.pack/code/management/data")?;
+    let mut setup = load_simulation_setup(&path, None::<(&str, &str)>).await?;
+    setup
+        .sites
+        .retain(|site| site.info.as_ref().map(|i| i.name.as_str()) == Some("london"));
 
-    for brand in caspers_universe::init::generate_brands() {
-        simulation.with_brand(brand);
-    }
-
-    let sites = vec![("london", (51.518898098201326, -0.13381370382489707))];
-    // let sites = vec![("amsterdam", (52.3358324410348, 4.888889169536197))];
-    for (name, (lat, long)) in sites {
-        simulation.with_site(name, lat, long);
-    }
-
-    let mut simulation = simulation.build()?;
-
-    simulation.run(500)?;
+    let data_path = Url::parse("file:///Users/robert.pack/code/management/notebooks/data/")?;
+    run_simulation(setup, cli.duration, data_path).await?;
 
     Ok(())
 }

@@ -1,0 +1,28 @@
+{
+  "info": {
+    "name": "amsterdam",
+    "latitude": 52.3358324410348,
+    "longitude": 4.888889169536197
+  },
+  "kitchens": [
+    {
+      "info": {
+        "name": "kitchen-1"
+      },
+      "stations": [
+        {
+          "name": "workstation-1",
+          "station_type": "KITCHEN_STATION_WORKSTATION"
+        },
+        {
+          "name": "oven-1",
+          "station_type": "KITCHEN_STATION_OVEN"
+        },
+        {
+          "name": "stove-1",
+          "station_type": "KITCHEN_STATION_STOVE"
+        }
+      ]
+    }
+  ]
+}

@@ -36,7 +36,7 @@ impl serde::Serialize for CloudEvent {
             struct_ser.serialize_field("source", &self.source)?;
         }
         if !self.spec_version.is_empty() {
-            struct_ser.serialize_field("specVersion", &self.spec_version)?;
+            struct_ser.serialize_field("spec_version", &self.spec_version)?;
         }
         if !self.r#type.is_empty() {
             struct_ser.serialize_field("type", &self.r#type)?;
@@ -52,13 +52,13 @@ impl serde::Serialize for CloudEvent {
                 cloud_event::Data::BinaryData(v) => {
                     #[allow(clippy::needless_borrow)]
                     #[allow(clippy::needless_borrows_for_generic_args)]
-                    struct_ser.serialize_field("binaryData", pbjson::private::base64::encode(&v).as_str())?;
+                    struct_ser.serialize_field("binary_data", pbjson::private::base64::encode(&v).as_str())?;
                 }
                 cloud_event::Data::TextData(v) => {
-                    struct_ser.serialize_field("textData", v)?;
+                    struct_ser.serialize_field("text_data", v)?;
                 }
                 cloud_event::Data::ProtoData(v) => {
-                    struct_ser.serialize_field("protoData", v)?;
+                    struct_ser.serialize_field("proto_data", v)?;
                 }
             }
         }
@@ -248,27 +248,27 @@ impl serde::Serialize for cloud_event::CloudEventAttributeValue {
         if let Some(v) = self.attr.as_ref() {
             match v {
                 cloud_event::cloud_event_attribute_value::Attr::CeBoolean(v) => {
-                    struct_ser.serialize_field("ceBoolean", v)?;
+                    struct_ser.serialize_field("ce_boolean", v)?;
                 }
                 cloud_event::cloud_event_attribute_value::Attr::CeInteger(v) => {
-                    struct_ser.serialize_field("ceInteger", v)?;
+                    struct_ser.serialize_field("ce_integer", v)?;
                 }
                 cloud_event::cloud_event_attribute_value::Attr::CeString(v) => {
-                    struct_ser.serialize_field("ceString", v)?;
+                    struct_ser.serialize_field("ce_string", v)?;
                 }
                 cloud_event::cloud_event_attribute_value::Attr::CeBytes(v) => {
                     #[allow(clippy::needless_borrow)]
                     #[allow(clippy::needless_borrows_for_generic_args)]
-                    struct_ser.serialize_field("ceBytes", pbjson::private::base64::encode(&v).as_str())?;
+                    struct_ser.serialize_field("ce_bytes", pbjson::private::base64::encode(&v).as_str())?;
                 }
                 cloud_event::cloud_event_attribute_value::Attr::CeUri(v) => {
-                    struct_ser.serialize_field("ceUri", v)?;
+                    struct_ser.serialize_field("ce_uri", v)?;
                 }
                 cloud_event::cloud_event_attribute_value::Attr::CeUriRef(v) => {
-                    struct_ser.serialize_field("ceUriRef", v)?;
+                    struct_ser.serialize_field("ce_uri_ref", v)?;
                 }
                 cloud_event::cloud_event_attribute_value::Attr::CeTimestamp(v) => {
-                    struct_ser.serialize_field("ceTimestamp", v)?;
+                    struct_ser.serialize_field("ce_timestamp", v)?;
                 }
             }
         }
@@ -537,7 +537,7 @@ impl serde::Serialize for LineItem {
             struct_ser.serialize_field("id", &self.id)?;
         }
         if !self.product_id.is_empty() {
-            struct_ser.serialize_field("productId", &self.product_id)?;
+            struct_ser.serialize_field("product_id", &self.product_id)?;
         }
         if self.quantity != 0 {
             struct_ser.serialize_field("quantity", &self.quantity)?;
@@ -546,7 +546,7 @@ impl serde::Serialize for LineItem {
             struct_ser.serialize_field("price", &self.price)?;
         }
         if self.total_price != 0. {
-            struct_ser.serialize_field("totalPrice", &self.total_price)?;
+            struct_ser.serialize_field("total_price", &self.total_price)?;
         }
         struct_ser.end()
     }
@@ -702,10 +702,10 @@ impl serde::Serialize for Order {
             struct_ser.serialize_field("id", &self.id)?;
         }
         if !self.customer_id.is_empty() {
-            struct_ser.serialize_field("customerId", &self.customer_id)?;
+            struct_ser.serialize_field("customer_id", &self.customer_id)?;
         }
         if !self.line_items.is_empty() {
-            struct_ser.serialize_field("lineItems", &self.line_items)?;
+            struct_ser.serialize_field("line_items", &self.line_items)?;
         }
         struct_ser.end()
     }

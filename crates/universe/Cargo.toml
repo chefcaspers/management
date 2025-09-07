@@ -26,6 +26,7 @@ h3o = { version = "0.8.0", features = ["geo"] }
 tokio = { version = "1", features = ["full"] }
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 
+arrow = { workspace = true }
 arrow-arith = { workspace = true }
 arrow-array = { workspace = true, features = ["chrono-tz"] }
 arrow-buffer = { workspace = true }
@@ -40,6 +41,7 @@ arrow-schema = { workspace = true, features = [
 ] }
 arrow-select = { workspace = true }
 datafusion = { workspace = true }
+object_store = { workspace = true }
 parquet = { workspace = true }
 geoarrow = { workspace = true }
 geoarrow-array = { workspace = true }
@@ -57,7 +59,13 @@ strum = { version = "0.27", features = ["derive"] }
 fast_paths = "1.0.0"
 bincode = { version = "2", features = ["serde"] }
 
+pyo3 = { version = "0.25", optional = true }
+
 [dev-dependencies]
 approx = "0.5.1"
 arrow = { workspace = true }
 test-log = "0.2.17"
+
+[features]
+default = []
+python = ["pyo3"]

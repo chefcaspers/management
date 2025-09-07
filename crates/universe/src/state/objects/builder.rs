@@ -1,27 +1,31 @@
 use std::sync::{Arc, LazyLock};
 
-use arrow_array::RecordBatch;
-use arrow_array::builder::{
+use arrow::array::builder::{
     FixedSizeBinaryBuilder, ListBuilder, StringBuilder, TimestampMillisecondBuilder,
 };
-use arrow_schema::{DataType, Field, Schema, SchemaRef, TimeUnit};
+use arrow::array::{LargeStringBuilder, RecordBatch};
+use arrow::datatypes::{DataType, Field, Schema, SchemaRef, TimeUnit};
+use arrow_schema::extension::{Json as JsonExtension, Uuid as UuidExtension};
 
+use crate::Error;
 use crate::error::Result;
 use crate::idents::{BrandId, KitchenId, MenuItemId, SiteId, StationId};
-use crate::models::{Brand, KitchenStation, Site, SiteSetup, Station};
+use crate::models::{Brand, SiteSetup};
 use crate::state::ObjectLabel;
 
 static OBJECT_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
     Arc::new(Schema::new(vec![
-        Field::new("id", DataType::FixedSizeBinary(16), false),
-        Field::new("parent_id", DataType::FixedSizeBinary(16), true),
+        Field::new("id", DataType::FixedSizeBinary(16), false).with_extension_type(UuidExtension),
+        Field::new("parent_id", DataType::FixedSizeBinary(16), true)
+            .with_extension_type(UuidExtension),
         Field::new("label", DataType::Utf8, false),
         Field::new(
             "name",
             DataType::List(Arc::new(Field::new_list_field(DataType::Utf8, true))),
             false,
         ),
-        Field::new("properties", DataType::Utf8, true),
+        Field::new("properties", DataType::LargeUtf8, true)
+            .with_extension_type(JsonExtension::default()),
         Field::new(
             "created_at",
             DataType::Timestamp(TimeUnit::Millisecond, Some("UTC".into())),
@@ -40,7 +44,7 @@ pub struct ObjectDataBuilder {
     parent_id: FixedSizeBinaryBuilder,
     name: ListBuilder<StringBuilder>,
     label: StringBuilder,
-    properties: StringBuilder,
+    properties: LargeStringBuilder,
     created_at: TimestampMillisecondBuilder,
     updated_at: TimestampMillisecondBuilder,
 }
@@ -58,7 +62,7 @@ impl ObjectDataBuilder {
             parent_id: FixedSizeBinaryBuilder::new(16),
             name: ListBuilder::new(StringBuilder::new()),
             label: StringBuilder::new(),
-            properties: StringBuilder::new(),
+            properties: LargeStringBuilder::new(),
             created_at: TimestampMillisecondBuilder::new().with_timezone("UTC"),
             updated_at: TimestampMillisecondBuilder::new().with_timezone("UTC"),
         }
@@ -94,29 +98,33 @@ impl ObjectDataBuilder {
         }
     }
 
-    pub fn append_site_info(&mut self, site_id: SiteId, site: &SiteSetup) {
-        let site_info = site.info.as_ref().unwrap();
+    pub fn append_site_info(&mut self, site: &SiteSetup) -> Result<()> {
+        let site_info = site
+            .info
+            .as_ref()
+            .ok_or(Error::invalid_data("expected site info object"))?;
+        let site_id: SiteId = uuid::Uuid::parse_str(&site_info.id)?.into();
 
-        self.id.append_value(site_id).unwrap();
+        self.id.append_value(site_id)?;
         self.parent_id.append_null();
         self.label.append_value(ObjectLabel::Site);
         self.name
             .append_value([Some("sites"), Some(&site_info.name)]);
         self.properties
-            .append_value(serde_json::to_string(site_info).unwrap());
+            .append_value(serde_json::to_string(site_info)?);
         self.created_at
             .append_value(chrono::Utc::now().timestamp_millis());
         self.updated_at.append_null();
 
         for kitchen in &site.kitchens {
-            let kitchen_info = kitchen.info.as_ref().unwrap();
+            let kitchen_info = kitchen
+                .info
+                .as_ref()
+                .ok_or(Error::invalid_data("expected kitchen info object"))?;
 
-            let kitchen_id = KitchenId::from_uri_ref(format!(
-                "sites/{}/kitchens/{}",
-                site_info.name, kitchen_info.name
-            ));
-            self.id.append_value(kitchen_id).unwrap();
-            self.parent_id.append_value(site_id).unwrap();
+            let kitchen_id: KitchenId = uuid::Uuid::parse_str(&kitchen_info.id)?.into();
+            self.id.append_value(kitchen_id)?;
+            self.parent_id.append_value(site_id)?;
             self.label.append_value(ObjectLabel::Kitchen);
             self.name.append_value([
                 Some("sites"),
@@ -130,10 +138,7 @@ impl ObjectDataBuilder {
             self.updated_at.append_null();
 
             for station in &kitchen.stations {
-                let station_id = StationId::from_uri_ref(format!(
-                    "sites/{}/kitchens/{}/stations/{}",
-                    site_info.name, kitchen_info.name, station.name
-                ));
+                let station_id: StationId = uuid::Uuid::parse_str(&station.id)?.into();
                 self.id.append_value(station_id).unwrap();
                 self.parent_id.append_value(kitchen_id).unwrap();
                 self.label.append_value(ObjectLabel::Station);
@@ -152,72 +157,8 @@ impl ObjectDataBuilder {
                 self.updated_at.append_null();
             }
         }
-    }
 
-    pub fn append_site(&mut self, site_id: SiteId, site: &Site) {
-        self.id.append_value(site_id).unwrap();
-        self.parent_id.append_null();
-        self.label.append_value(ObjectLabel::Site);
-        self.name.append_value([Some("sites"), Some(&site.name)]);
-        self.properties
-            .append_value(serde_json::to_string(&site).unwrap());
-        self.created_at
-            .append_value(chrono::Utc::now().timestamp_millis());
-        self.updated_at.append_null();
-
-        for idx in 0..=5 {
-            let kitchen_name = format!("kitchen-{idx}");
-            let kitchen_id =
-                KitchenId::from_uri_ref(format!("sites/{}/kitchens/{}", site.name, kitchen_name));
-            self.id.append_value(kitchen_id).unwrap();
-            self.parent_id.append_value(site_id).unwrap();
-            self.label.append_value(ObjectLabel::Kitchen);
-            self.name.append_value([
-                Some("sites"),
-                Some(&site.name),
-                Some("kitchens"),
-                Some(&kitchen_name),
-            ]);
-            self.properties.append_null();
-            self.created_at
-                .append_value(chrono::Utc::now().timestamp_millis());
-            self.updated_at.append_null();
-
-            for station in [
-                KitchenStation::Workstation,
-                KitchenStation::Oven,
-                KitchenStation::Stove,
-            ] {
-                let station_name = station.as_str_name().to_lowercase();
-                let station_id = StationId::from_uri_ref(format!(
-                    "sites/{}/kitchens/{}/stations/{}",
-                    site.name, kitchen_name, station_name
-                ));
-                self.id.append_value(station_id).unwrap();
-                self.parent_id.append_value(kitchen_id).unwrap();
-                self.label.append_value(ObjectLabel::Station);
-                self.name.append_value([
-                    Some("sites"),
-                    Some(&site.name),
-                    Some("kitchens"),
-                    Some(&kitchen_name),
-                    Some("stations"),
-                    Some(&station_name),
-                ]);
-
-                let station_props = Station {
-                    id: Some(station_id.to_string()),
-                    name: station_name.to_string(),
-                    station_type: station as i32,
-                };
-                self.properties
-                    .append_value(serde_json::to_string(&station_props).unwrap());
-
-                self.created_at
-                    .append_value(chrono::Utc::now().timestamp_millis());
-                self.updated_at.append_null();
-            }
-        }
+        Ok(())
     }
 
     pub fn finish(mut self) -> Result<RecordBatch> {

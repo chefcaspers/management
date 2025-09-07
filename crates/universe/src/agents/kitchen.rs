@@ -24,7 +24,7 @@ enum StationStatus {
 ///
 /// Represents a station in the kitchen where certain instructions can be executed.
 /// This can be a workstation - i.e. a place where a chef can perform a task and
-/// has cutting board, knives, and other necessary tools - or some more complex station
+/// has cutting board, knives, and other necessary tools - or some other station
 /// such as a freezer, stove, or oven.
 #[derive(Clone)]
 struct StationRunner {
@@ -101,13 +101,11 @@ impl KitchenRunner {
             let menu_item = ctx.objects().menu_item(&progress.order_line.item.1)?;
             match &progress.status {
                 OrderLineProcessingStatus::Processing(instruction_idx, stated_time) => {
-                    let expected_duration = menu_item.instructions[*instruction_idx]
-                        .expected_duration
-                        .map(|duration| duration.seconds)
-                        .unwrap_or(0);
+                    let expected_duration =
+                        menu_item.instructions[*instruction_idx].expected_duration;
 
                     // Check if the recipe will be completed within the current time step
-                    if (ctx.next_time() - stated_time).num_seconds() < expected_duration {
+                    if (ctx.next_time() - stated_time).num_seconds() < expected_duration as i64 {
                         continue;
                     }
 
@@ -275,10 +273,11 @@ fn release_station(assets: &mut Vec<StationRunner>, asset_type: &i32, recipe_id:
     for asset in assets {
         if &(asset.station_type as i32) == asset_type
             && let StationStatus::Busy(id) = &asset.status
-                && id == recipe_id {
-                    asset.status = StationStatus::Available;
-                    break;
-                }
+            && id == recipe_id
+        {
+            asset.status = StationStatus::Available;
+            break;
+        }
     }
 }
 

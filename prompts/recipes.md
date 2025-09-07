@@ -1,5 +1,6 @@
 We want to generate some realistic data for various recipes that can be prepared in a kitchen.
-Each recipe should have a list of ingredients and a list of instructions on how to prepare the dish. The data should be in JSON format.
+Each recipe should have a list of ingredients and a list of instructions on how to prepare the dish.
+The data should be in JSON format.
 
 The collected recipe data should be formatted in JSON as the following <example>:
 

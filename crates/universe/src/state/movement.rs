@@ -3,6 +3,7 @@ use std::sync::LazyLock;
 
 use arrow_array::cast::AsArray as _;
 use arrow_array::{RecordBatch, types::Float64Type};
+use arrow_schema::extension::Uuid as UuidExtension;
 use arrow_schema::{DataType, Field, Schema, SchemaRef};
 use datafusion::common::SchemaExt;
 use fast_paths::{FastGraph, InputGraph, PathCalculator};
@@ -314,7 +315,7 @@ impl RoutingData {
 
         let ids = nodes.column(1).as_fixed_size_binary();
         for id in ids.iter().flatten() {
-            let id = Uuid::from_slice(id).unwrap();
+            let id = Uuid::from_slice(id)?;
             node_map.insert(id);
         }
 
@@ -323,8 +324,8 @@ impl RoutingData {
         let targets = edges.column(2).as_fixed_size_binary();
         for (index, (source, target)) in sources.iter().zip(targets.iter()).enumerate() {
             if let (Some(source), Some(target)) = (source, target) {
-                let source = Uuid::from_slice(source).unwrap();
-                let target = Uuid::from_slice(target).unwrap();
+                let source = Uuid::from_slice(source)?;
+                let target = Uuid::from_slice(target)?;
                 let source_index = node_map.get_index_of(&source).unwrap();
                 let target_index = node_map.get_index_of(&target).unwrap();
                 edge_map.insert((source_index, target_index), index);
@@ -353,18 +354,17 @@ impl RoutingData {
     }
 
     fn nodes_schema() -> SchemaRef {
-        use arrow_schema::extension::Uuid as UuidExtension;
         static NODE_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
             SchemaRef::new(Schema::new(vec![
-                Field::new("location", DataType::Utf8, true),
-                Field::new("id", DataType::FixedSizeBinary(16), true)
+                Field::new("location", DataType::Utf8, false),
+                Field::new("id", DataType::FixedSizeBinary(16), false)
                     .with_extension_type(UuidExtension),
                 Field::new(
                     "properties",
                     DataType::Struct(
                         vec![
                             Field::new("highway", DataType::Utf8, true),
-                            Field::new("junction", DataType::Utf8, true),
+                            // Field::new("junction", DataType::Utf8, true),
                             Field::new("osmid", DataType::Int64, true),
                             Field::new("railway", DataType::Utf8, true),
                             Field::new("ref", DataType::Utf8, true),
@@ -395,8 +395,10 @@ impl RoutingData {
         static EDGE_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
             SchemaRef::new(Schema::new(vec![
                 Field::new("location", DataType::Utf8, false),
-                Field::new("source", DataType::FixedSizeBinary(16), false),
-                Field::new("target", DataType::FixedSizeBinary(16), false),
+                Field::new("source", DataType::FixedSizeBinary(16), false)
+                    .with_extension_type(UuidExtension),
+                Field::new("target", DataType::FixedSizeBinary(16), false)
+                    .with_extension_type(UuidExtension),
                 Field::new(
                     "properties",
                     DataType::Struct(
