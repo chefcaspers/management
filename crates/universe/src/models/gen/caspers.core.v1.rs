@@ -141,16 +141,17 @@ fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.Ingredient".
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Brand {
+    /// unique identifier for the brand
     #[prost(string, tag="1")]
-    pub name: ::prost::alloc::string::String,
+    pub id: ::prost::alloc::string::String,
     #[prost(string, tag="2")]
-    pub description: ::prost::alloc::string::String,
+    pub name: ::prost::alloc::string::String,
     #[prost(string, tag="3")]
+    pub description: ::prost::alloc::string::String,
+    #[prost(string, tag="4")]
     pub category: ::prost::alloc::string::String,
-    #[prost(message, repeated, tag="4")]
+    #[prost(message, repeated, tag="5")]
     pub items: ::prost::alloc::vec::Vec<MenuItem>,
-    #[prost(string, optional, tag="5")]
-    pub id: ::core::option::Option<::prost::alloc::string::String>,
 }
 impl ::prost::Name for Brand {
 const NAME: &'static str = "Brand";

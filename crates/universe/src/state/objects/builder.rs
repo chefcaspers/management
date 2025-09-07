@@ -105,7 +105,7 @@ impl ObjectDataBuilder {
             .ok_or(Error::invalid_data("expected site info object"))?;
         let site_id: SiteId = uuid::Uuid::parse_str(&site_info.id)?.into();
 
-        self.id.append_value(&site_id)?;
+        self.id.append_value(site_id)?;
         self.parent_id.append_null();
         self.label.append_value(ObjectLabel::Site);
         self.name
@@ -124,7 +124,7 @@ impl ObjectDataBuilder {
 
             let kitchen_id: KitchenId = uuid::Uuid::parse_str(&kitchen_info.id)?.into();
             self.id.append_value(kitchen_id)?;
-            self.parent_id.append_value(&site_id)?;
+            self.parent_id.append_value(site_id)?;
             self.label.append_value(ObjectLabel::Kitchen);
             self.name.append_value([
                 Some("sites"),

@@ -1,11 +1,3 @@
-mod agents;
-mod error;
-mod idents;
-pub mod init;
-mod models;
-mod simulation;
-pub mod state;
-
 use chrono::Duration;
 use futures::TryStreamExt;
 use object_store::ObjectStore;
@@ -22,29 +14,17 @@ pub use self::state::*;
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 
+mod agents;
+mod error;
+mod idents;
+pub mod init;
+mod models;
 #[cfg(feature = "python")]
-#[pymethods]
-impl Site {
-    #[new]
-    #[pyo3(signature = (id, name, latitude, longitude))]
-    fn new(id: String, name: String, latitude: f64, longitude: f64) -> Self {
-        Site {
-            id,
-            name,
-            latitude,
-            longitude,
-        }
-    }
+mod python;
+mod simulation;
+pub mod state;
 
-    fn __repr__(&self) -> String {
-        format!(
-            "Site(id={}, name={}, latitude={}, longitude={})",
-            self.id, self.name, self.latitude, self.longitude
-        )
-    }
-}
-
-#[cfg_attr(feature = "python", pyclass)]
+#[cfg_attr(feature = "python", pyclass(get_all, set_all))]
 #[derive(Debug, Clone)]
 pub struct SimulationSetup {
     pub sites: Vec<SiteSetup>,

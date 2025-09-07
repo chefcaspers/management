@@ -643,9 +643,14 @@ dependencies = [
 name = "caspers-universe-python"
 version = "0.0.1"
 dependencies = [
+ "arrow",
  "caspers-universe",
+ "datafusion",
+ "object_store",
  "pyo3",
+ "thiserror 2.0.16",
  "tokio",
+ "url",
 ]
 
 [[package]]

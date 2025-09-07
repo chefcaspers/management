@@ -8,9 +8,10 @@ app = marimo.App(width="medium")
 def _():
     import marimo as mo
     import pyarrow.parquet as pq
-    from caspers_universe import prepare_site, Site
+    from caspers_universe import prepare_site, Site, load_simulation_setup
     import polars as pl
-    return Site, mo, pq, prepare_site
+    from pathlib import Path
+    return Path, Site, load_simulation_setup, mo, pq, prepare_site
 
 
 @app.cell(hide_code=True)
@@ -30,6 +31,20 @@ def _(mo):
     This allows us to compute shortest path on every iteration.
     """
     )
+    return
+
+
+@app.cell
+def _(Path, load_simulation_setup):
+    setup_path = Path("../data").absolute().as_uri()
+    setup = load_simulation_setup(setup_path)
+    setup
+    return (setup,)
+
+
+@app.cell
+def _(setup):
+    setup.sites[0]
     return
 
 

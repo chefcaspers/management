@@ -54,6 +54,37 @@ _NODE_SCHEMA = pa.schema(
 )
 
 
+def prepare_site(
+    site: Site,
+    network_type: Literal["bike", "drive", "walk"] = "bike",
+    distance: int = 3000,
+) -> tuple[pa.Table, pa.Table]:
+    """Prepare site routing data for Caspers Universe.
+
+    This downloads the street / path network around the given location
+    and processes it for use in route planning within the simulation.
+
+    Args:
+        location (str): The location name.
+        lat (float): The latitude of the location.
+        lng (float): The longitude of the location.
+        network_type (Literal["bike", "drive", "walk"], optional): The type of network to use. Defaults to "bike".
+        distance (int, optional): The radius around the location to use for the network. Defaults to 3000.
+
+    Returns:
+        tuple[pa.Table, pa.Table]: The nodes and edges tables.
+    """
+    neighbourhood = ox.graph_from_point(
+        (site.latitude, site.longitude),
+        dist=distance,
+        network_type=network_type,
+    )
+    nodes = _process_nodes(site.name, neighbourhood)
+    edges = _process_edges(site.name, neighbourhood)
+
+    return nodes, edges
+
+
 def _process_nodes(location: str, G: nx.MultiDiGraph):
     node_ids = []
     node_coords = []
@@ -165,34 +196,3 @@ def _process_edges(location: str, G: nx.MultiDiGraph) -> pa.Table:
         arrays=[location_arr, source_array, target_array, props_array, geo_lines],
         schema=_EDGE_SCHEMA,
     )
-
-
-def prepare_site(
-    site: Site,
-    network_type: Literal["bike", "drive", "walk"] = "bike",
-    distance: int = 3000,
-) -> tuple[pa.Table, pa.Table]:
-    """Prepare site routing data for Caspers Universe.
-
-    This downloads the street / path network around the given location
-    and processes it for use in route planning within the simulation.
-
-    Args:
-        location (str): The location name.
-        lat (float): The latitude of the location.
-        lng (float): The longitude of the location.
-        network_type (Literal["bike", "drive", "walk"], optional): The type of network to use. Defaults to "bike".
-        distance (int, optional): The radius around the location to use for the network. Defaults to 3000.
-
-    Returns:
-        tuple[pa.Table, pa.Table]: The nodes and edges tables.
-    """
-    neighbourhood = ox.graph_from_point(
-        (site.latitude, site.longitude),
-        dist=distance,
-        network_type=network_type,
-    )
-    nodes = _process_nodes(site.name, neighbourhood)
-    edges = _process_edges(site.name, neighbourhood)
-
-    return nodes, edges

@@ -7,6 +7,9 @@ impl serde::Serialize for Brand {
     {
         use serde::ser::SerializeStruct;
         let mut len = 0;
+        if !self.id.is_empty() {
+            len += 1;
+        }
         if !self.name.is_empty() {
             len += 1;
         }
@@ -19,10 +22,10 @@ impl serde::Serialize for Brand {
         if !self.items.is_empty() {
             len += 1;
         }
-        if self.id.is_some() {
-            len += 1;
-        }
         let mut struct_ser = serializer.serialize_struct("caspers.core.v1.Brand", len)?;
+        if !self.id.is_empty() {
+            struct_ser.serialize_field("id", &self.id)?;
+        }
         if !self.name.is_empty() {
             struct_ser.serialize_field("name", &self.name)?;
         }
@@ -35,9 +38,6 @@ impl serde::Serialize for Brand {
         if !self.items.is_empty() {
             struct_ser.serialize_field("items", &self.items)?;
         }
-        if let Some(v) = self.id.as_ref() {
-            struct_ser.serialize_field("id", v)?;
-        }
         struct_ser.end()
     }
 }
@@ -48,20 +48,20 @@ impl<'de> serde::Deserialize<'de> for Brand {
         D: serde::Deserializer<'de>,
     {
         const FIELDS: &[&str] = &[
+            "id",
             "name",
             "description",
             "category",
             "items",
-            "id",
         ];
 
         #[allow(clippy::enum_variant_names)]
         enum GeneratedField {
+            Id,
             Name,
             Description,
             Category,
             Items,
-            Id,
             __SkipField__,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
@@ -84,11 +84,11 @@ impl<'de> serde::Deserialize<'de> for Brand {
                         E: serde::de::Error,
                     {
                         match value {
+                            "id" => Ok(GeneratedField::Id),
                             "name" => Ok(GeneratedField::Name),
                             "description" => Ok(GeneratedField::Description),
                             "category" => Ok(GeneratedField::Category),
                             "items" => Ok(GeneratedField::Items),
-                            "id" => Ok(GeneratedField::Id),
                             _ => Ok(GeneratedField::__SkipField__),
                         }
                     }
@@ -108,13 +108,19 @@ impl<'de> serde::Deserialize<'de> for Brand {
                 where
                     V: serde::de::MapAccess<'de>,
             {
+                let mut id__ = None;
                 let mut name__ = None;
                 let mut description__ = None;
                 let mut category__ = None;
                 let mut items__ = None;
-                let mut id__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
+                        GeneratedField::Id => {
+                            if id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("id"));
+                            }
+                            id__ = Some(map_.next_value()?);
+                        }
                         GeneratedField::Name => {
                             if name__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("name"));
@@ -139,23 +145,17 @@ impl<'de> serde::Deserialize<'de> for Brand {
                             }
                             items__ = Some(map_.next_value()?);
                         }
-                        GeneratedField::Id => {
-                            if id__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("id"));
-                            }
-                            id__ = map_.next_value()?;
-                        }
                         GeneratedField::__SkipField__ => {
                             let _ = map_.next_value::<serde::de::IgnoredAny>()?;
                         }
                     }
                 }
                 Ok(Brand {
+                    id: id__.unwrap_or_default(),
                     name: name__.unwrap_or_default(),
                     description: description__.unwrap_or_default(),
                     category: category__.unwrap_or_default(),
                     items: items__.unwrap_or_default(),
-                    id: id__,
                 })
             }
         }
