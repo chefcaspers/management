@@ -88,7 +88,26 @@ impl SimulationSetup {
     }
 
     async fn load_brands(store: &dyn ObjectStore, brands_path: &Path) -> Result<Vec<Brand>> {
-        Ok(crate::init::generate_brands())
+        let brand_files: Vec<_> = store.list(Some(brands_path)).try_collect().await?;
+        let mut brands = Vec::new();
+
+        for file in brand_files {
+            let brand_data = store.get(&file.location).await?.bytes().await?;
+            let mut brand: Brand = serde_json::from_slice(&brand_data)?;
+            brand.id = BrandId::from_uri_ref(format!("brands/{}", brand.name)).to_string();
+
+            for menu_item in brand.items.iter_mut() {
+                menu_item.id = MenuItemId::from_uri_ref(format!(
+                    "brands/{}/menu_items/{}",
+                    brand.id, menu_item.name
+                ))
+                .to_string();
+            }
+
+            brands.push(brand);
+        }
+
+        Ok(brands)
     }
 }
 
