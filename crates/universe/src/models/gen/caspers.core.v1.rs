@@ -26,8 +26,10 @@ fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.Site".into()
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SiteSetup {
+    /// Base information about the site
     #[prost(message, optional, tag="1")]
     pub info: ::core::option::Option<Site>,
+    /// Kitchens installed at the site
     #[prost(message, repeated, tag="2")]
     pub kitchens: ::prost::alloc::vec::Vec<KitchenSetup>,
 }

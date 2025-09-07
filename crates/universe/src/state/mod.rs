@@ -19,8 +19,10 @@ use uuid::Uuid;
 use self::movement::JourneyPlanner;
 use super::{EventPayload, SimulationConfig};
 use crate::error::Result;
-use crate::models::{Brand, Site};
-use crate::{Error, OrderCreatedPayload, OrderLineUpdatedPayload, OrderUpdatedPayload, idents::*};
+use crate::models::Brand;
+use crate::{
+    Error, OrderCreatedPayload, OrderLineUpdatedPayload, OrderUpdatedPayload, SiteSetup, idents::*,
+};
 
 pub(crate) use self::movement::RoutingData;
 pub(crate) use self::objects::{ObjectData, ObjectDataBuilder, ObjectLabel};
@@ -74,14 +76,19 @@ pub struct State {
 impl State {
     pub(crate) fn try_new(
         brands: impl IntoIterator<Item = (BrandId, Brand)>,
-        sites: Vec<(SiteId, Site)>,
+        sites: Vec<SiteSetup>,
         routing: RoutingData,
         config: Option<SimulationConfig>,
     ) -> Result<Self> {
         let mut builder = PopulationDataBuilder::new();
-        for (_site_id, site) in &sites {
+
+        for site in &sites {
             let n_people = rand::rng().random_range(500..1500);
-            builder.add_site(site, n_people)?;
+            let info = site
+                .info
+                .as_ref()
+                .ok_or(Error::invalid_data("expected site info"))?;
+            builder.add_site(info, n_people)?;
         }
 
         let brands: HashMap<_, _> = brands.into_iter().collect();

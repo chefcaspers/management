@@ -41,6 +41,7 @@ arrow-schema = { workspace = true, features = [
 ] }
 arrow-select = { workspace = true }
 datafusion = { workspace = true }
+object_store = { workspace = true }
 parquet = { workspace = true }
 geoarrow = { workspace = true }
 geoarrow-array = { workspace = true }

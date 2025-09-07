@@ -6,10 +6,8 @@ use geo_traits::to_geo::ToGeoPoint;
 use h3o::{LatLng, Resolution};
 use itertools::Itertools;
 use rand::Rng;
-use tokio::runtime::Runtime;
 use url::Url;
 
-use crate::Error;
 use crate::agents::SiteRunner;
 use crate::error::Result;
 use crate::idents::{BrandId, MenuItemId, SiteId, TypedId};
@@ -66,9 +64,6 @@ impl Default for SimulationConfig {
 /// Single entry point to run simulations.
 /// THis will drive progress in all entities and make sure results are reported.
 pub struct Simulation {
-    /// Async runtime to handle datafusion tasks
-    rt: Runtime,
-
     /// Global simulation state
     state: State,
 
@@ -86,7 +81,7 @@ pub struct Simulation {
 
 impl Simulation {
     /// Advance the simulation by one time step
-    fn step(&mut self) -> Result<()> {
+    async fn step(&mut self) -> Result<()> {
         let mut events = Vec::new();
 
         // move people
@@ -145,21 +140,21 @@ impl Simulation {
         self.state.step(events)?;
 
         // snapshot the state if the time is right
-        self.snapshot()?;
+        self.snapshot().await?;
 
         Ok(())
     }
 
     /// Run the simulation for a specified number of steps
-    pub fn run(&mut self, steps: usize) -> Result<()> {
+    pub async fn run(&mut self, steps: usize) -> Result<()> {
         for _ in 0..steps {
-            self.step()?;
+            self.step().await?;
         }
         Ok(())
     }
 
     /// Snapshot the state of the simulation
-    fn snapshot(&mut self) -> Result<()> {
+    async fn snapshot(&mut self) -> Result<()> {
         let base_url = self.state.config().result_storage_location.as_ref();
         let interval = self.state.config().snapshot_interval;
 
@@ -192,45 +187,41 @@ impl Simulation {
 
         let ctx = self.state.snapshot_session()?;
 
-        self.rt.block_on(async {
-            // people are only written once
-            if !self.initialized {
-                let df = ctx.sql(&query("population")).await?;
-                df.write_parquet(people_path.as_str(), DataFrameWriteOptions::new(), None)
-                    .await?;
-
-                // TODO: once we allow adding more brands etc. we need to make this more dynamic.
-                // or rather this information should be written from outside the simulation.
-                let df = ctx.sql(&query("objects")).await?;
-                df.write_parquet(objects_path.as_str(), DataFrameWriteOptions::new(), None)
-                    .await?;
-            }
-
-            if should_snapshot {
-                let df = ctx.sql(&query("orders")).await?;
-                df.write_parquet(orders_path.as_str(), DataFrameWriteOptions::new(), None)
-                    .await?;
-
-                let df = ctx.sql(&query("order_lines")).await?;
-                df.write_parquet(
-                    order_lines_path.as_str(),
-                    DataFrameWriteOptions::new(),
-                    None,
-                )
+        // people are only written once
+        if !self.initialized {
+            let df = ctx.sql(&query("population")).await?;
+            df.write_parquet(people_path.as_str(), DataFrameWriteOptions::new(), None)
                 .await?;
-            }
 
-            // write courier positions at every call.
-            let df = ctx
+            // TODO: once we allow adding more brands etc. we need to make this more dynamic.
+            // or rather this information should be written from outside the simulation.
+            let df = ctx.sql(&query("objects")).await?;
+            df.write_parquet(objects_path.as_str(), DataFrameWriteOptions::new(), None)
+                .await?;
+        }
+
+        if should_snapshot {
+            let df = ctx.sql(&query("orders")).await?;
+            df.write_parquet(orders_path.as_str(), DataFrameWriteOptions::new(), None)
+                .await?;
+
+            let df = ctx.sql(&query("order_lines")).await?;
+            df.write_parquet(
+                order_lines_path.as_str(),
+                DataFrameWriteOptions::new(),
+                None,
+            )
+            .await?;
+        }
+
+        // write courier positions at every call.
+        let df = ctx
                 .sql(&format!(
                     "SELECT id, '{timestamp}'::timestamp(6) as timestamp, position FROM population WHERE role = 'courier'"
                 ))
                 .await?;
-            df.write_parquet(positions_path.as_str(), DataFrameWriteOptions::new(), None)
-                .await?;
-
-            Ok::<_, Error>(())
-        })?;
+        df.write_parquet(positions_path.as_str(), DataFrameWriteOptions::new(), None)
+            .await?;
 
         if should_snapshot {
             self.last_snapshot_time = self.state.current_time();

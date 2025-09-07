@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::str::FromStr;
 
 use arrow_array::RecordBatchReader;
 use arrow_select::concat::concat_batches;
@@ -7,20 +6,19 @@ use chrono::{DateTime, Duration, Utc};
 use itertools::Itertools;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use url::Url;
-use uuid::Uuid;
 
 use crate::error::Result;
 use crate::idents::BrandId;
-use crate::models::{Brand, Site};
+use crate::models::Brand;
 use crate::simulation::{Simulation, SimulationConfig};
 use crate::state::{EntityView, RoutingData, State};
-use crate::{Error, SiteRunner};
+use crate::{Error, SiteRunner, SiteSetup};
 
 /// Builder for creating a simulation instance.
 pub struct SimulationBuilder {
     brands: Vec<Brand>,
 
-    sites: Vec<Site>,
+    sites: Vec<SiteSetup>,
 
     /// Size of the simulated population
     population_size: usize,
@@ -71,7 +69,7 @@ impl SimulationBuilder {
     }
 
     /// Add a site to the simulation
-    pub fn with_site(mut self, site: Site) -> Self {
+    pub fn with_site(mut self, site: SiteSetup) -> Self {
         self.sites.push(site);
         self
     }
@@ -126,12 +124,6 @@ impl SimulationBuilder {
             })
             .try_collect()?;
 
-        let sites = self
-            .sites
-            .into_iter()
-            .map(|site| (Uuid::parse_str(&site.id).unwrap().into(), site))
-            .collect_vec();
-
         let file = std::fs::File::open(
             "/Users/robert.pack/code/management/notebooks/sites/edges/london.parquet",
         )
@@ -164,7 +156,7 @@ impl SimulationBuilder {
             result_storage_location: self.result_storage_location,
             snapshot_interval: self.snapshot_interval,
         };
-        let state = State::try_new(brands, sites, routing, Some(config))?;
+        let state = State::try_new(brands, self.sites, routing, Some(config))?;
 
         let site_runners = state
             .objects()
@@ -172,13 +164,7 @@ impl SimulationBuilder {
             .map(|site| Ok::<_, Error>((site.id(), SiteRunner::try_new(site.id(), &state)?)))
             .try_collect()?;
 
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| Error::Generic(Box::new(e)))?;
-
         Ok(Simulation {
-            rt,
             initialized: false,
             last_snapshot_time: state.current_time(),
             state,

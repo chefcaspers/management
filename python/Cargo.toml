@@ -12,3 +12,4 @@ crate-type = ["cdylib"]
 caspers-universe = { path = "../crates/universe/", features = ["python"] }
 
 pyo3 = "0.25.0"
+tokio = { version = "1", features = ["rt-multi-thread"] }

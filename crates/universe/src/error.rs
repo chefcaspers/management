@@ -67,6 +67,12 @@ pub enum Error {
         #[from]
         source: rand::distr::uniform::Error,
     },
+
+    #[error("ObjectStore error: {source}")]
+    ObjectStore {
+        #[from]
+        source: object_store::Error,
+    },
 }
 
 impl From<h3o::error::DissolutionError> for Error {

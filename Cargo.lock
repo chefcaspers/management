@@ -619,6 +619,7 @@ dependencies = [
  "h3o",
  "indexmap 2.11.0",
  "itertools 0.14.0",
+ "object_store",
  "parquet",
  "pbjson",
  "pbjson-types",
@@ -644,6 +645,7 @@ version = "0.0.1"
 dependencies = [
  "caspers-universe",
  "pyo3",
+ "tokio",
 ]
 
 [[package]]

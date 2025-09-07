@@ -1,7 +1,7 @@
 use clap::Parser;
 use url::Url;
 
-use caspers_universe::{Result, Site, SiteId, run_simulation};
+use caspers_universe::{Result, load_simulation_setup, run_simulation};
 
 #[derive(Debug, Clone, clap::Parser)]
 #[command(name = "caspers-universe", version, about = "Running Caspers Universe", long_about = None)]
@@ -13,27 +13,22 @@ struct Cli {
     population: u32,
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main(flavor = "multi_thread")]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
     let _cli = Cli::parse();
 
-    let path = Url::parse("file:///Users/robert.pack/code/management/notebooks/data/")?;
-    let brands = caspers_universe::init::generate_brands();
-    let sites = vec![("london", (51.518898098201326, -0.13381370382489707))]
+    let path = Url::parse("file:///Users/robert.pack/code/management/data")?;
+    let mut setup = load_simulation_setup(&path, None::<(&str, &str)>).await?;
+    setup.sites = setup
+        .sites
         .into_iter()
-        .map(|(name, (lat, long))| {
-            let site = Site {
-                id: SiteId::from_uri_ref(format!("sites/{name}")).to_string(),
-                name: name.to_string(),
-                latitude: lat,
-                longitude: long,
-            };
-            site
-        })
+        .filter(|site| site.info.as_ref().map(|i| i.name.as_str()) == Some("london"))
         .collect();
 
-    run_simulation(sites, brands, 500, path)?;
+    let data_path = Url::parse("file:///Users/robert.pack/code/management/notebooks/data/")?;
+    run_simulation(setup, 500, data_path).await?;
 
     Ok(())
 }

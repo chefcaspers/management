@@ -3,9 +3,10 @@ use std::sync::{Arc, LazyLock};
 
 use arrow_array::RecordBatch;
 
+use crate::SiteSetup;
 use crate::error::Result;
-use crate::idents::{BrandId, MenuItemId, SiteId};
-use crate::models::{Brand, MenuItem, Site};
+use crate::idents::{BrandId, MenuItemId};
+use crate::models::{Brand, MenuItem};
 use crate::state::ObjectDataBuilder;
 
 static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
@@ -68,9 +69,9 @@ static BRANDS: LazyLock<Arc<Vec<Brand>>> = LazyLock::new(|| {
     Arc::new(brands)
 });
 
-pub fn generate_objects(
+pub(crate) fn generate_objects(
     brands: &HashMap<BrandId, Brand>,
-    sites: impl IntoIterator<Item = (SiteId, Site)>,
+    sites: impl IntoIterator<Item = SiteSetup>,
 ) -> Result<RecordBatch> {
     let mut builder = ObjectDataBuilder::new();
 
@@ -78,8 +79,8 @@ pub fn generate_objects(
         builder.append_brand(brand_id, brand);
     }
 
-    for (site_id, site) in sites {
-        builder.append_site(site_id, &site);
+    for site in sites {
+        builder.append_site_info(&site)?;
     }
 
     builder.finish()

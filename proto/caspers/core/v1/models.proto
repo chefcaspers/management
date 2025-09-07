@@ -30,7 +30,9 @@ message Site {
 }
 
 message SiteSetup {
+  // Base information about the site
   Site info = 1;
+  // Kitchens installed at the site
   repeated KitchenSetup kitchens = 2;
 }
 
