@@ -11,7 +11,7 @@ def _():
     from caspers_universe import prepare_site, Site, load_simulation_setup
     import polars as pl
     from pathlib import Path
-    return Path, Site, load_simulation_setup, mo, pq, prepare_site
+    return Path, load_simulation_setup, mo, pq, prepare_site
 
 
 @app.cell(hide_code=True)
@@ -20,59 +20,42 @@ def _(mo):
         r"""
     ### Prepare data to efficiently compute courier routes at runtime
 
-    We want to have a realistic simuation and provide realisitic looking data. Especially when plotting movement data it, sticking to roads / pathways make visulaizations much more compelling.
+    We want to have a realistic simuation and provide realisitic looking data.
+    Especially when plotting movement data it, sticking to roads / pathways make
+    visulaizations much more compelling.
+
     The baseic strategy is as follows.
 
     1. select a sufficiently large region around our kitchen sites.
-    2. Load data from OSM and normalive node / edge information
+    2. Load data from OSM and normalize node / edge information
     3. Store as geoparquet so we can efficiently load it
 
-    Within the rust kernel, we can further prepare ourselves by creating a graph representation optimized for shortest path search.
-    This allows us to compute shortest path on every iteration.
+    This data is used within the rust kernel to create a representation optimized for
+    route-finding which allows us to compute all courier trips and generally movements
+    along road networks on-the-fly.
     """
     )
     return
 
 
 @app.cell
-def _(Path, load_simulation_setup):
-    setup_path = Path("../data").absolute().as_uri()
-    setup = load_simulation_setup(setup_path)
-    setup
-    return (setup,)
-
-
-@app.cell
-def _(setup):
-    setup.sites[0]
-    return
-
-
-@app.cell
-def _(Site):
-    sites = [
-        Site(
-            name="london",
-            latitude=51.518898098201326,
-            longitude=-0.13381370382489707,
-        ),
-        Site(
-            name="amsterdam",
-            latitude=52.3358324410348,
-            longitude=4.888889169536197,
-        ),
-    ]
-    return (sites,)
-
-
-@app.cell
-def routing_data(pq, prepare_site, sites):
+def routing_data(Path, load_simulation_setup, pq, prepare_site, true):
     # this cell might error when marimo processes results,
     # the variables will still be assigned
-    for site in sites:
-        nodes, edges = prepare_site(site)
-        pq.write_table(nodes, f"./sites/nodes/{site.name}.parquet")
-        pq.write_table(edges, f"./sites/edges/{site.name}.parquet")
+
+    setup_path = Path("../data").absolute()
+    # load the overall simulation setup to get site configurations.
+    setup = load_simulation_setup(setup_path.as_uri())
+
+    # make sure the data paths exist.
+    setup_path.joinpath("routing/nodes").mkdir(exist_ok=true, parents=true)
+    setup_path.joinpath("routing/edges").mkdir(exist_ok=true, parents=true)
+
+    # load and process open street map data.
+    for site in setup.sites:
+        nodes, edges = prepare_site(site.info)
+        pq.write_table(nodes, f"../data/routing/nodes/{site.info.name}.parquet")
+        pq.write_table(edges, f"../data/routing/edges/{site.info.name}.parquet")
 
     print("done")
     return

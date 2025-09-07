@@ -129,7 +129,19 @@ pub async fn run_simulation(
     let simulation = SimulationBuilder::new()
         .with_result_storage_location(output_location)
         .with_snapshot_interval(Duration::minutes(10))
-        .with_time_increment(Duration::minutes(1));
+        .with_time_increment(Duration::minutes(1))
+        .with_routing_edges(
+            Url::parse(
+                "file:///Users/robert.pack/code/management/notebooks/sites/edges/london.parquet",
+            )
+            .unwrap(),
+        )
+        .with_routing_nodes(
+            Url::parse(
+                "file:///Users/robert.pack/code/management/notebooks/sites/nodes/london.parquet",
+            )
+            .unwrap(),
+        );
 
     // add barnds to simulation
     let simulation = setup
@@ -143,7 +155,7 @@ pub async fn run_simulation(
         .into_iter()
         .fold(simulation, |sim, site| sim.with_site(site));
 
-    let mut simulation = simulation.build()?;
+    let mut simulation = simulation.build().await?;
 
     simulation.run(duration).await?;
 

@@ -1,11 +1,16 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use arrow_array::RecordBatchReader;
 use arrow_select::concat::concat_batches;
 use chrono::{DateTime, Duration, Utc};
+use futures::TryStreamExt;
 use itertools::Itertools;
+use object_store::parse_url_opts;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
+use parquet::arrow::async_reader::{ParquetObjectReader, ParquetRecordBatchStreamBuilder};
 use url::Url;
+use uuid::Uuid;
 
 use crate::error::Result;
 use crate::idents::BrandId;
@@ -114,39 +119,36 @@ impl SimulationBuilder {
     }
 
     /// Build the simulation with the given initial conditions
-    pub fn build(self) -> Result<Simulation> {
+    pub async fn build(self) -> Result<Simulation> {
         let brands: HashMap<BrandId, _> = self
             .brands
             .into_iter()
-            .map(|brand| {
-                let brand_id = BrandId::from_uri_ref(format!("brands/{}", brand.name));
-                Ok::<_, Error>((brand_id, brand))
-            })
+            .map(|brand| Ok::<_, Error>((Uuid::parse_str(&brand.id)?.into(), brand)))
             .try_collect()?;
 
-        let file = std::fs::File::open(
-            "/Users/robert.pack/code/management/notebooks/sites/edges/london.parquet",
-        )
-        .unwrap();
-        let reader = ParquetRecordBatchReaderBuilder::try_new(file)?.build()?;
-        let schema = reader.schema();
-        let batches: Vec<_> = reader.into_iter().try_collect()?;
-        let edges = concat_batches(&schema, &batches)?;
-
-        // let Some(node_file) = self.routing_nodes else {
-        //     return Err(Error::MissingInput(
-        //         "Routing nodes file not found".to_string(),
-        //     ));
-        // };
-
-        let file = std::fs::File::open(
-            "/Users/robert.pack/code/management/notebooks/sites/nodes/london.parquet",
-        )
-        .unwrap();
-        let reader = ParquetRecordBatchReaderBuilder::try_new(file)?.build()?;
-        let schema = reader.schema();
-        let batches: Vec<_> = reader.into_iter().try_collect()?;
+        let Some(node_file) = self.routing_nodes else {
+            return Err(Error::MissingInput(
+                "Routing nodes file not found".to_string(),
+            ));
+        };
+        let (store, path) = parse_url_opts(&node_file, None::<(&str, &str)>)?;
+        let reader = ParquetObjectReader::new(Arc::new(store), path);
+        let stream = ParquetRecordBatchStreamBuilder::new(reader).await?;
+        let schema = stream.schema().clone();
+        let batches: Vec<_> = stream.build()?.try_collect().await?;
         let nodes = concat_batches(&schema, &batches)?;
+
+        let Some(edge_file) = self.routing_edges else {
+            return Err(Error::MissingInput(
+                "Routing edges file not found".to_string(),
+            ));
+        };
+        let (store, path) = parse_url_opts(&edge_file, None::<(&str, &str)>)?;
+        let reader = ParquetObjectReader::new(Arc::new(store), path);
+        let stream = ParquetRecordBatchStreamBuilder::new(reader).await?;
+        let schema = stream.schema().clone();
+        let batches: Vec<_> = stream.build()?.try_collect().await?;
+        let edges = concat_batches(&schema, &batches)?;
 
         let routing = RoutingData::try_new(nodes, edges)?;
 
