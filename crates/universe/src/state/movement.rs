@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-use arrow_array::cast::AsArray as _;
-use arrow_array::{RecordBatch, types::Float64Type};
+use arrow::array::cast::AsArray as _;
+use arrow::array::{RecordBatch, types::Float64Type};
+use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use arrow_schema::extension::Uuid as UuidExtension;
-use arrow_schema::{DataType, Field, Schema, SchemaRef};
 use datafusion::common::SchemaExt;
 use fast_paths::{FastGraph, InputGraph, PathCalculator};
 use geo::Point;

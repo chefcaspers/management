@@ -24,12 +24,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let path = Url::parse("file:///Users/robert.pack/code/management/data")?;
     let mut setup = load_simulation_setup(&path, None::<(&str, &str)>).await?;
+
     setup
         .sites
-        .retain(|site| site.info.as_ref().map(|i| i.name.as_str()) == Some("london"));
+        .retain(|s| s.info.as_ref().map(|i| i.name.as_str()) == Some("london"));
 
     let data_path = Url::parse("file:///Users/robert.pack/code/management/notebooks/data/")?;
-    run_simulation(setup, cli.duration, data_path).await?;
+    let routing_path = Url::parse("file:///Users/robert.pack/code/management/data/routing")?;
+    run_simulation(setup, cli.duration, data_path, routing_path).await?;
 
     Ok(())
 }
