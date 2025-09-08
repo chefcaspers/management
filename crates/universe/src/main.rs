@@ -14,6 +14,9 @@ struct Cli {
 
     #[arg(short, long, default_value_t = 100)]
     duration: usize,
+
+    #[arg(long, default_value_t = false)]
+    dry_run: bool,
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -31,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let data_path = Url::parse("file:///Users/robert.pack/code/management/notebooks/data/")?;
     let routing_path = Url::parse("file:///Users/robert.pack/code/management/data/routing")?;
-    run_simulation(setup, cli.duration, data_path, routing_path).await?;
+    run_simulation(setup, cli.duration, data_path, routing_path, cli.dry_run).await?;
 
     Ok(())
 }

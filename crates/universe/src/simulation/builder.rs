@@ -34,6 +34,9 @@ pub struct SimulationBuilder {
 
     /// Path where routing data is stored
     routing_path: Option<Url>,
+
+    /// Whether to run the simulation in dry run mode
+    dry_run: bool,
 }
 
 impl Default for SimulationBuilder {
@@ -46,6 +49,7 @@ impl Default for SimulationBuilder {
             result_storage_location: None,
             snapshot_interval: None,
             routing_path: None,
+            dry_run: false,
         }
     }
 }
@@ -99,6 +103,12 @@ impl SimulationBuilder {
         self
     }
 
+    pub fn with_dry_run(mut self, dry_run: bool) -> Self {
+        self.dry_run = dry_run;
+        self
+    }
+
+    /// Load the prepared street network data into routing data objects.
     async fn routing_data(&self) -> Result<HashMap<SiteId, RoutingData>> {
         let Some(setup) = &self.setup else {
             return Err(Error::MissingInput("Setup file not found".to_string()));
@@ -115,6 +125,11 @@ impl SimulationBuilder {
 
         let nodes = read_parquet_dir(&nodes_path, None).await?;
         let edges = read_parquet_dir(&edge_path, None).await?;
+
+        tracing::info!(
+            target: "builder",
+            "Loaded routing data with {} nodes and {} edges", nodes.num_rows(), edges.num_rows()
+        );
 
         let mut routers = HashMap::new();
         for site in &setup.sites {
@@ -134,6 +149,14 @@ impl SimulationBuilder {
                 .and_then(|i| Uuid::parse_str(&i.id).ok())
                 .ok_or(Error::InvalidData("Expected site info".into()))?;
 
+            tracing::info!(
+                target: "builder",
+                "Creating router for site {} with {} nodes and {} edges",
+                site_id,
+                filtered_nodes.num_rows(),
+                filtered_edges.num_rows()
+            );
+
             routers.insert(
                 site_id.into(),
                 RoutingData::try_new(filtered_nodes, filtered_edges)?,
@@ -150,6 +173,7 @@ impl SimulationBuilder {
             time_increment: self.time_increment,
             result_storage_location: self.result_storage_location.clone(),
             snapshot_interval: self.snapshot_interval,
+            dry_run: self.dry_run,
         };
         let routing = self.routing_data().await?;
 

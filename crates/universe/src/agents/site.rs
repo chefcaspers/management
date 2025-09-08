@@ -127,7 +127,6 @@ impl SiteRunner {
 
         Ok(SiteRunner {
             id,
-            // order_data,
             kitchens,
             order_queue: VecDeque::new(),
             order_lines: HashMap::new(),
@@ -230,7 +229,7 @@ impl SiteRunner {
 
             // Generate the delivery route for the courier
             let Some(destination_node) = planner.nearest_node(&destination) else {
-                tracing::error!("Failed to find a node for order {:?}", order.id());
+                tracing::error!(target: "site-agent", "Failed to find a node for order {:?}", order.id());
                 events.push(EventPayload::order_failed(*order.id(), None));
                 continue;
             };
@@ -241,7 +240,7 @@ impl SiteRunner {
                 continue;
             };
 
-            tracing::debug!(target: "agents", "Courier {:?} is delivering order {:?}", courier.id(), order.id());
+            tracing::debug!(target: "site-agent", "Courier {:?} is delivering order {:?}", courier.id(), order.id());
             events.push(EventPayload::person_updated(
                 *courier.id(),
                 PersonStatus::Delivering(*order.id(), journey),

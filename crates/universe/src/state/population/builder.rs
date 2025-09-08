@@ -12,6 +12,7 @@ use rand::distr::{Distribution, Uniform};
 use rand::rngs::ThreadRng;
 
 use super::{PersonRole, PopulationData};
+use crate::Error;
 use crate::error::Result;
 use crate::idents::PersonId;
 use crate::models::Site;
@@ -80,7 +81,9 @@ impl PopulationDataBuilder {
         let solvent = SolventBuilder::new().build();
         let geom = solvent.dissolve(cells)?;
 
-        let bounding_rect = geom.bounding_rect().unwrap();
+        let bounding_rect = geom
+            .bounding_rect()
+            .ok_or(Error::internal("failed to get bounding rect"))?;
         let (maxx, maxy) = bounding_rect.max().x_y();
         let (minx, miny) = bounding_rect.min().x_y();
 
@@ -100,7 +103,9 @@ impl PopulationDataBuilder {
 
         let n_couriers = n_people / 10;
         tracing::info!("Adding {} couriers", n_couriers);
-        let loc = geom.centroid().unwrap();
+        let loc = geom
+            .centroid()
+            .ok_or(Error::internal("failed to get centroid"))?;
         for _ in 0..n_couriers {
             let id = PersonId::new();
             self.ids.append_value(id)?;
