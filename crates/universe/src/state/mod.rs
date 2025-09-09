@@ -5,24 +5,32 @@
 //! external data storages that might be used to store the state.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 
-use arrow_array::{RecordBatch, cast::AsArray as _};
+use arrow::array::{RecordBatch, cast::AsArray as _};
+use arrow::compute::concat_batches;
 use chrono::{DateTime, Utc};
+use datafusion::datasource::file_format::parquet::ParquetFormat;
+use datafusion::datasource::listing::{
+    ListingOptions, ListingTable, ListingTableConfig, ListingTableUrl,
+};
 use datafusion::prelude::*;
 use geo::Point;
 use geo_traits::PointTrait;
 use itertools::Itertools;
 use rand::Rng;
+use url::Url;
 use uuid::Uuid;
+
+use crate::error::Result;
+use crate::idents::*;
+use crate::{
+    Error, OrderCreatedPayload, OrderLineUpdatedPayload, OrderUpdatedPayload, SimulationSetup,
+};
 
 use self::movement::JourneyPlanner;
 use super::{EventPayload, SimulationConfig};
-use crate::error::Result;
-use crate::models::Brand;
-use crate::{
-    Error, OrderCreatedPayload, OrderLineUpdatedPayload, OrderUpdatedPayload, SiteSetup, idents::*,
-};
 
 pub(crate) use self::movement::RoutingData;
 pub(crate) use self::objects::{ObjectData, ObjectDataBuilder, ObjectLabel};
@@ -67,7 +75,7 @@ pub struct State {
     objects: ObjectData,
 
     /// Routing data
-    routing: JourneyPlanner,
+    routing: HashMap<SiteId, JourneyPlanner>,
 
     /// Order data
     orders: OrderData,
@@ -75,14 +83,13 @@ pub struct State {
 
 impl State {
     pub(crate) fn try_new(
-        brands: impl IntoIterator<Item = (BrandId, Brand)>,
-        sites: Vec<SiteSetup>,
-        routing: RoutingData,
+        setup: SimulationSetup,
+        routing: HashMap<SiteId, RoutingData>,
         config: Option<SimulationConfig>,
     ) -> Result<Self> {
         let mut builder = PopulationDataBuilder::new();
 
-        for site in &sites {
+        for site in &setup.sites {
             let n_people = rand::rng().random_range(500..1500);
             let info = site
                 .info
@@ -91,9 +98,13 @@ impl State {
             builder.add_site(info, n_people)?;
         }
 
-        let brands: HashMap<_, _> = brands.into_iter().collect();
+        let brands: HashMap<_, _> = setup
+            .brands
+            .into_iter()
+            .map(|brand| Ok::<_, Error>((Uuid::parse_str(&brand.id)?.into(), brand)))
+            .try_collect()?;
 
-        let vendors = crate::init::generate_objects(&brands, sites)?;
+        let vendors = crate::init::generate_objects(&brands, setup.sites)?;
 
         let config = config.unwrap_or_default();
         Ok(State {
@@ -101,7 +112,10 @@ impl State {
             time: config.simulation_start,
             population: builder.finish()?,
             objects: ObjectData::try_new(vendors)?,
-            routing: routing.into_trip_planner(),
+            routing: routing
+                .into_iter()
+                .map(|(id, data)| (id, data.into_trip_planner()))
+                .collect(),
             config,
             orders: OrderData::empty(),
         })
@@ -127,8 +141,8 @@ impl State {
         &self.orders
     }
 
-    pub fn trip_planner(&self) -> &JourneyPlanner {
-        &self.routing
+    pub fn trip_planner(&self, site_id: &SiteId) -> Option<&JourneyPlanner> {
+        self.routing.get(site_id)
     }
 
     pub fn current_time(&self) -> DateTime<Utc> {
@@ -175,19 +189,22 @@ impl State {
             .into_iter()
             .fold(OrderDataBuilder::new(), |builder, order| {
                 builder.add_order(
-                    &order.person_id,
+                    order.site_id,
+                    order.person_id,
                     order.destination.coord().unwrap().try_into().unwrap(),
                     &order.items,
                 )
             })
             .finish()?;
+
         tracing::debug!(
             target: "state",
             "Processing {} orders with {} lines",
             order_data.batch_orders().num_rows(),
             order_data.batch_lines().num_rows()
         );
-        let order_ids = order_data.orders().map(|o| *o.id()).collect_vec();
+
+        let order_ids = order_data.all_orders().map(|o| *o.id()).collect_vec();
         self.orders = self.orders.merge(order_data)?;
         Ok(order_ids)
     }
@@ -264,4 +281,39 @@ pub trait EntityView {
             .value(self.valid_index());
         Ok(serde_json::from_str(raw)?)
     }
+}
+
+pub(crate) async fn read_parquet_dir(
+    table_path: &Url,
+    ctx: Option<SessionContext>,
+) -> Result<RecordBatch> {
+    let ctx = ctx.unwrap_or_else(SessionContext::new);
+    let session_state = ctx.state();
+
+    // Parse the path
+    let table_path = ListingTableUrl::parse(table_path)?;
+
+    // Create default parquet options
+    let file_format = ParquetFormat::new();
+    let listing_options =
+        ListingOptions::new(Arc::new(file_format)).with_file_extension(".parquet");
+
+    // Resolve the schema
+    let resolved_schema = listing_options
+        .infer_schema(&session_state, &table_path)
+        .await?;
+
+    let config = ListingTableConfig::new(table_path)
+        .with_listing_options(listing_options)
+        .with_schema(resolved_schema.clone());
+
+    // Create a new TableProvider
+    let provider = Arc::new(ListingTable::try_new(config)?);
+
+    // This provider can now be read as a dataframe:
+    let df = ctx.read_table(provider.clone())?;
+
+    let batches = df.collect().await?;
+
+    Ok(concat_batches(&resolved_schema, &batches)?)
 }

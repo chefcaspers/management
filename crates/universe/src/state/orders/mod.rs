@@ -11,7 +11,7 @@ use itertools::Itertools;
 use strum::{AsRefStr, Display, EnumString};
 
 use crate::error::{Error, Result};
-use crate::idents::{OrderId, OrderLineId};
+use crate::idents::{OrderId, OrderLineId, SiteId};
 
 pub(crate) use self::builder::OrderDataBuilder;
 
@@ -144,17 +144,25 @@ impl OrderData {
             .map(|(id, (idx, _))| OrderView::new(id, self, *idx))
     }
 
-    pub(crate) fn orders(&self) -> impl Iterator<Item = OrderView<'_>> {
+    pub(crate) fn all_orders(&self) -> impl Iterator<Item = OrderView<'_>> {
         self.index
             .iter()
             .map(|(id, (idx, _))| OrderView::new(id, self, *idx))
     }
 
+    pub(crate) fn orders(&self, site_id: &SiteId) -> impl Iterator<Item = OrderView<'_>> {
+        self.index.iter().filter_map(|(id, (idx, _))| {
+            let view = OrderView::new(id, self, *idx);
+            (view.site_id() == AsRef::<[u8]>::as_ref(site_id)).then_some(view)
+        })
+    }
+
     pub(crate) fn orders_with_status(
         &self,
+        site_id: &SiteId,
         status: &OrderStatus,
     ) -> impl Iterator<Item = OrderView<'_>> {
-        self.orders()
+        self.orders(site_id)
             .filter(|order| order.status() == status.as_ref())
     }
 
@@ -205,7 +213,7 @@ impl OrderData {
         self.lines = RecordBatch::try_new(builder::ORDER_LINE_SCHEMA.clone(), arrays)?;
 
         let statuses = self
-            .orders()
+            .all_orders()
             .map(|order| order.compute_status().to_string());
         let status_arr = Arc::new(StringArray::from(statuses.collect_vec()));
         let mut arrays = self
@@ -228,7 +236,7 @@ impl OrderData {
     ) -> Result<()> {
         let update_map: HashMap<OrderId, &OrderStatus> = updates.into_iter().collect();
         let mut statuses = Vec::with_capacity(self.orders.num_rows());
-        for order in self.orders() {
+        for order in self.all_orders() {
             if let Some(status) = update_map.get(order.id()) {
                 statuses.push(status.to_string());
             } else {
@@ -266,6 +274,14 @@ impl<'a> OrderView<'a> {
 
     pub fn id(&self) -> &OrderId {
         self.order_id
+    }
+
+    pub(crate) fn site_id(&self) -> &[u8] {
+        self.data
+            .orders
+            .column(builder::ORDER_SITE_ID_IDX)
+            .as_fixed_size_binary()
+            .value(self.valid_index)
     }
 
     pub fn status(&self) -> &str {

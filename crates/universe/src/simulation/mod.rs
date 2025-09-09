@@ -6,6 +6,7 @@ use geo_traits::to_geo::ToGeoPoint;
 use h3o::{LatLng, Resolution};
 use itertools::Itertools;
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::agents::SiteRunner;
@@ -35,6 +36,7 @@ pub trait Simulatable: Entity {
 }
 
 /// Configuration for the simulation engine
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct SimulationConfig {
     /// all ghost kitchen sites.
     pub(crate) simulation_start: DateTime<Utc>,
@@ -46,6 +48,8 @@ pub(crate) struct SimulationConfig {
     pub(crate) result_storage_location: Option<Url>,
 
     pub(crate) snapshot_interval: Option<Duration>,
+
+    pub(crate) dry_run: bool,
 }
 
 impl Default for SimulationConfig {
@@ -55,6 +59,7 @@ impl Default for SimulationConfig {
             time_increment: Duration::seconds(60),
             result_storage_location: None,
             snapshot_interval: None,
+            dry_run: false,
         }
     }
 }
@@ -62,7 +67,7 @@ impl Default for SimulationConfig {
 /// The main simulation engine
 ///
 /// Single entry point to run simulations.
-/// THis will drive progress in all entities and make sure results are reported.
+/// This will drive progress in all entities and make sure results are reported.
 pub struct Simulation {
     /// Global simulation state
     state: State,
@@ -86,7 +91,6 @@ impl Simulation {
 
         // move people
         let movements = self.state.move_people()?;
-        tracing::debug!(target: "simulation", "Moved {} people.", movements.len());
 
         // generate orders for each site
         let orders: HashMap<_, _> = self
@@ -130,7 +134,7 @@ impl Simulation {
 
                 events.extend(site_events);
             } else {
-                tracing::error!("Failed to step site {:?}", site.id());
+                tracing::error!(target: "simulation", "Failed to step site {:?}", site.id());
             }
         }
 
@@ -140,7 +144,9 @@ impl Simulation {
         self.state.step(events)?;
 
         // snapshot the state if the time is right
-        self.snapshot().await?;
+        if !self.state.config().dry_run {
+            self.snapshot().await?;
+        }
 
         Ok(())
     }
@@ -248,6 +254,7 @@ impl Simulation {
             .filter_map(|person| create_order(&self.state).map(|items| (person, items)))
             .flat_map(|(person, items)| {
                 Some(OrderCreatedPayload {
+                    site_id: *site_id,
                     person_id: *person.id(),
                     items,
                     destination: person.position().ok()?.to_point(),

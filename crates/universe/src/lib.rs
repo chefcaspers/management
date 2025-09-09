@@ -125,25 +125,18 @@ pub async fn run_simulation(
     setup: SimulationSetup,
     duration: usize,
     output_location: Url,
+    routing_location: Url,
+    dry_run: bool,
 ) -> Result<(), Error> {
     let simulation = SimulationBuilder::new()
+        .with_setup(setup)
         .with_result_storage_location(output_location)
         .with_snapshot_interval(Duration::minutes(10))
-        .with_time_increment(Duration::minutes(1));
+        .with_time_increment(Duration::minutes(1))
+        .with_routing_data_path(routing_location)
+        .with_dry_run(dry_run);
 
-    // add barnds to simulation
-    let simulation = setup
-        .brands
-        .into_iter()
-        .fold(simulation, |sim, brand| sim.with_brand(brand));
-
-    // add sites to simulation
-    let simulation = setup
-        .sites
-        .into_iter()
-        .fold(simulation, |sim, site| sim.with_site(site));
-
-    let mut simulation = simulation.build()?;
+    let mut simulation = simulation.build().await?;
 
     simulation.run(duration).await?;
 

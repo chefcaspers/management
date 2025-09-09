@@ -1,24 +1,21 @@
 use std::collections::HashMap;
 
-use arrow_array::RecordBatchReader;
-use arrow_select::concat::concat_batches;
+use arrow::compute::filter_record_batch;
+use arrow_array::{Scalar, StringArray};
+use arrow_ord::cmp::eq;
 use chrono::{DateTime, Duration, Utc};
 use itertools::Itertools;
-use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use url::Url;
+use uuid::Uuid;
 
 use crate::error::Result;
-use crate::idents::BrandId;
-use crate::models::Brand;
 use crate::simulation::{Simulation, SimulationConfig};
 use crate::state::{EntityView, RoutingData, State};
-use crate::{Error, SiteRunner, SiteSetup};
+use crate::{Error, SimulationSetup, SiteId, SiteRunner, read_parquet_dir};
 
 /// Builder for creating a simulation instance.
 pub struct SimulationBuilder {
-    brands: Vec<Brand>,
-
-    sites: Vec<SiteSetup>,
+    setup: Option<SimulationSetup>,
 
     /// Size of the simulated population
     population_size: usize,
@@ -35,23 +32,24 @@ pub struct SimulationBuilder {
     /// Interval at which to take snapshots of the simulation state
     snapshot_interval: Option<Duration>,
 
-    /// Routing nodes and edges
-    routing_nodes: Option<Url>,
-    routing_edges: Option<Url>,
+    /// Path where routing data is stored
+    routing_path: Option<Url>,
+
+    /// Whether to run the simulation in dry run mode
+    dry_run: bool,
 }
 
 impl Default for SimulationBuilder {
     fn default() -> Self {
         Self {
-            brands: Vec::new(),
-            sites: Vec::new(),
+            setup: None,
             population_size: 1000,
             time_increment: Duration::seconds(60),
             start_time: Utc::now(),
             result_storage_location: None,
             snapshot_interval: None,
-            routing_nodes: None,
-            routing_edges: None,
+            routing_path: None,
+            dry_run: false,
         }
     }
 }
@@ -63,14 +61,8 @@ impl SimulationBuilder {
     }
 
     /// Add a brand to the simulation
-    pub fn with_brand(mut self, brand: Brand) -> Self {
-        self.brands.push(brand);
-        self
-    }
-
-    /// Add a site to the simulation
-    pub fn with_site(mut self, site: SiteSetup) -> Self {
-        self.sites.push(site);
+    pub fn with_setup(mut self, setup: SimulationSetup) -> Self {
+        self.setup = Some(setup);
         self
     }
 
@@ -103,60 +95,93 @@ impl SimulationBuilder {
         self
     }
 
-    pub fn with_routing_nodes(mut self, routing_nodes: Url) -> Self {
-        self.routing_nodes = Some(routing_nodes);
+    pub fn with_routing_data_path(mut self, mut routing_path: Url) -> Self {
+        if !routing_path.path().ends_with('/') {
+            routing_path.set_path(&format!("{}/", routing_path.path()));
+        }
+        self.routing_path = Some(routing_path);
         self
     }
 
-    pub fn with_routing_edges(mut self, routing_edges: Url) -> Self {
-        self.routing_edges = Some(routing_edges);
+    pub fn with_dry_run(mut self, dry_run: bool) -> Self {
+        self.dry_run = dry_run;
         self
+    }
+
+    /// Load the prepared street network data into routing data objects.
+    async fn routing_data(&self) -> Result<HashMap<SiteId, RoutingData>> {
+        let Some(setup) = &self.setup else {
+            return Err(Error::MissingInput("Setup file not found".to_string()));
+        };
+
+        let Some(routing_path) = &self.routing_path else {
+            return Err(Error::MissingInput(
+                "Routing data path is required".to_string(),
+            ));
+        };
+
+        let nodes_path = routing_path.join("nodes/").unwrap();
+        let edge_path = routing_path.join("edges/").unwrap();
+
+        let nodes = read_parquet_dir(&nodes_path, None).await?;
+        let edges = read_parquet_dir(&edge_path, None).await?;
+
+        tracing::info!(
+            target: "builder",
+            "Loaded routing data with {} nodes and {} edges", nodes.num_rows(), edges.num_rows()
+        );
+
+        let mut routers = HashMap::new();
+        for site in &setup.sites {
+            let site_name = Scalar::new(StringArray::from(vec![
+                site.info.as_ref().map(|i| i.name.clone()),
+            ]));
+            // filter nodes for site
+            let node_filter = eq(nodes.column(0), &site_name)?;
+            let filtered_nodes = filter_record_batch(&nodes, &node_filter)?;
+
+            // filter edges for site
+            let edge_filter = eq(edges.column(0), &site_name)?;
+            let filtered_edges = filter_record_batch(&edges, &edge_filter)?;
+            let site_id = site
+                .info
+                .as_ref()
+                .and_then(|i| Uuid::parse_str(&i.id).ok())
+                .ok_or(Error::InvalidData("Expected site info".into()))?;
+
+            tracing::info!(
+                target: "builder",
+                "Creating router for site {} with {} nodes and {} edges",
+                site_id,
+                filtered_nodes.num_rows(),
+                filtered_edges.num_rows()
+            );
+
+            routers.insert(
+                site_id.into(),
+                RoutingData::try_new(filtered_nodes, filtered_edges)?,
+            );
+        }
+
+        Ok(routers)
     }
 
     /// Build the simulation with the given initial conditions
-    pub fn build(self) -> Result<Simulation> {
-        let brands: HashMap<BrandId, _> = self
-            .brands
-            .into_iter()
-            .map(|brand| {
-                let brand_id = BrandId::from_uri_ref(format!("brands/{}", brand.name));
-                Ok::<_, Error>((brand_id, brand))
-            })
-            .try_collect()?;
-
-        let file = std::fs::File::open(
-            "/Users/robert.pack/code/management/notebooks/sites/edges/london.parquet",
-        )
-        .unwrap();
-        let reader = ParquetRecordBatchReaderBuilder::try_new(file)?.build()?;
-        let schema = reader.schema();
-        let batches: Vec<_> = reader.into_iter().try_collect()?;
-        let edges = concat_batches(&schema, &batches)?;
-
-        // let Some(node_file) = self.routing_nodes else {
-        //     return Err(Error::MissingInput(
-        //         "Routing nodes file not found".to_string(),
-        //     ));
-        // };
-
-        let file = std::fs::File::open(
-            "/Users/robert.pack/code/management/notebooks/sites/nodes/london.parquet",
-        )
-        .unwrap();
-        let reader = ParquetRecordBatchReaderBuilder::try_new(file)?.build()?;
-        let schema = reader.schema();
-        let batches: Vec<_> = reader.into_iter().try_collect()?;
-        let nodes = concat_batches(&schema, &batches)?;
-
-        let routing = RoutingData::try_new(nodes, edges)?;
-
+    pub async fn build(self) -> Result<Simulation> {
         let config = SimulationConfig {
             simulation_start: self.start_time,
             time_increment: self.time_increment,
-            result_storage_location: self.result_storage_location,
+            result_storage_location: self.result_storage_location.clone(),
             snapshot_interval: self.snapshot_interval,
+            dry_run: self.dry_run,
         };
-        let state = State::try_new(brands, self.sites, routing, Some(config))?;
+        let routing = self.routing_data().await?;
+
+        let state = if let Some(setup) = self.setup {
+            State::try_new(setup, routing, Some(config))?
+        } else {
+            todo!()
+        };
 
         let site_runners = state
             .objects()

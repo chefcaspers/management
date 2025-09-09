@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-use arrow_array::cast::AsArray as _;
-use arrow_array::{RecordBatch, types::Float64Type};
+use arrow::array::cast::AsArray as _;
+use arrow::array::{RecordBatch, types::Float64Type};
+use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use arrow_schema::extension::Uuid as UuidExtension;
-use arrow_schema::{DataType, Field, Schema, SchemaRef};
 use datafusion::common::SchemaExt;
 use fast_paths::{FastGraph, InputGraph, PathCalculator};
 use geo::Point;
@@ -69,11 +69,11 @@ impl<T: Into<Point>> From<(T, usize)> for JourneyLeg {
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Journey {
-    // Store all legs for the full journey history
+    // The full journey to be completed
     legs: Vec<JourneyLeg>,
-    // Track progress through the journey
+    // The current leg being traveled
     current_leg_index: usize,
-    // Track progress within the current leg (0.0 to 1.0)
+    // Progress within the current leg (0.0 to 1.0)
     current_leg_progress: f64,
 }
 
@@ -225,6 +225,7 @@ impl<T: Into<JourneyLeg>> FromIterator<T> for Journey {
     }
 }
 
+/// Auxiliary structure to handle journey planning and routing.
 pub struct JourneyPlanner {
     routing: RoutingData,
     graph: FastGraph,
@@ -236,6 +237,9 @@ impl JourneyPlanner {
         Self { routing, graph }
     }
 
+    /// Get a path calculator for the routing graph.
+    ///
+    /// This calculator should be reused for repeated calls to the plan method.
     pub fn get_router(&self) -> PathCalculator {
         fast_paths::create_calculator(&self.graph)
     }

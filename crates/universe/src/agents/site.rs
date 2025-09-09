@@ -127,7 +127,6 @@ impl SiteRunner {
 
         Ok(SiteRunner {
             id,
-            // order_data,
             kitchens,
             order_queue: VecDeque::new(),
             order_lines: HashMap::new(),
@@ -207,7 +206,11 @@ impl SiteRunner {
         let mut events = Vec::new();
 
         let site_location = ctx.objects().site(&self.id)?.properties()?.lat_lng()?;
-        let Some(site_location_node) = ctx.trip_planner().nearest_node(&site_location) else {
+        let planner = ctx
+            .trip_planner(&self.id)
+            .ok_or(Error::invalid_data("no planner registered for site"))?;
+
+        let Some(site_location_node) = planner.nearest_node(&site_location) else {
             tracing::error!("No node found for site location");
             return Err(Error::invalid_geometry("No node found for site location"));
         };
@@ -216,29 +219,30 @@ impl SiteRunner {
             site_location.to_cell(Resolution::Eight),
             &PersonRole::Courier,
         );
-        let orders = ctx.orders().orders_with_status(&OrderStatus::Ready);
+        let orders = ctx
+            .orders()
+            .orders_with_status(&self.id, &OrderStatus::Ready);
 
-        let mut router = ctx.trip_planner().get_router();
+        let mut router = planner.get_router();
+
         let order_queue = orders.zip(couriers);
         for (order, courier) in order_queue {
             let destination = order.destination()?;
 
             // Generate the delivery route for the courier
-            let Some(destination_node) = ctx.trip_planner().nearest_node(&destination) else {
-                tracing::error!("Failed to find a node for order {:?}", order.id());
+            let Some(destination_node) = planner.nearest_node(&destination) else {
+                tracing::error!(target: "site-agent", "Failed to find a node for order {:?}", order.id());
                 events.push(EventPayload::order_failed(*order.id(), None));
                 continue;
             };
-            let Some(journey) =
-                ctx.trip_planner()
-                    .plan(&mut router, site_location_node, destination_node)
+            let Some(journey) = planner.plan(&mut router, site_location_node, destination_node)
             else {
                 tracing::error!("Failed to find a route for order {:?}", order.id());
                 events.push(EventPayload::order_failed(*order.id(), None));
                 continue;
             };
 
-            tracing::debug!(target: "agents", "Courier {:?} is delivering order {:?}", courier.id(), order.id());
+            tracing::debug!(target: "site-agent", "Courier {:?} is delivering order {:?}", courier.id(), order.id());
             events.push(EventPayload::person_updated(
                 *courier.id(),
                 PersonStatus::Delivering(*order.id(), journey),
