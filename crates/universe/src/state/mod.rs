@@ -189,19 +189,22 @@ impl State {
             .into_iter()
             .fold(OrderDataBuilder::new(), |builder, order| {
                 builder.add_order(
-                    &order.person_id,
+                    order.site_id,
+                    order.person_id,
                     order.destination.coord().unwrap().try_into().unwrap(),
                     &order.items,
                 )
             })
             .finish()?;
+
         tracing::debug!(
             target: "state",
             "Processing {} orders with {} lines",
             order_data.batch_orders().num_rows(),
             order_data.batch_lines().num_rows()
         );
-        let order_ids = order_data.orders().map(|o| *o.id()).collect_vec();
+
+        let order_ids = order_data.all_orders().map(|o| *o.id()).collect_vec();
         self.orders = self.orders.merge(order_data)?;
         Ok(order_ids)
     }

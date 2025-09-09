@@ -67,7 +67,7 @@ impl Default for SimulationConfig {
 /// The main simulation engine
 ///
 /// Single entry point to run simulations.
-/// THis will drive progress in all entities and make sure results are reported.
+/// This will drive progress in all entities and make sure results are reported.
 pub struct Simulation {
     /// Global simulation state
     state: State,
@@ -91,7 +91,6 @@ impl Simulation {
 
         // move people
         let movements = self.state.move_people()?;
-        tracing::debug!(target: "simulation", "Moved {} people.", movements.len());
 
         // generate orders for each site
         let orders: HashMap<_, _> = self
@@ -255,6 +254,7 @@ impl Simulation {
             .filter_map(|person| create_order(&self.state).map(|items| (person, items)))
             .flat_map(|(person, items)| {
                 Some(OrderCreatedPayload {
+                    site_id: *site_id,
                     person_id: *person.id(),
                     items,
                     destination: person.position().ok()?.to_point(),

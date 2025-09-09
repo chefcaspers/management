@@ -219,7 +219,9 @@ impl SiteRunner {
             site_location.to_cell(Resolution::Eight),
             &PersonRole::Courier,
         );
-        let orders = ctx.orders().orders_with_status(&OrderStatus::Ready);
+        let orders = ctx
+            .orders()
+            .orders_with_status(&self.id, &OrderStatus::Ready);
 
         let mut router = planner.get_router();
 

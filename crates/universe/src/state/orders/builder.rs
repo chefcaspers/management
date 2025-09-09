@@ -1,15 +1,16 @@
 use std::sync::{Arc, LazyLock};
 
-use arrow_array::RecordBatch;
-use arrow_array::builder::{
+use arrow::array::RecordBatch;
+use arrow::array::builder::{
     FixedSizeBinaryBuilder, FixedSizeListBuilder, Float64Builder, StringBuilder,
 };
+use arrow_schema::extension::Uuid as UuidExtension;
 use arrow_schema::{ArrowError, DataType, Field, Schema, SchemaRef};
 use h3o::LatLng;
 
 use super::{OrderData, OrderLineStatus, OrderStatus};
 use crate::error::Result;
-use crate::idents::{BrandId, MenuItemId, OrderId, OrderLineId, PersonId};
+use crate::idents::{BrandId, MenuItemId, OrderId, OrderLineId, PersonId, SiteId};
 
 pub struct OrderDataBuilder {
     orders: OrderBuilder,
@@ -26,11 +27,15 @@ impl OrderDataBuilder {
 
     pub fn add_order(
         mut self,
-        person_id: &PersonId,
+        site_id: SiteId,
+        person_id: PersonId,
         destination: LatLng,
         order: &[(BrandId, MenuItemId)],
     ) -> Self {
-        let order_id = self.orders.add_order(*person_id, destination).unwrap();
+        let order_id = self
+            .orders
+            .add_order(site_id, person_id, destination)
+            .unwrap();
         for (brand_id, menu_item_id) in order {
             self.lines
                 .add_line(order_id, brand_id, menu_item_id)
@@ -105,16 +110,22 @@ impl OrderLineBuilder {
     }
 }
 
-pub(super) static ORDER_DESTINATION_IDX: usize = 2;
-pub(super) static ORDER_STATUS_IDX: usize = 3;
+pub(super) static ORDER_SITE_ID_IDX: usize = 1;
+pub(super) static ORDER_DESTINATION_IDX: usize = 3;
+pub(super) static ORDER_STATUS_IDX: usize = 4;
 pub(super) static ORDER_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
     let mut fields = Vec::with_capacity(4);
-    fields.push(Field::new("id", DataType::FixedSizeBinary(16), false));
-    fields.push(Field::new(
-        "customer_id",
-        DataType::FixedSizeBinary(16),
-        false,
-    ));
+    fields.push(
+        Field::new("id", DataType::FixedSizeBinary(16), false).with_extension_type(UuidExtension),
+    );
+    fields.push(
+        Field::new("site_id", DataType::FixedSizeBinary(16), false)
+            .with_extension_type(UuidExtension),
+    );
+    fields.push(
+        Field::new("customer_id", DataType::FixedSizeBinary(16), false)
+            .with_extension_type(UuidExtension),
+    );
     fields.push(Field::new_fixed_size_list(
         "destination",
         Field::new("item", DataType::Float64, false),
@@ -127,6 +138,7 @@ pub(super) static ORDER_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
 
 struct OrderBuilder {
     ids: FixedSizeBinaryBuilder,
+    site_ids: FixedSizeBinaryBuilder,
     customer_ids: FixedSizeBinaryBuilder,
     destination: FixedSizeListBuilder<Float64Builder>,
     statuses: StringBuilder,
@@ -136,6 +148,7 @@ impl OrderBuilder {
     pub fn new() -> Self {
         Self {
             ids: FixedSizeBinaryBuilder::new(16),
+            site_ids: FixedSizeBinaryBuilder::new(16),
             customer_ids: FixedSizeBinaryBuilder::new(16),
             destination: FixedSizeListBuilder::new(Float64Builder::new(), 2)
                 .with_field(Field::new("item", DataType::Float64, false)),
@@ -145,11 +158,13 @@ impl OrderBuilder {
 
     pub fn add_order(
         &mut self,
+        site_id: impl AsRef<[u8]>,
         customer_id: impl AsRef<[u8]>,
         destination: LatLng,
     ) -> Result<OrderId, ArrowError> {
         let id = OrderId::new();
         self.ids.append_value(id)?;
+        self.site_ids.append_value(site_id)?;
         self.customer_ids.append_value(customer_id)?;
         self.destination.values().append_value(destination.lat());
         self.destination.values().append_value(destination.lng());
@@ -163,6 +178,7 @@ impl OrderBuilder {
             ORDER_SCHEMA.clone(),
             vec![
                 Arc::new(self.ids.finish()),
+                Arc::new(self.site_ids.finish()),
                 Arc::new(self.customer_ids.finish()),
                 Arc::new(self.destination.finish()),
                 Arc::new(self.statuses.finish()),

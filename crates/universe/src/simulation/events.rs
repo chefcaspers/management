@@ -1,10 +1,11 @@
 use geo::Point;
 
-use crate::idents::{BrandId, KitchenId, MenuItemId, OrderId, OrderLineId, PersonId};
+use crate::idents::{BrandId, KitchenId, MenuItemId, OrderId, OrderLineId, PersonId, SiteId};
 use crate::state::{OrderLineStatus, OrderStatus, PersonStatus};
 
 #[derive(Debug, Clone)]
 pub struct OrderCreatedPayload {
+    pub site_id: SiteId,
     pub person_id: PersonId,
     pub items: Vec<(BrandId, MenuItemId)>,
     pub destination: Point,
