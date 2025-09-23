@@ -15,6 +15,10 @@ struct Cli {
     #[arg(short, long, default_value_t = 100)]
     duration: usize,
 
+    #[arg(long)]
+    /// Path where basic simulation setup is stored.
+    setup_path: String,
+
     #[arg(long, default_value_t = false)]
     dry_run: bool,
 }

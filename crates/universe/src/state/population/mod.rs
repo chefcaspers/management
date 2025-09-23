@@ -1,8 +1,8 @@
 use std::convert::AsRef;
 use std::sync::Arc;
 
-use arrow_array::{RecordBatch, cast::AsArray as _};
-use arrow_schema::{Field, Schema};
+use arrow::array::{RecordBatch, cast::AsArray as _};
+use arrow::datatypes::{Field, Schema};
 use chrono::{DateTime, Utc};
 use geo::Point;
 use geo_traits::PointTrait as _;

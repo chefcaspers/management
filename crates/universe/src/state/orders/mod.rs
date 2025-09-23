@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use arrow_array::types::Float64Type;
-use arrow_array::{RecordBatch, StringArray, cast::AsArray as _};
+use arrow::array::types::Float64Type;
+use arrow::array::{RecordBatch, StringArray, cast::AsArray as _};
 use arrow_ord::partition::partition;
 use arrow_select::concat::concat_batches;
 use h3o::LatLng;

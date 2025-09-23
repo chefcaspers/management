@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
+use arrow::array::{Scalar, StringArray};
 use arrow::compute::filter_record_batch;
-use arrow_array::{Scalar, StringArray};
 use arrow_ord::cmp::eq;
 use chrono::{DateTime, Duration, Utc};
 use itertools::Itertools;

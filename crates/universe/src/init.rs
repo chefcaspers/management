@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use arrow_array::RecordBatch;
+use arrow::array::RecordBatch;
 
 use crate::SiteSetup;
 use crate::error::Result;

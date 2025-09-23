@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use arrow_array::RecordBatch;
-use arrow_array::cast::AsArray as _;
+use arrow::array::RecordBatch;
+use arrow::array::cast::AsArray as _;
 use dashmap::DashMap;
 use dashmap::mapref::one::Ref;
 use indexmap::IndexMap;

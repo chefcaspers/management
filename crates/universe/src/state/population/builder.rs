@@ -1,7 +1,7 @@
 use std::sync::{Arc, LazyLock};
 
-use arrow_array::RecordBatch;
-use arrow_array::builder::{FixedSizeBinaryBuilder, StringBuilder};
+use arrow::array::RecordBatch;
+use arrow::array::builder::{FixedSizeBinaryBuilder, StringBuilder};
 use arrow_schema::{DataType, Field, Schema, SchemaRef};
 use fake::Fake;
 use geo::{BoundingRect, Centroid, Contains, Point};

@@ -4,7 +4,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use arrow_array::RecordBatch;
+use arrow::array::RecordBatch;
 use arrow_schema::{DataType, Field, Schema, SchemaRef, TimeUnit, UnionFields, UnionMode};
 use datafusion::common::DataFusionError;
 use datafusion::execution::RecordBatchStream;
