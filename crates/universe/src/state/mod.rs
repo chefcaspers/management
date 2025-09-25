@@ -290,7 +290,7 @@ pub(crate) async fn read_parquet_dir(
     table_path: &Url,
     ctx: Option<SessionContext>,
 ) -> Result<RecordBatch> {
-    let ctx = ctx.unwrap_or_else(SessionContext::new);
+    let ctx = ctx.unwrap_or_default();
     let session_state = ctx.state();
 
     // Parse the path

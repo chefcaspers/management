@@ -258,5 +258,78 @@ impl KitchenStation {
         }
     }
 }
+#[cfg_attr(feature = "python", ::pyo3::pyclass(get_all, set_all))]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListSitesRequest {
+    /// The maximum number of results per page that should be returned.
+    #[prost(int32, optional, tag="2")]
+    pub max_results: ::core::option::Option<i32>,
+    /// Opaque pagination token to go to next page based on previous query.
+    #[prost(string, optional, tag="3")]
+    pub page_token: ::core::option::Option<::prost::alloc::string::String>,
+}
+impl ::prost::Name for ListSitesRequest {
+const NAME: &'static str = "ListSitesRequest";
+const PACKAGE: &'static str = "caspers.core.v1";
+fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.ListSitesRequest".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.ListSitesRequest".into() }}
+/// List catalogs response.
+#[cfg_attr(feature = "python", ::pyo3::pyclass(get_all, set_all))]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListSitesResponse {
+    /// The sites returned.
+    #[prost(message, repeated, tag="1")]
+    pub sites: ::prost::alloc::vec::Vec<Site>,
+    /// The next_page_token value to include in the next List request.
+    #[prost(string, optional, tag="2")]
+    pub next_page_token: ::core::option::Option<::prost::alloc::string::String>,
+}
+impl ::prost::Name for ListSitesResponse {
+const NAME: &'static str = "ListSitesResponse";
+const PACKAGE: &'static str = "caspers.core.v1";
+fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.ListSitesResponse".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.ListSitesResponse".into() }}
+#[cfg_attr(feature = "python", ::pyo3::pyclass(get_all, set_all))]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CreateSiteRequest {
+    /// Name of the site.
+    ///
+    /// The name must be unique amon all sites.
+    #[prost(string, tag="1")]
+    pub name: ::prost::alloc::string::String,
+    /// Latitude coordinate of the site's location.
+    #[prost(double, tag="2")]
+    pub latitude: f64,
+    /// Longitude coordinate of the site's location.
+    #[prost(double, tag="3")]
+    pub longitude: f64,
+}
+impl ::prost::Name for CreateSiteRequest {
+const NAME: &'static str = "CreateSiteRequest";
+const PACKAGE: &'static str = "caspers.core.v1";
+fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.CreateSiteRequest".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.CreateSiteRequest".into() }}
+#[cfg_attr(feature = "python", ::pyo3::pyclass(get_all, set_all))]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetSiteRequest {
+    #[prost(string, tag="1")]
+    pub name: ::prost::alloc::string::String,
+}
+impl ::prost::Name for GetSiteRequest {
+const NAME: &'static str = "GetSiteRequest";
+const PACKAGE: &'static str = "caspers.core.v1";
+fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.GetSiteRequest".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.GetSiteRequest".into() }}
+#[cfg_attr(feature = "python", ::pyo3::pyclass(get_all, set_all))]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DeleteSiteRequest {
+    #[prost(string, tag="1")]
+    pub name: ::prost::alloc::string::String,
+}
+impl ::prost::Name for DeleteSiteRequest {
+const NAME: &'static str = "DeleteSiteRequest";
+const PACKAGE: &'static str = "caspers.core.v1";
+fn full_name() -> ::prost::alloc::string::String { "caspers.core.v1.DeleteSiteRequest".into() }fn type_url() -> ::prost::alloc::string::String { "/caspers.core.v1.DeleteSiteRequest".into() }}
 include!("caspers.core.v1.serde.rs");
 // @@protoc_insertion_point(module)

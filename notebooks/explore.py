@@ -14,6 +14,7 @@ def _():
     import plotly.express as px
     import folium
     import marimo as mo
+
     return folium, mo, os
 
 
@@ -146,16 +147,13 @@ def _():
 
     from typing import TypedDict, Iterable, Any
 
-
     class TripPoint(TypedDict):
         x: float
         y: float
 
-
     class TripData(TypedDict):
         timestamps: list[datetime.datetime]
         positions: list[TripPoint]
-
 
     def trip_geo_features(trips: Iterable[TripData]) -> list[dict[str, Any]]:
         """Genearte GeoJson Features from trip data."""
@@ -181,6 +179,7 @@ def _():
             }
             for trip in trips
         ]
+
     return (trip_geo_features,)
 
 

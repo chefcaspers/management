@@ -3,12 +3,20 @@ syntax = "proto3";
 package caspers.core.v1;
 
 import "buf/validate/validate.proto";
+import "google/api/resource.proto";
 import "google/protobuf/duration.proto";
 
 // Physical locations where kitchens operate
 //
 // Multiple kitchens are located within each site.
 message Site {
+  option (google.api.resource) = {
+    type: "caspers.io/Site"
+    pattern: "sites/{site}"
+    plural: "sites"
+    singular: "site"
+  };
+
   // Unique identifier for the location
   string id = 1 [(buf.validate.field).string.uuid = true];
 

@@ -21,3 +21,8 @@ run:
 # run marimo notebook server for interactive data exploration
 scratch:
     uv run --directory {{ source_directory() }}/notebooks marimo edit explore.py
+
+fmt:
+    cargo fmt --all
+    buf format proto/ --write
+    uvx ruff format .
