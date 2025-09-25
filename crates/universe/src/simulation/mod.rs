@@ -6,12 +6,14 @@ use geo_traits::to_geo::ToGeoPoint;
 use h3o::{LatLng, Resolution};
 use itertools::Itertools;
 use rand::Rng;
+use rand::distr::{Distribution, Uniform};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::agents::SiteRunner;
 use crate::error::Result;
 use crate::idents::{BrandId, MenuItemId, SiteId, TypedId};
+use crate::simulation::execution::EventDataBuilder;
 use crate::state::{EntityView, PersonRole, State};
 
 pub use self::builder::SimulationBuilder;
@@ -141,12 +143,45 @@ impl Simulation {
         tracing::debug!(target: "simulation", "Collected {} events.", events.len());
 
         // update the state with the collected events
-        self.state.step(events)?;
+        self.state.step(&events)?;
+        self.write_events(events).await?;
 
         // snapshot the state if the time is right
         if !self.state.config().dry_run {
             self.snapshot().await?;
         }
+
+        Ok(())
+    }
+
+    async fn write_events(&self, events: impl IntoIterator<Item = EventPayload>) -> Result<()> {
+        let range = Uniform::new(0.0_f32, 0.9999_f32).unwrap();
+        let events = events.into_iter().map(|payload| {
+            let multiplier = range.sample(&mut rand::rng());
+            let timestamp = self.state.current_time() + self.state.time_step().mul_f32(multiplier);
+            Event { timestamp, payload }
+        });
+
+        let mut builder = EventDataBuilder::new();
+        for event in events {
+            builder.add_event(&event)?;
+        }
+        let batch = builder.build()?;
+
+        let base_url = self.state.config().result_storage_location.as_ref();
+        // we have no place to store results
+        let Some(base_path) = base_url else {
+            return Ok(());
+        };
+        let ts = self.state.current_time().timestamp();
+        let events_path = base_path
+            .join(&format!("events/snapshot-{ts}.json"))
+            .unwrap();
+
+        let ctx = self.state.snapshot_session()?;
+        let df = ctx.read_batch(batch)?;
+        df.write_json(events_path.as_str(), DataFrameWriteOptions::new(), None)
+            .await?;
 
         Ok(())
     }

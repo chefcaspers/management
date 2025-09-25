@@ -1,9 +1,17 @@
+use chrono::{DateTime, Utc};
 use geo::Point;
+use serde::{Deserialize, Serialize};
 
 use crate::idents::{BrandId, KitchenId, MenuItemId, OrderId, OrderLineId, PersonId, SiteId};
 use crate::state::{OrderLineStatus, OrderStatus, PersonStatus};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Event {
+    pub timestamp: DateTime<Utc>,
+    pub payload: EventPayload,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrderCreatedPayload {
     pub site_id: SiteId,
     pub person_id: PersonId,
@@ -11,20 +19,20 @@ pub struct OrderCreatedPayload {
     pub destination: Point,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PersonUpdatedPayload {
     pub person_id: PersonId,
     pub status: PersonStatus,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrderUpdatedPayload {
     pub order_id: OrderId,
     pub status: OrderStatus,
     pub actor_id: Option<PersonId>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrderLineUpdatedPayload {
     pub order_line_id: OrderLineId,
     pub status: OrderLineStatus,
@@ -32,7 +40,7 @@ pub struct OrderLineUpdatedPayload {
     pub actor_id: Option<PersonId>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EventPayload {
     PersonUpdated(PersonUpdatedPayload),
     OrderUpdated(OrderUpdatedPayload),

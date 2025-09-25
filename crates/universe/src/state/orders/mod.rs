@@ -8,6 +8,7 @@ use arrow_select::concat::concat_batches;
 use h3o::LatLng;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, Display, EnumString};
 
 use crate::error::{Error, Result};
@@ -17,8 +18,11 @@ pub(crate) use self::builder::OrderDataBuilder;
 
 mod builder;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, EnumString, Display, AsRefStr)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Hash, EnumString, Display, AsRefStr, Serialize, Deserialize,
+)]
 #[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum OrderStatus {
     /// Customer submitted the order
     Submitted,
@@ -40,8 +44,11 @@ pub enum OrderStatus {
     Unknown(String),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumString, Display, AsRefStr)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, EnumString, Display, AsRefStr, Serialize, Deserialize,
+)]
 #[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum OrderLineStatus {
     Submitted,
     Assigned,

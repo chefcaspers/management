@@ -221,16 +221,19 @@ impl State {
 
         // update person statuses after positions have been updated.
         for (person_id, status) in status_updates.into_iter() {
-            self.population.update_person_status(&person_id, status)?;
+            self.population.update_person_status(&person_id, &status)?;
         }
         Ok(movements)
     }
 
-    pub(super) fn step(&mut self, events: impl IntoIterator<Item = EventPayload>) -> Result<()> {
+    pub(super) fn step<'a>(
+        &mut self,
+        events: impl IntoIterator<Item = &'a EventPayload>,
+    ) -> Result<()> {
         for event in events.into_iter() {
             if let EventPayload::PersonUpdated(payload) = event {
                 self.population
-                    .update_person_status(&payload.person_id, payload.status)?;
+                    .update_person_status(&payload.person_id, &payload.status)?;
             }
         }
 

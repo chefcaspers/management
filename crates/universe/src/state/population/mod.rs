@@ -134,8 +134,8 @@ impl PopulationData {
             .map(|(valid_index, (id, _))| PersonView::new(id, self, valid_index))
     }
 
-    pub fn update_person_status(&mut self, id: &PersonId, status: PersonStatus) -> Result<()> {
-        self.lookup_index.get_mut(id).ok_or(Error::NotFound)?.status = status;
+    pub fn update_person_status(&mut self, id: &PersonId, status: &PersonStatus) -> Result<()> {
+        self.lookup_index.get_mut(id).ok_or(Error::NotFound)?.status = status.clone();
         Ok(())
     }
 
