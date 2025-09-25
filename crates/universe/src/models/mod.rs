@@ -17,6 +17,12 @@ pub mod caspers {
             include!("./gen/caspers.messages.v1.rs");
         }
     }
+
+    pub mod vendors {
+        pub mod v1 {
+            include!("./gen/caspers.vendors.v1.rs");
+        }
+    }
 }
 
 impl Site {
