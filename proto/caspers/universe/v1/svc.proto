@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package caspers.core.v1;
+
+message SimulateRequest {
+  string site = 1;
+}
+
+message SimulateResponse {
+  string result = 1;
+}
+
+service UniverseService {
+  rpc Simulate(SimulateRequest) returns (SimulateResponse) {}
+}

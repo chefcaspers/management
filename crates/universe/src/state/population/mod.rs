@@ -1,8 +1,10 @@
 use std::convert::AsRef;
 use std::sync::Arc;
 
+use arrow::array::{Array, LargeStringArray};
 use arrow::array::{RecordBatch, cast::AsArray as _};
 use arrow::datatypes::{Field, Schema};
+use arrow_schema::DataType;
 use chrono::{DateTime, Utc};
 use geo::Point;
 use geo_traits::PointTrait as _;
@@ -85,26 +87,66 @@ impl PopulationData {
         })
     }
 
+    pub(crate) fn try_new_from_snapshot(snapshot: RecordBatch) -> Result<Self> {
+        let indices = (0..snapshot.columns().len() - 2).collect::<Vec<_>>();
+        let people = snapshot.project(&indices)?;
+        let position_data = snapshot.column_by_name("position").unwrap().as_struct();
+        let point_type = PointType::new(Dimension::XY, Default::default());
+        let positions: PointArray = (position_data, point_type).try_into()?;
+
+        let id_iter = people
+            .column_by_name("id")
+            .unwrap()
+            .as_fixed_size_binary()
+            .iter();
+        let state_iter = people
+            .column_by_name("state")
+            .unwrap()
+            .as_string::<i64>()
+            .iter();
+
+        let lookup_index = id_iter
+            .zip(state_iter)
+            .map(|(id, state)| {
+                let id = Uuid::from_slice(id.unwrap()).unwrap().into();
+                let state = serde_json::from_str(state.unwrap()).unwrap();
+                (id, state)
+            })
+            .collect();
+
+        Ok(PopulationData {
+            people,
+            positions,
+            lookup_index,
+        })
+    }
+
     pub fn people(&self) -> &RecordBatch {
         &self.people
     }
 
-    pub fn people_full(&self) -> RecordBatch {
+    pub fn snapshot(&self) -> RecordBatch {
         let people = self.people.clone();
         let positions = self.positions.clone().into_arrow();
+        let states: Arc<dyn Array> = Arc::new(LargeStringArray::from(
+            self.lookup_index
+                .values()
+                .map(|v| serde_json::to_string(v).unwrap())
+                .collect_vec(),
+        ));
         let full_schema = people
             .schema()
             .fields()
             .iter()
             .cloned()
-            .chain(std::iter::once(Arc::new(Field::new(
-                "position",
-                positions.data_type().clone(),
-                false,
-            ))))
+            .chain(vec![
+                Arc::new(Field::new("position", positions.data_type().clone(), false)),
+                Arc::new(Field::new("state", DataType::LargeUtf8, false)),
+            ])
             .collect_vec();
         let mut columns = people.columns().iter().cloned().collect_vec();
         columns.push(positions);
+        columns.push(states);
         RecordBatch::try_new(Arc::new(Schema::new(full_schema)), columns).unwrap()
     }
 

@@ -14,7 +14,6 @@ def _():
     import plotly.express as px
     import folium
     import marimo as mo
-
     return folium, mo, os
 
 
@@ -91,6 +90,19 @@ def _(mo):
         SELECT role, count(*) as count
         FROM './data/population/people/*.parquet'
         GROUP BY role
+        """
+    )
+    return
+
+
+@app.cell
+def _(mo):
+    _df = mo.sql(
+        f"""
+        SELECT *
+        FROM './data/population/people/*.parquet'
+        WHERE role = 'courier'
+        LIMIT 10
         """
     )
     return
@@ -179,7 +191,6 @@ def _():
             }
             for trip in trips
         ]
-
     return (trip_geo_features,)
 
 

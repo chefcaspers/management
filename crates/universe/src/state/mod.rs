@@ -245,7 +245,7 @@ impl State {
     /// Create a new session context with the current state of the simulation.
     pub(crate) fn snapshot_session(&self) -> Result<SessionContext> {
         let ctx = SessionContext::new();
-        ctx.register_batch("population", self.population.people_full().clone())?;
+        ctx.register_batch("population", self.population.snapshot().clone())?;
         ctx.register_batch("objects", self.objects.objects().clone())?;
         ctx.register_batch("orders", self.orders.batch_orders().clone())?;
         ctx.register_batch("order_lines", self.orders.batch_lines().clone())?;

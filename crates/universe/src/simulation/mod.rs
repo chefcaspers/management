@@ -117,7 +117,7 @@ impl Simulation {
             let orders = orders.get(site_id).unwrap();
             let orders = orders
                 .iter()
-                .map(|order_id| self.state.orders().order(order_id).unwrap());
+                .flat_map(|order_id| self.state.orders().order(order_id));
             site.receive_orders(orders)?;
 
             // advance the site and collect events
