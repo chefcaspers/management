@@ -32,7 +32,7 @@ pub trait Entity: Send + Sync + 'static {
 /// Trait for entities that need to be updated each simulation step
 pub trait Simulatable: Entity {
     /// Update the entity state based on the current simulation context
-    fn step(&mut self, context: &State) -> Result<Vec<EventPayload>>;
+    fn step(&mut self, events: &[EventPayload], context: &State) -> Result<Vec<EventPayload>>;
 }
 
 /// Configuration for the simulation engine
@@ -97,30 +97,15 @@ impl Simulation {
         // advance all sites and collect events
         for (site_id, site) in self.sites.iter_mut() {
             // query population to get new orders for the site
-            let new_orders = self
-                .population
-                .orders_for_site(site_id, &self.state)?
-                .collect_vec();
-            // update the site state with new orders
-            let new_order_ids = self.state.process_orders(&new_orders)?;
+            let population_events = self.population.step(site_id, &self.state)?.collect_vec();
 
-            // send new orders to the site for processing
-            site.receive_orders(&new_order_ids, &self.state)?;
+            // update the site state with new orders
+            let interactions_events = self.state.process_population_events(&population_events)?;
+            events.extend(population_events);
 
             // advance the site and collect events
-            if let Ok(site_events) = site.step(&self.state) {
-                let order_line_updates = site_events.iter().filter_map(|event| match event {
-                    EventPayload::OrderLineUpdated(payload) => Some(payload),
-                    _ => None,
-                });
-                self.state.update_order_lines(order_line_updates)?;
-
-                let order_updates = site_events.iter().filter_map(|event| match event {
-                    EventPayload::OrderUpdated(payload) => Some(payload),
-                    _ => None,
-                });
-                self.state.update_orders(order_updates)?;
-
+            if let Ok(site_events) = site.step(&interactions_events, &self.state) {
+                self.state.process_site_events(&site_events)?;
                 events.extend(site_events);
             } else {
                 tracing::error!(target: "simulation", "Failed to step site {:?}", site.id());

@@ -3,7 +3,8 @@ use h3o::{LatLng, Resolution};
 use rand::Rng as _;
 
 use crate::{
-    BrandId, EntityView as _, MenuItemId, OrderCreatedPayload, PersonRole, Result, SiteId, State,
+    BrandId, EntityView as _, EventPayload, MenuItemId, OrderCreatedPayload, PersonRole, Result,
+    SiteId, State,
 };
 
 pub struct PopulationRunner {}
@@ -13,11 +14,11 @@ impl PopulationRunner {
         PopulationRunner {}
     }
 
-    pub(crate) fn orders_for_site(
+    pub(crate) fn step(
         &self,
         site_id: &SiteId,
         ctx: &State,
-    ) -> Result<impl Iterator<Item = OrderCreatedPayload>> {
+    ) -> Result<impl Iterator<Item = EventPayload>> {
         let site = ctx.objects().site(site_id)?;
         let props = site.properties()?;
         let lat_lng = LatLng::new(props.latitude, props.longitude)?;
@@ -28,12 +29,12 @@ impl PopulationRunner {
             .idle_people_in_cell(lat_lng.to_cell(Resolution::Six), &PersonRole::Customer)
             .filter_map(|person| create_order(ctx).map(|items| (person, items)))
             .flat_map(|(person, items)| {
-                Some(OrderCreatedPayload {
+                Some(EventPayload::OrderCreated(OrderCreatedPayload {
                     site_id: *site_id,
                     person_id: *person.id(),
                     items,
                     destination: person.position().ok()?.to_point(),
-                })
+                }))
             }))
     }
 }

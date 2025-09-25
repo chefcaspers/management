@@ -25,9 +25,7 @@ use uuid::Uuid;
 
 use crate::error::Result;
 use crate::idents::*;
-use crate::{
-    Error, OrderCreatedPayload, OrderLineUpdatedPayload, OrderUpdatedPayload, SimulationSetup,
-};
+use crate::{Error, OrderLineUpdatedPayload, OrderUpdatedPayload, SimulationSetup};
 
 use self::movement::JourneyPlanner;
 use super::{EventPayload, SimulationConfig};
@@ -157,35 +155,31 @@ impl State {
         self.time + self.time_step
     }
 
-    pub(crate) fn update_order_lines<'a>(
-        &mut self,
-        updates: impl IntoIterator<Item = &'a OrderLineUpdatedPayload>,
-    ) -> Result<()> {
-        self.orders.update_order_lines(
-            updates
-                .into_iter()
-                .map(|payload| (payload.order_line_id, &payload.status)),
-        )?;
+    pub(crate) fn process_site_events<'a>(&mut self, events: &[EventPayload]) -> Result<()> {
+        let order_line_updates = events.iter().filter_map(|event| match event {
+            EventPayload::OrderLineUpdated(payload) => Some(payload),
+            _ => None,
+        });
+        self.update_order_lines(order_line_updates)?;
+        let order_updates = events.iter().filter_map(|event| match event {
+            EventPayload::OrderUpdated(payload) => Some(payload),
+            _ => None,
+        });
+        self.update_orders(order_updates)?;
+
         Ok(())
     }
 
-    pub(crate) fn update_orders<'a>(
+    pub(crate) fn process_population_events<'a>(
         &mut self,
-        updates: impl IntoIterator<Item = &'a OrderUpdatedPayload>,
-    ) -> Result<()> {
-        self.orders.update_orders(
-            updates
-                .into_iter()
-                .map(|payload| (payload.order_id, &payload.status)),
-        )?;
-        Ok(())
-    }
+        events: &[EventPayload],
+    ) -> Result<Vec<EventPayload>> {
+        let new_orders = events.iter().filter_map(|event| match event {
+            EventPayload::OrderCreated(payload) => Some(payload),
+            _ => None,
+        });
 
-    pub(crate) fn process_orders<'a>(
-        &mut self,
-        orders: impl IntoIterator<Item = &'a OrderCreatedPayload>,
-    ) -> Result<Vec<OrderId>> {
-        let order_data = orders
+        let order_data = new_orders
             .into_iter()
             .fold(OrderDataBuilder::new(), |builder, order| {
                 builder.add_order(
@@ -204,9 +198,42 @@ impl State {
             order_data.batch_lines().num_rows()
         );
 
-        let order_ids = order_data.all_orders().map(|o| *o.id()).collect_vec();
+        let order_ids = order_data
+            .all_orders()
+            .map(|o| {
+                EventPayload::OrderUpdated(OrderUpdatedPayload {
+                    order_id: *o.id(),
+                    status: OrderStatus::Submitted,
+                    actor_id: None,
+                })
+            })
+            .collect_vec();
         self.orders = self.orders.merge(order_data)?;
         Ok(order_ids)
+    }
+
+    fn update_order_lines<'a>(
+        &mut self,
+        updates: impl IntoIterator<Item = &'a OrderLineUpdatedPayload>,
+    ) -> Result<()> {
+        self.orders.update_order_lines(
+            updates
+                .into_iter()
+                .map(|payload| (payload.order_line_id, &payload.status)),
+        )?;
+        Ok(())
+    }
+
+    fn update_orders<'a>(
+        &mut self,
+        updates: impl IntoIterator<Item = &'a OrderUpdatedPayload>,
+    ) -> Result<()> {
+        self.orders.update_orders(
+            updates
+                .into_iter()
+                .map(|payload| (payload.order_id, &payload.status)),
+        )?;
+        Ok(())
     }
 
     /// Advance people's journeys and update their statuses on arrival at their destination.
