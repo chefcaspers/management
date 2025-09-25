@@ -199,7 +199,7 @@ impl State {
 
         tracing::debug!(
             target: "state",
-            "Processing {} orders with {} lines",
+            "Created {} new orders with {} lines",
             order_data.batch_orders().num_rows(),
             order_data.batch_lines().num_rows()
         );

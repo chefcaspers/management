@@ -2,19 +2,17 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, Duration, Utc};
 use datafusion::dataframe::DataFrameWriteOptions;
-use geo_traits::to_geo::ToGeoPoint;
-use h3o::{LatLng, Resolution};
 use itertools::Itertools;
-use rand::Rng;
 use rand::distr::{Distribution, Uniform};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
+use crate::PopulationRunner;
 use crate::agents::SiteRunner;
 use crate::error::Result;
-use crate::idents::{BrandId, MenuItemId, SiteId, TypedId};
+use crate::idents::{SiteId, TypedId};
 use crate::simulation::execution::EventDataBuilder;
-use crate::state::{EntityView, PersonRole, State};
+use crate::state::State;
 
 pub use self::builder::SimulationBuilder;
 pub use self::events::*;
@@ -77,6 +75,8 @@ pub struct Simulation {
     /// all ghost kitchen sites.
     sites: HashMap<SiteId, SiteRunner>,
 
+    population: PopulationRunner,
+
     last_snapshot_time: DateTime<Utc>,
 
     /// whether the simulation has been initialized
@@ -92,33 +92,20 @@ impl Simulation {
         let mut events = Vec::new();
 
         // move people
-        let movements = self.state.move_people()?;
-
-        // generate orders for each site
-        let orders: HashMap<_, _> = self
-            .sites
-            .iter()
-            .flat_map(|(site_id, _)| {
-                self.orders_for_site(site_id)
-                    .ok()
-                    .map(|orders| (*site_id, orders.collect_vec()))
-            })
-            .collect();
-
-        // process orders for each site
-        let orders: HashMap<_, _> = orders
-            .into_iter()
-            .flat_map(|(site_id, orders)| Some((site_id, self.state.process_orders(&orders).ok()?)))
-            .collect();
+        let _movements = self.state.move_people()?;
 
         // advance all sites and collect events
         for (site_id, site) in self.sites.iter_mut() {
+            // query population to get new orders for the site
+            let new_orders = self
+                .population
+                .orders_for_site(site_id, &self.state)?
+                .collect_vec();
+            // update the site state with new orders
+            let new_order_ids = self.state.process_orders(&new_orders)?;
+
             // send new orders to the site for processing
-            let orders = orders.get(site_id).unwrap();
-            let orders = orders
-                .iter()
-                .flat_map(|order_id| self.state.orders().order(order_id));
-            site.receive_orders(orders)?;
+            site.receive_orders(&new_order_ids, &self.state)?;
 
             // advance the site and collect events
             if let Ok(site_events) = site.step(&self.state) {
@@ -272,42 +259,4 @@ impl Simulation {
 
         Ok(())
     }
-
-    fn orders_for_site(
-        &self,
-        site_id: &SiteId,
-    ) -> Result<impl Iterator<Item = OrderCreatedPayload>> {
-        let site = self.state.objects().site(site_id)?;
-        let props = site.properties()?;
-        let lat_lng = LatLng::new(props.latitude, props.longitude)?;
-
-        Ok(self
-            .state
-            .population()
-            // NB: resolution 6 corresponds to a cell size of approximately 36 km2
-            .idle_people_in_cell(lat_lng.to_cell(Resolution::Six), &PersonRole::Customer)
-            .filter_map(|person| create_order(&self.state).map(|items| (person, items)))
-            .flat_map(|(person, items)| {
-                Some(OrderCreatedPayload {
-                    site_id: *site_id,
-                    person_id: *person.id(),
-                    items,
-                    destination: person.position().ok()?.to_point(),
-                })
-            }))
-    }
-}
-
-fn create_order(state: &State) -> Option<Vec<(BrandId, MenuItemId)>> {
-    let mut rng = rand::rng();
-
-    // TODO: compute probability from person state
-    rng.random_bool(1.0 / 50.0).then(|| {
-        state
-            .objects()
-            .sample_menu_items(None, &mut rng)
-            .into_iter()
-            .map(|menu_item| (menu_item.brand_id().try_into().unwrap(), menu_item.id()))
-            .collect()
-    })
 }

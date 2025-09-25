@@ -134,10 +134,10 @@ impl SiteRunner {
     }
 
     /// Receive new orders from the state and queue them for processing.
-    pub(crate) fn receive_orders<'a>(
-        &mut self,
-        orders: impl IntoIterator<Item = OrderView<'a>>,
-    ) -> Result<()> {
+    pub(crate) fn receive_orders<'a>(&mut self, orders: &[OrderId], ctx: &State) -> Result<()> {
+        let orders = orders
+            .iter()
+            .flat_map(|order_id| ctx.orders().order(order_id));
         for order in orders {
             for line in order.lines() {
                 self.order_lines.insert(
