@@ -41,6 +41,7 @@ pub struct OrderLineUpdatedPayload {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum EventPayload {
     PersonUpdated(PersonUpdatedPayload),
     OrderUpdated(OrderUpdatedPayload),

@@ -9,6 +9,12 @@ use crate::{
 
 pub struct PopulationRunner {}
 
+impl Default for PopulationRunner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PopulationRunner {
     pub fn new() -> Self {
         PopulationRunner {}
@@ -43,7 +49,7 @@ fn create_order(state: &State) -> Option<Vec<(BrandId, MenuItemId)>> {
     let mut rng = rand::rng();
 
     // TODO: compute probability from person state
-    rng.random_bool(1.0 / 100.0).then(|| {
+    rng.random_bool(1.0 / 1000.0).then(|| {
         state
             .objects()
             .sample_menu_items(None, &mut rng)

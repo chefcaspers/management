@@ -21,6 +21,7 @@ use uuid::Uuid;
 
 use crate::error::{Error, Result};
 use crate::idents::{OrderId, PersonId};
+use crate::OrderData;
 
 use super::movement::{Journey, Transport};
 
@@ -36,7 +37,7 @@ pub enum PersonStatus {
     Eating(DateTime<Utc>),
     Moving(Journey),
     Delivering(OrderId, Journey),
-    WaitingForCustomer(OrderId),
+    WaitingForCustomer(OrderId, Journey),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -181,9 +182,10 @@ impl PopulationData {
         Ok(())
     }
 
-    pub(crate) fn update_journeys(
+    pub(super) fn update_journeys(
         &mut self,
         time_step: std::time::Duration,
+        order_data: &OrderData,
     ) -> Result<(Vec<(PersonId, Vec<Point>)>, Vec<(PersonId, PersonStatus)>)> {
         let mut new_positions =
             PointBuilder::new(PointType::new(Dimension::XY, Default::default()));
@@ -197,15 +199,26 @@ impl PopulationData {
                     let next_status = journey.is_done().then_some(PersonStatus::Idle);
                     (Some(progress), next_status)
                 }
-                PersonStatus::Delivering(_, journey) => {
+                PersonStatus::Delivering(order_id, journey) => {
                     let progress = journey.advance(&Transport::Bicycle, time_step);
                     let next_status = journey.is_done().then_some({
                         // couriers need to reverse their journey when they're done delivering
                         let mut journey = journey.clone();
                         journey.reset_reverse();
-                        PersonStatus::Moving(journey)
+                        PersonStatus::WaitingForCustomer(*order_id, journey)
                     });
                     (Some(progress), next_status)
+                }
+                PersonStatus::WaitingForCustomer(order_id, journey) => {
+                    if let Some(order) = order_data.order(order_id) {
+                        let customer_id: PersonId =
+                            Uuid::from_slice(order.customer_person_id()).unwrap().into();
+                        status_updates.push((
+                            customer_id,
+                            PersonStatus::Eating(Utc::now() + chrono::Duration::seconds(30 * 60)),
+                        ));
+                    };
+                    (None, Some(PersonStatus::Moving(journey.clone())))
                 }
                 _ => (None, None),
             };

@@ -16,7 +16,6 @@ use datafusion::datasource::listing::{
     ListingOptions, ListingTable, ListingTableConfig, ListingTableUrl,
 };
 use datafusion::prelude::*;
-use geo::Point;
 use geo_traits::PointTrait;
 use itertools::Itertools;
 use rand::Rng;
@@ -25,16 +24,16 @@ use uuid::Uuid;
 
 use crate::error::Result;
 use crate::idents::*;
-use crate::{Error, OrderLineUpdatedPayload, OrderUpdatedPayload, SimulationSetup};
+use crate::{
+    Error, OrderLineUpdatedPayload, OrderUpdatedPayload, PersonUpdatedPayload, SimulationSetup,
+};
 
 use self::movement::JourneyPlanner;
 use super::{EventPayload, SimulationConfig};
 
 pub(crate) use self::movement::RoutingData;
 pub(crate) use self::objects::{ObjectData, ObjectDataBuilder, ObjectLabel};
-pub(crate) use self::orders::{
-    OrderData, OrderDataBuilder, OrderLineStatus, OrderStatus, OrderView,
-};
+pub(crate) use self::orders::{OrderData, OrderDataBuilder, OrderLineStatus, OrderStatus};
 pub(crate) use self::population::{
     PersonRole, PersonStatus, PopulationData, PopulationDataBuilder,
 };
@@ -237,8 +236,10 @@ impl State {
     }
 
     /// Advance people's journeys and update their statuses on arrival at their destination.
-    pub(super) fn move_people(&mut self) -> Result<Vec<(PersonId, Vec<Point>)>> {
-        let (movements, status_updates) = self.population.update_journeys(self.time_step)?;
+    pub(super) fn move_people(&mut self) -> Result<Vec<EventPayload>> {
+        let (movements, status_updates) = self
+            .population
+            .update_journeys(self.time_step, &self.orders)?;
         tracing::debug!(
             target: "state",
             "Moved {} people with {} status updates",
@@ -246,11 +247,17 @@ impl State {
             status_updates.len()
         );
 
+        let mut events = vec![];
         // update person statuses after positions have been updated.
         for (person_id, status) in status_updates.into_iter() {
-            self.population.update_person_status(&person_id, &status)?;
+            // self.population.update_person_status(&person_id, &status)?;
+            events.push(EventPayload::PersonUpdated(PersonUpdatedPayload {
+                person_id,
+                status,
+            }));
         }
-        Ok(movements)
+
+        Ok(events)
     }
 
     pub(super) fn step<'a>(

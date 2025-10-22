@@ -291,6 +291,14 @@ impl<'a> OrderView<'a> {
             .value(self.valid_index)
     }
 
+    pub(crate) fn customer_person_id(&self) -> &[u8] {
+        self.data
+            .orders
+            .column(builder::ORDER_CUSTOMER_ID_IDX)
+            .as_fixed_size_binary()
+            .value(self.valid_index)
+    }
+
     pub fn status(&self) -> &str {
         self.data
             .orders

@@ -89,10 +89,8 @@ pub struct Simulation {
 impl Simulation {
     /// Advance the simulation by one time step
     async fn step(&mut self) -> Result<()> {
-        let mut events = Vec::new();
-
         // move people
-        let _movements = self.state.move_people()?;
+        let mut events = self.state.move_people()?;
 
         // advance all sites and collect events
         for (site_id, site) in self.sites.iter_mut() {
@@ -117,11 +115,6 @@ impl Simulation {
         // update the state with the collected events
         self.state.step(&events)?;
         self.write_events(events).await?;
-
-        // snapshot the state if the time is right
-        if !self.state.config().dry_run {
-            self.snapshot().await?;
-        }
 
         Ok(())
     }
@@ -162,6 +155,10 @@ impl Simulation {
     pub async fn run(&mut self, steps: usize) -> Result<()> {
         for _ in 0..steps {
             self.step().await?;
+        }
+        // snapshot the state
+        if !self.state.config().dry_run {
+            self.snapshot().await?;
         }
         Ok(())
     }

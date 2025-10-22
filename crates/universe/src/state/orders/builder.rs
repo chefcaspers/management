@@ -111,6 +111,7 @@ impl OrderLineBuilder {
 }
 
 pub(super) static ORDER_SITE_ID_IDX: usize = 1;
+pub(super) static ORDER_CUSTOMER_ID_IDX: usize = 2;
 pub(super) static ORDER_DESTINATION_IDX: usize = 3;
 pub(super) static ORDER_STATUS_IDX: usize = 4;
 pub(super) static ORDER_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
