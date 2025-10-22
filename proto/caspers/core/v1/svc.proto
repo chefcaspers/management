@@ -1,0 +1,111 @@
+syntax = "proto3";
+
+package caspers.core.v1;
+
+import "buf/validate/validate.proto";
+import "caspers/core/v1/models.proto";
+import "gnostic/openapi/v3/annotations.proto";
+import "gnostic/openapi/v3/openapiv3.proto";
+import "google/api/annotations.proto";
+import "google/api/client.proto";
+import "google/api/field_behavior.proto";
+import "google/protobuf/empty.proto";
+
+message ListSitesRequest {
+  // The maximum number of results per page that should be returned.
+  optional int32 max_results = 2 [
+    (buf.validate.field).int32.gt = 0,
+    (buf.validate.field).int32.lte = 1000,
+    (google.api.field_behavior) = OPTIONAL
+  ];
+
+  // Opaque pagination token to go to next page based on previous query.
+  optional string page_token = 3 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// List catalogs response.
+message ListSitesResponse {
+  // The sites returned.
+  repeated Site sites = 1;
+
+  // The next_page_token value to include in the next List request.
+  optional string next_page_token = 2;
+}
+
+message CreateSiteRequest {
+  // Name of the site.
+  //
+  // The name must be unique amon all sites.
+  string name = 1 [
+    (buf.validate.field).string.pattern = "^[a-z][0-9a-z_]*[0-9a-z]$",
+    (buf.validate.field).string.min_len = 3,
+    (buf.validate.field).string.max_len = 255,
+    (buf.validate.field).required = true,
+    (google.api.field_behavior) = REQUIRED
+  ];
+
+  // Latitude coordinate of the site's location.
+  double latitude = 2 [
+    (buf.validate.field).double.gte = -90.0,
+    (buf.validate.field).double.lte = 90.0
+  ];
+
+  // Longitude coordinate of the site's location.
+  double longitude = 3 [
+    (buf.validate.field).double.gte = -180.0,
+    (buf.validate.field).double.lte = 180.0
+  ];
+}
+
+message GetSiteRequest {
+  string name = 1 [
+    (buf.validate.field).string.pattern = "^[a-z][0-9a-z_]*[0-9a-z]$",
+    (buf.validate.field).string.min_len = 3,
+    (buf.validate.field).string.max_len = 255,
+    (buf.validate.field).required = true,
+    (google.api.field_behavior) = REQUIRED
+  ];
+}
+
+message DeleteSiteRequest {
+  string name = 1 [
+    (buf.validate.field).string.pattern = "^[a-z][0-9a-z_]*[0-9a-z]$",
+    (buf.validate.field).string.min_len = 3,
+    (buf.validate.field).string.max_len = 255,
+    (buf.validate.field).required = true,
+    (google.api.field_behavior) = REQUIRED
+  ];
+}
+
+service SitesService {
+  rpc ListSites(ListSitesRequest) returns (ListSitesResponse) {
+    option (google.api.http) = {get: "/sites"};
+    option (gnostic.openapi.v3.operation) = {operation_id: "ListSites"};
+  }
+
+  rpc CreateSite(CreateSiteRequest) returns (Site) {
+    option (google.api.http) = {
+      post: "/sites"
+      body: "*"
+    };
+    option (gnostic.openapi.v3.operation) = {operation_id: "CreateSite"};
+  }
+
+  rpc GetSite(GetSiteRequest) returns (Site) {
+    option (google.api.http) = {get: "/sites/{name}"};
+    option (gnostic.openapi.v3.operation) = {operation_id: "GetSite"};
+  }
+
+  // rpc UpdateSite(UpdateSiteRequest) returns (Site) {
+  //   option (google.api.http) = {
+  //     patch: "/sites/{name}"
+  //     body: "*"
+  //   };
+  //   option (gnostic.openapi.v3.operation) = {operation_id: "UpdateSite"};
+  // }
+
+  rpc DeleteSite(DeleteSiteRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/sites/{name}"};
+    option (gnostic.openapi.v3.operation) = {operation_id: "DeleteSite"};
+  }
+}

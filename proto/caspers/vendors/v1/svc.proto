@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+package caspers.vendors.v1;
+
+import "buf/validate/validate.proto";
+import "caspers/vendors/v1/models.proto";
+import "gnostic/openapi/v3/annotations.proto";
+import "gnostic/openapi/v3/openapiv3.proto";
+import "google/api/annotations.proto";
+import "google/api/client.proto";
+import "google/api/field_behavior.proto";
+import "google/protobuf/empty.proto";
+
+message ListVendorsRequest {
+  // The maximum number of results per page that should be returned.
+  optional int32 max_results = 2 [
+    (buf.validate.field).int32.gt = 0,
+    (buf.validate.field).int32.lte = 1000,
+    (google.api.field_behavior) = OPTIONAL
+  ];
+
+  // Opaque pagination token to go to next page based on previous query.
+  optional string page_token = 3 [(google.api.field_behavior) = OPTIONAL];
+}
+
+message ListVendorsResponse {
+  repeated Vendor vendors = 1;
+
+  // The next_page_token value to include in the next List request.
+  optional string next_page_token = 2;
+}
+
+message CreateVendorRequest {
+  // Name of the vendor
+  //
+  // Must be unique among all vendors
+  string name = 2 [
+    (buf.validate.field).string.pattern = "^[a-z][0-9a-z_]*[0-9a-z]$",
+    (buf.validate.field).string.min_len = 3,
+    (buf.validate.field).string.max_len = 255,
+    (buf.validate.field).required = true,
+    (google.api.field_behavior) = REQUIRED
+  ];
+
+  // Display name of the vendor for use in the UI
+  optional string display_name = 3;
+
+  optional string description = 4;
+
+  // URL of the vendor's logo
+  //
+  // for display purposes
+  optional string logo_url = 5 [(buf.validate.field).string.uri = true];
+}
+
+service VendorsService {
+  rpc ListVendors(ListVendorsRequest) returns (ListVendorsResponse) {
+    option (google.api.http) = {get: "/vendors"};
+  }
+
+  rpc CreateVendor(CreateVendorRequest) returns (Vendor) {
+    option (google.api.http) = {
+      post: "/vendors"
+      body: "*"
+    };
+  }
+}

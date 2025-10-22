@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use arrow_array::RecordBatch;
-use arrow_array::cast::AsArray as _;
+use arrow::array::RecordBatch;
+use arrow::array::cast::AsArray as _;
 use dashmap::DashMap;
 use dashmap::mapref::one::Ref;
 use indexmap::IndexMap;
@@ -78,7 +78,7 @@ impl ObjectData {
         let menu_item_idx = self
             .iter_ids()?
             .enumerate()
-            .filter(|&(_, (_, _, label))| (label == Some(ObjectLabel::MenuItem.as_ref())))
+            .filter(|&(_, (_, _, label))| label == Some(ObjectLabel::MenuItem.as_ref()))
             .filter_map(|(idx, (id, _parent_id, _))| {
                 id.and_then(|id| Some((id.try_into().ok()?, idx)))
             })
@@ -185,7 +185,7 @@ impl ObjectData {
     ) -> Result<impl Iterator<Item = Result<(KitchenId, Vec<BrandId>)>>> {
         let brands: Vec<_> = self
             .iter_ids()?
-            .filter(|&(id, _, label)| (label == Some(ObjectLabel::Brand.as_ref()) && id.is_some()))
+            .filter(|&(id, _, label)| label == Some(ObjectLabel::Brand.as_ref()) && id.is_some())
             .map(|(id, _, _)| uuid::Uuid::from_slice(id.unwrap()).map(|id| id.into()))
             .try_collect()?;
         Ok(self.iter_ids()?.filter_map(move |(id, parent_id, label)| {

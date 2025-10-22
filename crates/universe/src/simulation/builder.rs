@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
+use arrow::array::{Scalar, StringArray};
 use arrow::compute::filter_record_batch;
-use arrow_array::{Scalar, StringArray};
 use arrow_ord::cmp::eq;
 use chrono::{DateTime, Duration, Utc};
 use itertools::Itertools;
@@ -11,7 +11,7 @@ use uuid::Uuid;
 use crate::error::Result;
 use crate::simulation::{Simulation, SimulationConfig};
 use crate::state::{EntityView, RoutingData, State};
-use crate::{Error, SimulationSetup, SiteId, SiteRunner, read_parquet_dir};
+use crate::{Error, PopulationRunner, SimulationSetup, SiteId, SiteRunner, read_parquet_dir};
 
 /// Builder for creating a simulation instance.
 pub struct SimulationBuilder {
@@ -194,6 +194,7 @@ impl SimulationBuilder {
             last_snapshot_time: state.current_time(),
             state,
             sites: site_runners,
+            population: PopulationRunner::new(),
         })
     }
 }

@@ -97,11 +97,12 @@ impl Journey {
             return Vec::new();
         }
 
+        // cumpute the total distance travelled during this step.
         let velocity_m_s = transport.default_velocity_m_s();
         let distance_m = velocity_m_s * time_step.as_secs_f64();
         let mut distance_remaining = distance_m;
-        let mut traversed_points = Vec::new();
 
+        let mut traversed_points = Vec::new();
         while distance_remaining > 0. && !self.is_done() {
             let current_leg = &self.legs[self.current_leg_index];
             let leg_distance_remaining =

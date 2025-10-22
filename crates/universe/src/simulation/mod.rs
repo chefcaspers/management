@@ -2,17 +2,17 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, Duration, Utc};
 use datafusion::dataframe::DataFrameWriteOptions;
-use geo_traits::to_geo::ToGeoPoint;
-use h3o::{LatLng, Resolution};
 use itertools::Itertools;
-use rand::Rng;
+use rand::distr::{Distribution, Uniform};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
+use crate::PopulationRunner;
 use crate::agents::SiteRunner;
 use crate::error::Result;
-use crate::idents::{BrandId, MenuItemId, SiteId, TypedId};
-use crate::state::{EntityView, PersonRole, State};
+use crate::idents::{SiteId, TypedId};
+use crate::simulation::execution::EventDataBuilder;
+use crate::state::State;
 
 pub use self::builder::SimulationBuilder;
 pub use self::events::*;
@@ -32,7 +32,7 @@ pub trait Entity: Send + Sync + 'static {
 /// Trait for entities that need to be updated each simulation step
 pub trait Simulatable: Entity {
     /// Update the entity state based on the current simulation context
-    fn step(&mut self, context: &State) -> Result<Vec<EventPayload>>;
+    fn step(&mut self, events: &[EventPayload], context: &State) -> Result<Vec<EventPayload>>;
 }
 
 /// Configuration for the simulation engine
@@ -75,6 +75,8 @@ pub struct Simulation {
     /// all ghost kitchen sites.
     sites: HashMap<SiteId, SiteRunner>,
 
+    population: PopulationRunner,
+
     last_snapshot_time: DateTime<Utc>,
 
     /// whether the simulation has been initialized
@@ -87,51 +89,21 @@ pub struct Simulation {
 impl Simulation {
     /// Advance the simulation by one time step
     async fn step(&mut self) -> Result<()> {
-        let mut events = Vec::new();
-
         // move people
-        let movements = self.state.move_people()?;
-
-        // generate orders for each site
-        let orders: HashMap<_, _> = self
-            .sites
-            .iter()
-            .flat_map(|(site_id, _)| {
-                self.orders_for_site(site_id)
-                    .ok()
-                    .map(|orders| (*site_id, orders.collect_vec()))
-            })
-            .collect();
-
-        // process orders for each site
-        let orders: HashMap<_, _> = orders
-            .into_iter()
-            .flat_map(|(site_id, orders)| Some((site_id, self.state.process_orders(&orders).ok()?)))
-            .collect();
+        let mut events = self.state.move_people()?;
 
         // advance all sites and collect events
         for (site_id, site) in self.sites.iter_mut() {
-            // send new orders to the site for processing
-            let orders = orders.get(site_id).unwrap();
-            let orders = orders
-                .iter()
-                .map(|order_id| self.state.orders().order(order_id).unwrap());
-            site.receive_orders(orders)?;
+            // query population to get new orders for the site
+            let population_events = self.population.step(site_id, &self.state)?.collect_vec();
+
+            // update the site state with new orders
+            let interactions_events = self.state.process_population_events(&population_events)?;
+            events.extend(population_events);
 
             // advance the site and collect events
-            if let Ok(site_events) = site.step(&self.state) {
-                let order_line_updates = site_events.iter().filter_map(|event| match event {
-                    EventPayload::OrderLineUpdated(payload) => Some(payload),
-                    _ => None,
-                });
-                self.state.update_order_lines(order_line_updates)?;
-
-                let order_updates = site_events.iter().filter_map(|event| match event {
-                    EventPayload::OrderUpdated(payload) => Some(payload),
-                    _ => None,
-                });
-                self.state.update_orders(order_updates)?;
-
+            if let Ok(site_events) = site.step(&interactions_events, &self.state) {
+                self.state.process_site_events(&site_events)?;
                 events.extend(site_events);
             } else {
                 tracing::error!(target: "simulation", "Failed to step site {:?}", site.id());
@@ -141,12 +113,40 @@ impl Simulation {
         tracing::debug!(target: "simulation", "Collected {} events.", events.len());
 
         // update the state with the collected events
-        self.state.step(events)?;
+        self.state.step(&events)?;
+        self.write_events(events).await?;
 
-        // snapshot the state if the time is right
-        if !self.state.config().dry_run {
-            self.snapshot().await?;
+        Ok(())
+    }
+
+    async fn write_events(&self, events: impl IntoIterator<Item = EventPayload>) -> Result<()> {
+        let range = Uniform::new(0.0_f32, 0.9999_f32).unwrap();
+        let events = events.into_iter().map(|payload| {
+            let multiplier = range.sample(&mut rand::rng());
+            let timestamp = self.state.current_time() + self.state.time_step().mul_f32(multiplier);
+            Event { timestamp, payload }
+        });
+
+        let mut builder = EventDataBuilder::new();
+        for event in events {
+            builder.add_event(&event)?;
         }
+        let batch = builder.build()?;
+
+        let base_url = self.state.config().result_storage_location.as_ref();
+        // we have no place to store results
+        let Some(base_path) = base_url else {
+            return Ok(());
+        };
+        let ts = self.state.current_time().timestamp();
+        let events_path = base_path
+            .join(&format!("events/snapshot-{ts}.json"))
+            .unwrap();
+
+        let ctx = self.state.snapshot_session()?;
+        let df = ctx.read_batch(batch)?;
+        df.write_json(events_path.as_str(), DataFrameWriteOptions::new(), None)
+            .await?;
 
         Ok(())
     }
@@ -155,6 +155,10 @@ impl Simulation {
     pub async fn run(&mut self, steps: usize) -> Result<()> {
         for _ in 0..steps {
             self.step().await?;
+        }
+        // snapshot the state
+        if !self.state.config().dry_run {
+            self.snapshot().await?;
         }
         Ok(())
     }
@@ -237,42 +241,4 @@ impl Simulation {
 
         Ok(())
     }
-
-    fn orders_for_site(
-        &self,
-        site_id: &SiteId,
-    ) -> Result<impl Iterator<Item = OrderCreatedPayload>> {
-        let site = self.state.objects().site(site_id)?;
-        let props = site.properties()?;
-        let lat_lng = LatLng::new(props.latitude, props.longitude)?;
-
-        Ok(self
-            .state
-            .population()
-            // NB: resolution 6 corresponds to a cell size of approximately 36 km2
-            .idle_people_in_cell(lat_lng.to_cell(Resolution::Six), &PersonRole::Customer)
-            .filter_map(|person| create_order(&self.state).map(|items| (person, items)))
-            .flat_map(|(person, items)| {
-                Some(OrderCreatedPayload {
-                    site_id: *site_id,
-                    person_id: *person.id(),
-                    items,
-                    destination: person.position().ok()?.to_point(),
-                })
-            }))
-    }
-}
-
-fn create_order(state: &State) -> Option<Vec<(BrandId, MenuItemId)>> {
-    let mut rng = rand::rng();
-
-    // TODO: compute probability from person state
-    rng.random_bool(1.0 / 50.0).then(|| {
-        state
-            .objects()
-            .sample_menu_items(None, &mut rng)
-            .into_iter()
-            .map(|menu_item| (menu_item.brand_id().try_into().unwrap(), menu_item.id()))
-            .collect()
-    })
 }

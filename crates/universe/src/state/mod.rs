@@ -16,7 +16,6 @@ use datafusion::datasource::listing::{
     ListingOptions, ListingTable, ListingTableConfig, ListingTableUrl,
 };
 use datafusion::prelude::*;
-use geo::Point;
 use geo_traits::PointTrait;
 use itertools::Itertools;
 use rand::Rng;
@@ -26,7 +25,7 @@ use uuid::Uuid;
 use crate::error::Result;
 use crate::idents::*;
 use crate::{
-    Error, OrderCreatedPayload, OrderLineUpdatedPayload, OrderUpdatedPayload, SimulationSetup,
+    Error, OrderLineUpdatedPayload, OrderUpdatedPayload, PersonUpdatedPayload, SimulationSetup,
 };
 
 use self::movement::JourneyPlanner;
@@ -34,9 +33,7 @@ use super::{EventPayload, SimulationConfig};
 
 pub(crate) use self::movement::RoutingData;
 pub(crate) use self::objects::{ObjectData, ObjectDataBuilder, ObjectLabel};
-pub(crate) use self::orders::{
-    OrderData, OrderDataBuilder, OrderLineStatus, OrderStatus, OrderView,
-};
+pub(crate) use self::orders::{OrderData, OrderDataBuilder, OrderLineStatus, OrderStatus};
 pub(crate) use self::population::{
     PersonRole, PersonStatus, PopulationData, PopulationDataBuilder,
 };
@@ -157,35 +154,31 @@ impl State {
         self.time + self.time_step
     }
 
-    pub(crate) fn update_order_lines<'a>(
-        &mut self,
-        updates: impl IntoIterator<Item = &'a OrderLineUpdatedPayload>,
-    ) -> Result<()> {
-        self.orders.update_order_lines(
-            updates
-                .into_iter()
-                .map(|payload| (payload.order_line_id, &payload.status)),
-        )?;
+    pub(crate) fn process_site_events<'a>(&mut self, events: &[EventPayload]) -> Result<()> {
+        let order_line_updates = events.iter().filter_map(|event| match event {
+            EventPayload::OrderLineUpdated(payload) => Some(payload),
+            _ => None,
+        });
+        self.update_order_lines(order_line_updates)?;
+        let order_updates = events.iter().filter_map(|event| match event {
+            EventPayload::OrderUpdated(payload) => Some(payload),
+            _ => None,
+        });
+        self.update_orders(order_updates)?;
+
         Ok(())
     }
 
-    pub(crate) fn update_orders<'a>(
+    pub(crate) fn process_population_events<'a>(
         &mut self,
-        updates: impl IntoIterator<Item = &'a OrderUpdatedPayload>,
-    ) -> Result<()> {
-        self.orders.update_orders(
-            updates
-                .into_iter()
-                .map(|payload| (payload.order_id, &payload.status)),
-        )?;
-        Ok(())
-    }
+        events: &[EventPayload],
+    ) -> Result<Vec<EventPayload>> {
+        let new_orders = events.iter().filter_map(|event| match event {
+            EventPayload::OrderCreated(payload) => Some(payload),
+            _ => None,
+        });
 
-    pub(crate) fn process_orders<'a>(
-        &mut self,
-        orders: impl IntoIterator<Item = &'a OrderCreatedPayload>,
-    ) -> Result<Vec<OrderId>> {
-        let order_data = orders
+        let order_data = new_orders
             .into_iter()
             .fold(OrderDataBuilder::new(), |builder, order| {
                 builder.add_order(
@@ -199,19 +192,54 @@ impl State {
 
         tracing::debug!(
             target: "state",
-            "Processing {} orders with {} lines",
+            "Created {} new orders with {} lines",
             order_data.batch_orders().num_rows(),
             order_data.batch_lines().num_rows()
         );
 
-        let order_ids = order_data.all_orders().map(|o| *o.id()).collect_vec();
+        let order_ids = order_data
+            .all_orders()
+            .map(|o| {
+                EventPayload::OrderUpdated(OrderUpdatedPayload {
+                    order_id: *o.id(),
+                    status: OrderStatus::Submitted,
+                    actor_id: None,
+                })
+            })
+            .collect_vec();
         self.orders = self.orders.merge(order_data)?;
         Ok(order_ids)
     }
 
+    fn update_order_lines<'a>(
+        &mut self,
+        updates: impl IntoIterator<Item = &'a OrderLineUpdatedPayload>,
+    ) -> Result<()> {
+        self.orders.update_order_lines(
+            updates
+                .into_iter()
+                .map(|payload| (payload.order_line_id, &payload.status)),
+        )?;
+        Ok(())
+    }
+
+    fn update_orders<'a>(
+        &mut self,
+        updates: impl IntoIterator<Item = &'a OrderUpdatedPayload>,
+    ) -> Result<()> {
+        self.orders.update_orders(
+            updates
+                .into_iter()
+                .map(|payload| (payload.order_id, &payload.status)),
+        )?;
+        Ok(())
+    }
+
     /// Advance people's journeys and update their statuses on arrival at their destination.
-    pub(super) fn move_people(&mut self) -> Result<Vec<(PersonId, Vec<Point>)>> {
-        let (movements, status_updates) = self.population.update_journeys(self.time_step)?;
+    pub(super) fn move_people(&mut self) -> Result<Vec<EventPayload>> {
+        let (movements, status_updates) = self
+            .population
+            .update_journeys(self.time_step, &self.orders)?;
         tracing::debug!(
             target: "state",
             "Moved {} people with {} status updates",
@@ -219,18 +247,27 @@ impl State {
             status_updates.len()
         );
 
+        let mut events = vec![];
         // update person statuses after positions have been updated.
         for (person_id, status) in status_updates.into_iter() {
-            self.population.update_person_status(&person_id, status)?;
+            // self.population.update_person_status(&person_id, &status)?;
+            events.push(EventPayload::PersonUpdated(PersonUpdatedPayload {
+                person_id,
+                status,
+            }));
         }
-        Ok(movements)
+
+        Ok(events)
     }
 
-    pub(super) fn step(&mut self, events: impl IntoIterator<Item = EventPayload>) -> Result<()> {
+    pub(super) fn step<'a>(
+        &mut self,
+        events: impl IntoIterator<Item = &'a EventPayload>,
+    ) -> Result<()> {
         for event in events.into_iter() {
             if let EventPayload::PersonUpdated(payload) = event {
                 self.population
-                    .update_person_status(&payload.person_id, payload.status)?;
+                    .update_person_status(&payload.person_id, &payload.status)?;
             }
         }
 
@@ -242,7 +279,7 @@ impl State {
     /// Create a new session context with the current state of the simulation.
     pub(crate) fn snapshot_session(&self) -> Result<SessionContext> {
         let ctx = SessionContext::new();
-        ctx.register_batch("population", self.population.people_full().clone())?;
+        ctx.register_batch("population", self.population.snapshot().clone())?;
         ctx.register_batch("objects", self.objects.objects().clone())?;
         ctx.register_batch("orders", self.orders.batch_orders().clone())?;
         ctx.register_batch("order_lines", self.orders.batch_lines().clone())?;
@@ -287,7 +324,7 @@ pub(crate) async fn read_parquet_dir(
     table_path: &Url,
     ctx: Option<SessionContext>,
 ) -> Result<RecordBatch> {
-    let ctx = ctx.unwrap_or_else(SessionContext::new);
+    let ctx = ctx.unwrap_or_default();
     let session_state = ctx.state();
 
     // Parse the path

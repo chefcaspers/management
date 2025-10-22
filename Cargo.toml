@@ -24,7 +24,6 @@ uuid = { version = "1", features = ["serde"] }
 # arrow
 arrow = { version = "56" }
 arrow-arith = { version = "56" }
-arrow-array = { version = "56", features = ["chrono-tz"] }
 arrow-buffer = { version = "56" }
 arrow-cast = { version = "56" }
 arrow-ipc = { version = "56" }
@@ -37,8 +36,8 @@ object_store = { version = "0.12.3" }
 parquet = { version = "56", features = ["async", "object_store"] }
 
 # datafusion
-# datafusion = "49"
-datafusion = { git = "https://github.com/apache/datafusion", rev = "fa1f8c192dd531d3f2fca61885eafa3e9002f0dd" }
+datafusion = "50"
+# datafusion = { git = "https://github.com/apache/datafusion", rev = "fa1f8c192dd531d3f2fca61885eafa3e9002f0dd" }
 # datafusion-expr = "49"
 # datafusion-common = "49"
 # datafusion-execution = "49"

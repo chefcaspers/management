@@ -97,6 +97,19 @@ def _(mo):
 
 @app.cell
 def _(mo):
+    _df = mo.sql(
+        f"""
+        SELECT *
+        FROM './data/population/people/*.parquet'
+        WHERE role = 'courier'
+        LIMIT 10
+        """
+    )
+    return
+
+
+@app.cell
+def _(mo):
     trips = mo.sql(
         f"""
         SELECT
@@ -146,16 +159,13 @@ def _():
 
     from typing import TypedDict, Iterable, Any
 
-
     class TripPoint(TypedDict):
         x: float
         y: float
 
-
     class TripData(TypedDict):
         timestamps: list[datetime.datetime]
         positions: list[TripPoint]
-
 
     def trip_geo_features(trips: Iterable[TripData]) -> list[dict[str, Any]]:
         """Genearte GeoJson Features from trip data."""

@@ -1,13 +1,14 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use arrow_array::types::Float64Type;
-use arrow_array::{RecordBatch, StringArray, cast::AsArray as _};
+use arrow::array::types::Float64Type;
+use arrow::array::{RecordBatch, StringArray, cast::AsArray as _};
 use arrow_ord::partition::partition;
 use arrow_select::concat::concat_batches;
 use h3o::LatLng;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, Display, EnumString};
 
 use crate::error::{Error, Result};
@@ -17,8 +18,11 @@ pub(crate) use self::builder::OrderDataBuilder;
 
 mod builder;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, EnumString, Display, AsRefStr)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Hash, EnumString, Display, AsRefStr, Serialize, Deserialize,
+)]
 #[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum OrderStatus {
     /// Customer submitted the order
     Submitted,
@@ -40,8 +44,11 @@ pub enum OrderStatus {
     Unknown(String),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumString, Display, AsRefStr)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, EnumString, Display, AsRefStr, Serialize, Deserialize,
+)]
 #[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum OrderLineStatus {
     Submitted,
     Assigned,
@@ -280,6 +287,14 @@ impl<'a> OrderView<'a> {
         self.data
             .orders
             .column(builder::ORDER_SITE_ID_IDX)
+            .as_fixed_size_binary()
+            .value(self.valid_index)
+    }
+
+    pub(crate) fn customer_person_id(&self) -> &[u8] {
+        self.data
+            .orders
+            .column(builder::ORDER_CUSTOMER_ID_IDX)
             .as_fixed_size_binary()
             .value(self.valid_index)
     }

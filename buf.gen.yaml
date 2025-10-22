@@ -12,6 +12,8 @@ plugins:
       - enable_type_names=true
       - message_attribute=.caspers.core=#[cfg_attr(feature = "python"\, ::pyo3::pyclass(get_all\, set_all))]
       - enum_attribute=.caspers.core=#[cfg_attr(feature = "python"\, ::pyo3::pyclass)]
+      - message_attribute=.caspers.vendors=#[cfg_attr(feature = "python"\, ::pyo3::pyclass(get_all\, set_all))]
+      - enum_attribute=.caspers.vendors=#[cfg_attr(feature = "python"\, ::pyo3::pyclass)]
   - remote: buf.build/community/neoeinstein-prost-serde:v0.3.1
     out: crates/universe/src/models/gen
     opt:

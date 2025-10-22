@@ -28,7 +28,6 @@ tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 
 arrow = { workspace = true }
 arrow-arith = { workspace = true }
-arrow-array = { workspace = true, features = ["chrono-tz"] }
 arrow-buffer = { workspace = true }
 arrow-cast = { workspace = true }
 arrow-ipc = { workspace = true }
@@ -63,7 +62,6 @@ pyo3 = { version = "0.25", optional = true }
 
 [dev-dependencies]
 approx = "0.5.1"
-arrow = { workspace = true }
 test-log = "0.2.17"
 
 [features]

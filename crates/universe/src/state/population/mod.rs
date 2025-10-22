@@ -1,8 +1,10 @@
 use std::convert::AsRef;
 use std::sync::Arc;
 
-use arrow_array::{RecordBatch, cast::AsArray as _};
-use arrow_schema::{Field, Schema};
+use arrow::array::{Array, LargeStringArray};
+use arrow::array::{RecordBatch, cast::AsArray as _};
+use arrow::datatypes::{Field, Schema};
+use arrow_schema::DataType;
 use chrono::{DateTime, Utc};
 use geo::Point;
 use geo_traits::PointTrait as _;
@@ -19,6 +21,7 @@ use uuid::Uuid;
 
 use crate::error::{Error, Result};
 use crate::idents::{OrderId, PersonId};
+use crate::OrderData;
 
 use super::movement::{Journey, Transport};
 
@@ -34,7 +37,7 @@ pub enum PersonStatus {
     Eating(DateTime<Utc>),
     Moving(Journey),
     Delivering(OrderId, Journey),
-    WaitingForCustomer(OrderId),
+    WaitingForCustomer(OrderId, Journey),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -85,26 +88,66 @@ impl PopulationData {
         })
     }
 
+    pub(crate) fn try_new_from_snapshot(snapshot: RecordBatch) -> Result<Self> {
+        let indices = (0..snapshot.columns().len() - 2).collect::<Vec<_>>();
+        let people = snapshot.project(&indices)?;
+        let position_data = snapshot.column_by_name("position").unwrap().as_struct();
+        let point_type = PointType::new(Dimension::XY, Default::default());
+        let positions: PointArray = (position_data, point_type).try_into()?;
+
+        let id_iter = people
+            .column_by_name("id")
+            .unwrap()
+            .as_fixed_size_binary()
+            .iter();
+        let state_iter = people
+            .column_by_name("state")
+            .unwrap()
+            .as_string::<i64>()
+            .iter();
+
+        let lookup_index = id_iter
+            .zip(state_iter)
+            .map(|(id, state)| {
+                let id = Uuid::from_slice(id.unwrap()).unwrap().into();
+                let state = serde_json::from_str(state.unwrap()).unwrap();
+                (id, state)
+            })
+            .collect();
+
+        Ok(PopulationData {
+            people,
+            positions,
+            lookup_index,
+        })
+    }
+
     pub fn people(&self) -> &RecordBatch {
         &self.people
     }
 
-    pub fn people_full(&self) -> RecordBatch {
+    pub fn snapshot(&self) -> RecordBatch {
         let people = self.people.clone();
         let positions = self.positions.clone().into_arrow();
+        let states: Arc<dyn Array> = Arc::new(LargeStringArray::from(
+            self.lookup_index
+                .values()
+                .map(|v| serde_json::to_string(v).unwrap())
+                .collect_vec(),
+        ));
         let full_schema = people
             .schema()
             .fields()
             .iter()
             .cloned()
-            .chain(std::iter::once(Arc::new(Field::new(
-                "position",
-                positions.data_type().clone(),
-                false,
-            ))))
+            .chain(vec![
+                Arc::new(Field::new("position", positions.data_type().clone(), false)),
+                Arc::new(Field::new("state", DataType::LargeUtf8, false)),
+            ])
             .collect_vec();
         let mut columns = people.columns().iter().cloned().collect_vec();
         columns.push(positions);
+        columns.push(states);
         RecordBatch::try_new(Arc::new(Schema::new(full_schema)), columns).unwrap()
     }
 
@@ -134,14 +177,15 @@ impl PopulationData {
             .map(|(valid_index, (id, _))| PersonView::new(id, self, valid_index))
     }
 
-    pub fn update_person_status(&mut self, id: &PersonId, status: PersonStatus) -> Result<()> {
-        self.lookup_index.get_mut(id).ok_or(Error::NotFound)?.status = status;
+    pub fn update_person_status(&mut self, id: &PersonId, status: &PersonStatus) -> Result<()> {
+        self.lookup_index.get_mut(id).ok_or(Error::NotFound)?.status = status.clone();
         Ok(())
     }
 
-    pub(crate) fn update_journeys(
+    pub(super) fn update_journeys(
         &mut self,
         time_step: std::time::Duration,
+        order_data: &OrderData,
     ) -> Result<(Vec<(PersonId, Vec<Point>)>, Vec<(PersonId, PersonStatus)>)> {
         let mut new_positions =
             PointBuilder::new(PointType::new(Dimension::XY, Default::default()));
@@ -155,15 +199,26 @@ impl PopulationData {
                     let next_status = journey.is_done().then_some(PersonStatus::Idle);
                     (Some(progress), next_status)
                 }
-                PersonStatus::Delivering(_, journey) => {
+                PersonStatus::Delivering(order_id, journey) => {
                     let progress = journey.advance(&Transport::Bicycle, time_step);
                     let next_status = journey.is_done().then_some({
                         // couriers need to reverse their journey when they're done delivering
                         let mut journey = journey.clone();
                         journey.reset_reverse();
-                        PersonStatus::Moving(journey)
+                        PersonStatus::WaitingForCustomer(*order_id, journey)
                     });
                     (Some(progress), next_status)
+                }
+                PersonStatus::WaitingForCustomer(order_id, journey) => {
+                    if let Some(order) = order_data.order(order_id) {
+                        let customer_id: PersonId =
+                            Uuid::from_slice(order.customer_person_id()).unwrap().into();
+                        status_updates.push((
+                            customer_id,
+                            PersonStatus::Eating(Utc::now() + chrono::Duration::seconds(30 * 60)),
+                        ));
+                    };
+                    (None, Some(PersonStatus::Moving(journey.clone())))
                 }
                 _ => (None, None),
             };
