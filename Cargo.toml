@@ -37,19 +37,8 @@ parquet = { version = "56", features = ["async", "object_store"] }
 
 # datafusion
 datafusion = "50"
-# datafusion = { git = "https://github.com/apache/datafusion", rev = "fa1f8c192dd531d3f2fca61885eafa3e9002f0dd" }
-# datafusion-expr = "49"
-# datafusion-common = "49"
-# datafusion-execution = "49"
-# datafusion-ffi = "49"
-# datafusion-functions = "49"
-# datafusion-functions-aggregate = "49"
-# datafusion-physical-expr = "49"
-# datafusion-physical-plan = "49"
-# datafusion-proto = "49"
-# datafusion-sql = "49"
 
-geoarrow = { version = "0.5.0" }
-geoarrow-array = { version = "0.5.0" }
-geoparquet = { version = "0.5.0" }
-geoarrow-schema = { version = "0.5.0" }
+geoarrow = { version = "0.6.1" }
+geoarrow-array = { version = "0.6.1" }
+geoparquet = { version = "0.6.1" }
+geoarrow-schema = { version = "0.6.1" }

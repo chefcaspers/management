@@ -125,10 +125,9 @@ def _process_edges(location: str, G: nx.MultiDiGraph) -> pa.Table:
         properties = {}
 
         # we internally store UUIDs for nodes and edges. so we create a static mapping
-        # via UUID v5 ans store the original values in the properties.
+        # via UUID v5 and store the original values in the properties.
         source_uuid = uuid5(NAMESPACE_DNS, f"osmid/{source}")
         target_uuid = uuid5(NAMESPACE_DNS, f"osmid/{target}")
-
         properties["osmid_source"] = source
         properties["osmid_target"] = target
 
