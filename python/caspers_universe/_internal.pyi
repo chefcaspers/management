@@ -176,3 +176,20 @@ def load_simulation_setup(
     Returns:
         A SimulationSetup object representing the loaded simulation setup.
     """
+
+def run_simulation(
+    setup: SimulationSetup,
+    duration: int,
+    output_location: str,
+    routing_location: str,
+    dry_run: bool = False,
+) -> None:
+    """Run a simulation using the provided setup.
+
+    Args:
+        setup: The simulation setup to use.
+        duration: The duration of the simulation in seconds.
+        output_location: The location to save the simulation output.
+        routing_location: The location where the routing graph is stored.
+        dry_run: Whether to run the simulation in dry run mode.
+    """

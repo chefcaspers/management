@@ -99,10 +99,9 @@ def _(mo):
 def _(mo):
     _df = mo.sql(
         f"""
-        SELECT *
-        FROM './data/population/people/*.parquet'
-        WHERE role = 'courier'
-        LIMIT 10
+        SELECT type, count(*)
+        FROM './data/events/*.json'
+        GROUP BY type
         """
     )
     return

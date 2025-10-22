@@ -584,7 +584,7 @@ dependencies = [
 
 [[package]]
 name = "caspers-universe"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "approx",
  "arrow",
@@ -1910,9 +1910,9 @@ dependencies = [
 
 [[package]]
 name = "geoarrow"
-version = "0.5.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94814b84d617d4f971cd94270ccd9d79ff89f396b3c9472ec8f2a0101dd82e0a"
+checksum = "3dd48e89e3c2a7f7ed220cea9d6508e59c73f8dfb5560ffce5d66ce4b035003a"
 dependencies = [
  "geoarrow-array",
  "geoarrow-schema",
@@ -1920,9 +1920,9 @@ dependencies = [
 
 [[package]]
 name = "geoarrow-array"
-version = "0.5.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73241361a33c1339883aa98d0655bd0dad53f760b9fe92ffbd1d5bbd87dc07bc"
+checksum = "36490f9fbab061752290ac5ebce2bc9bab82ea6fdfcfc9ac3d030d44a98a1a7d"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
@@ -1936,9 +1936,9 @@ dependencies = [
 
 [[package]]
 name = "geoarrow-schema"
-version = "0.5.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5ebd2cbf841a1062d3521c2b2de7e819bb201b30f23381f872e62b9430b82af"
+checksum = "278e963401cfb23b4f81b212605b33b342ab73741d39b80de51cc7028d6d3af4"
 dependencies = [
  "arrow-schema",
  "geo-traits",
@@ -1958,9 +1958,9 @@ dependencies = [
 
 [[package]]
 name = "geoparquet"
-version = "0.5.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c7961c07ee7df26f00eea1762531331f045ff95d59350a0a07171fdabed8fe5"
+checksum = "180ca505a7be5de3f0e6a4004d260f1964159d7d9a8a5dda8bbd85a00e531947"
 dependencies = [
  "arrow-arith",
  "arrow-array",
@@ -4458,9 +4458,9 @@ checksum = "052283831dbae3d879dc7f51f3d92703a316ca49f91540417d38591826127814"
 
 [[package]]
 name = "wkb"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff9eff6aebac4c64f9c7c057a68f6359284e2a80acf102dffe041fe219b3a082"
+checksum = "908e92c755a5f5ff8781c1c7ebcedb60ce5443879d20f4a0b6a1ee8fb3e6dfb6"
 dependencies = [
  "byteorder",
  "geo-traits",
