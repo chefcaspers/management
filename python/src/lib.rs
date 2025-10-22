@@ -5,6 +5,7 @@ use caspers_universe::{
     run_simulation as run_simulation_inner,
 };
 use pyo3::{exceptions::PyValueError, prelude::*};
+use pyo3_arrow::PyRecordBatchReader;
 use tokio::runtime::Runtime;
 use url::Url;
 

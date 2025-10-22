@@ -1,7 +1,11 @@
 [package]
 name = "caspers-universe"
-version = "0.1.0"
-edition = "2024"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+readme = "README.md"
+license = { workspace = true }
+rust-version = { workspace = true }
 
 [dependencies]
 async-trait = { workspace = true }

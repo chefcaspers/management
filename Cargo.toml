@@ -2,6 +2,13 @@
 resolver = "2"
 members = ["crates/*", "python/"]
 
+[workspace.package]
+version = "0.0.1"
+authors = ["Robert Pack <robstar.pack@gmail.com>"]
+edition = "2024"
+license = "MIT OR Apache-2.0"
+rust-version = "1.90"
+
 [workspace.dependencies]
 async-trait = { version = "0.1.83" }
 bytes = { version = "1.1" }
