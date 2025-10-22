@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.15.2"
+__generated_with = "0.17.0"
 app = marimo.App(width="medium")
 
 
@@ -8,11 +8,10 @@ app = marimo.App(width="medium")
 def _():
     import marimo as mo
     import pyarrow.parquet as pq
-    from caspers_universe import prepare_site, Site, load_simulation_setup
+    from caspers_universe import prepare_site, Site, load_simulation_setup, run_simulation
     import polars as pl
     from pathlib import Path
-
-    return Path, load_simulation_setup, mo, pq, prepare_site
+    return Path, load_simulation_setup, mo, pq, prepare_site, run_simulation
 
 
 @app.cell(hide_code=True)
@@ -40,17 +39,21 @@ def _(mo):
 
 
 @app.cell
-def routing_data(Path, load_simulation_setup, pq, prepare_site, true):
-    # this cell might error when marimo processes results,
-    # the variables will still be assigned
-
+def _(Path, load_simulation_setup):
     setup_path = Path("../data").absolute()
     # load the overall simulation setup to get site configurations.
     setup = load_simulation_setup(setup_path.as_uri())
 
     # make sure the data paths exist.
-    setup_path.joinpath("routing/nodes").mkdir(exist_ok=true, parents=true)
-    setup_path.joinpath("routing/edges").mkdir(exist_ok=true, parents=true)
+    setup_path.joinpath("routing/nodes").mkdir(exist_ok=True, parents=True)
+    setup_path.joinpath("routing/edges").mkdir(exist_ok=True, parents=True)
+    return (setup,)
+
+
+@app.cell
+def routing_data(pq, prepare_site, setup):
+    # this cell might error when marimo processes results,
+    # the variables will still be assigned
 
     # load and process open street map data.
     for site in setup.sites:
@@ -59,6 +62,15 @@ def routing_data(Path, load_simulation_setup, pq, prepare_site, true):
         pq.write_table(edges, f"../data/routing/edges/{site.info.name}.parquet")
 
     print("done")
+    return
+
+
+@app.cell
+def run_simulation(Path, run_simulation, setup):
+    output_path = Path("./data").absolute()
+    routing_path = Path("../data/routing/").absolute()
+
+    run_simulation(setup, 100, str(output_path), str(routing_path))
     return
 
 

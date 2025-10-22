@@ -1,8 +1,12 @@
 use std::{collections::HashMap, sync::OnceLock};
 
-use caspers_universe::{SimulationSetup, Site, load_simulation_setup as load_simulation};
+use caspers_universe::{
+    SimulationSetup, Site, load_simulation_setup as load_simulation,
+    run_simulation as run_simulation_inner,
+};
 use pyo3::{exceptions::PyValueError, prelude::*};
 use tokio::runtime::Runtime;
+use url::Url;
 
 use crate::error::Error;
 
@@ -41,12 +45,46 @@ fn load_simulation_setup(
     Ok(setup)
 }
 
+#[pyfunction]
+#[pyo3(signature = (setup, duration, output_location, routing_location, dry_run = false))]
+fn run_simulation(
+    setup: SimulationSetup,
+    duration: usize,
+    output_location: String,
+    routing_location: String,
+    dry_run: bool,
+) -> PyResult<()> {
+    let output_location = resolve_url(&output_location)?;
+    let routing_location = resolve_url(&routing_location)?;
+    let setup = rt()
+        .block_on(run_simulation_inner(
+            setup,
+            duration,
+            output_location,
+            routing_location,
+            dry_run,
+        ))
+        .map_err(Error::from)?;
+    Ok(setup)
+}
+
+fn resolve_url(url: &str) -> PyResult<Url> {
+    match url::Url::parse(url) {
+        Ok(url) => Ok(url),
+        Err(_) => {
+            let path = std::fs::canonicalize(url)?;
+            Ok(Url::from_directory_path(path).unwrap())
+        }
+    }
+}
+
 /// A Python module implemented in Rust.
 #[pymodule]
 fn _internal(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Site>()?;
 
     m.add_function(wrap_pyfunction!(load_simulation_setup, m)?)?;
+    m.add_function(wrap_pyfunction!(run_simulation, m)?)?;
 
     Ok(())
 }

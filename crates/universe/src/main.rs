@@ -29,7 +29,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let cli = Cli::parse();
 
-    let path = Url::parse("file:///Users/robert.pack/code/management/data")?;
+    let setup_path = std::fs::canonicalize(cli.setup_path)?;
+    let path = Url::from_directory_path(setup_path).expect("Path to be valid directory");
     let setup = load_simulation_setup(&path, None::<(&str, &str)>).await?;
 
     let data_path = Url::parse("file:///Users/robert.pack/code/management/notebooks/data/")?;
