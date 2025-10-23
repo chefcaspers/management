@@ -3,7 +3,7 @@ use std::sync::{Arc, LazyLock};
 use arrow::array::builder::{
     FixedSizeBinaryBuilder, ListBuilder, StringBuilder, TimestampMillisecondBuilder,
 };
-use arrow::array::{LargeStringBuilder, RecordBatch};
+use arrow::array::{LargeStringBuilder, RecordBatch, StringViewBuilder};
 use arrow::datatypes::{DataType, Field, Schema, SchemaRef, TimeUnit};
 use arrow_schema::extension::{Json as JsonExtension, Uuid as UuidExtension};
 
@@ -13,12 +13,12 @@ use crate::idents::{BrandId, KitchenId, MenuItemId, SiteId, StationId};
 use crate::models::{Brand, SiteSetup};
 use crate::state::ObjectLabel;
 
-static OBJECT_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
+pub(crate) static OBJECT_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
     Arc::new(Schema::new(vec![
         Field::new("id", DataType::FixedSizeBinary(16), false).with_extension_type(UuidExtension),
         Field::new("parent_id", DataType::FixedSizeBinary(16), true)
             .with_extension_type(UuidExtension),
-        Field::new("label", DataType::Utf8, false),
+        Field::new("label", DataType::Utf8View, false),
         Field::new(
             "name",
             DataType::List(Arc::new(Field::new_list_field(DataType::Utf8, true))),
@@ -43,7 +43,7 @@ pub struct ObjectDataBuilder {
     id: FixedSizeBinaryBuilder,
     parent_id: FixedSizeBinaryBuilder,
     name: ListBuilder<StringBuilder>,
-    label: StringBuilder,
+    label: StringViewBuilder,
     properties: LargeStringBuilder,
     created_at: TimestampMillisecondBuilder,
     updated_at: TimestampMillisecondBuilder,
@@ -61,7 +61,7 @@ impl ObjectDataBuilder {
             id: FixedSizeBinaryBuilder::new(16),
             parent_id: FixedSizeBinaryBuilder::new(16),
             name: ListBuilder::new(StringBuilder::new()),
-            label: StringBuilder::new(),
+            label: StringViewBuilder::new(),
             properties: LargeStringBuilder::new(),
             created_at: TimestampMillisecondBuilder::new().with_timezone("UTC"),
             updated_at: TimestampMillisecondBuilder::new().with_timezone("UTC"),

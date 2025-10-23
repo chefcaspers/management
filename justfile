@@ -16,7 +16,7 @@ build-py:
     uvx --from 'maturin[zig]' maturin develop -m python/Cargo.toml
 
 run:
-    cargo run --bin caspers-universe -- --duration 100 --setup-path data/
+    cargo run --bin caspers-universe -- run --duration 100 --setup-path data/
 
 # run marimo notebook server for interactive data exploration
 scratch:
@@ -26,3 +26,6 @@ fmt:
     cargo fmt --all
     buf format proto/ --write
     uvx ruff format .
+
+docs:
+  npm -w docs run dev

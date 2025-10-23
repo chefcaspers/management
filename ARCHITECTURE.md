@@ -96,6 +96,19 @@ as well as additional live state (e.g. last time eaten, ...)
 
 The operations data tracks the live progress of orders and individual order line items.
 
+Order Lines Table
+
+| id  | order_id | brand_id | menu_item_id | status      |
+| --- | -------- | -------- | ------------ | ----------- |
+| 1   | 1        | 1        | 1            | pending     |
+| 2   | 2        | 2        | 2            | in_progress |
+
+Orders Table
+
+| id  | site_id | customer_id | destination  | status      |
+| --- | ------- | ----------- | ------------ | ----------- |
+| 1   | 1       | 1           | [10.0, 20.0] | pending     |
+| 2   | 2       | 2           | [10.0, 20.0] | in_progress |
 
 ### Data Outputs / Sinks
 

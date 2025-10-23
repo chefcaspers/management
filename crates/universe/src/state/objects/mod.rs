@@ -16,7 +16,7 @@ use crate::models::{MenuItem, Site, Station};
 
 use super::EntityView;
 
-pub use builder::ObjectDataBuilder;
+pub(crate) use builder::{OBJECT_SCHEMA, ObjectDataBuilder};
 
 mod builder;
 
@@ -110,7 +110,7 @@ impl ObjectData {
             .objects
             .column_by_name("label")
             .ok_or(VendorDataError::ColumnNotFound("label"))?
-            .as_string::<i32>();
+            .as_string_view();
 
         Ok(ids
             .iter()

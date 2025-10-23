@@ -8,8 +8,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use arrow::array::StructArray;
 use arrow::array::{RecordBatch, cast::AsArray as _};
-use arrow::compute::concat_batches;
+use arrow::compute::{cast, concat_batches};
+use arrow_schema::DataType;
 use chrono::{DateTime, Utc};
 use datafusion::datasource::file_format::parquet::ParquetFormat;
 use datafusion::datasource::listing::{
@@ -24,6 +26,8 @@ use uuid::Uuid;
 
 use crate::error::Result;
 use crate::idents::*;
+use crate::state::objects::OBJECT_SCHEMA;
+use crate::state::orders::{ORDER_LINE_SCHEMA, ORDER_SCHEMA};
 use crate::{
     Error, OrderLineUpdatedPayload, OrderUpdatedPayload, PersonUpdatedPayload, SimulationSetup,
 };
@@ -285,6 +289,85 @@ impl State {
         ctx.register_batch("order_lines", self.orders.batch_lines().clone())?;
         Ok(ctx)
     }
+
+    pub(crate) async fn load_snapshot(
+        config: Option<SimulationConfig>,
+        routing: HashMap<SiteId, RoutingData>,
+        base_url: &Url,
+        snapshot_id: u64,
+    ) -> Result<Self> {
+        let ctx = SessionContext::new();
+
+        let people_path = base_url.join(&format!(
+            "population/people/snapshot-{}.parquet",
+            snapshot_id
+        ))?;
+        let df = ctx
+            .read_parquet(people_path.as_str(), Default::default())
+            .await?
+            .collect()
+            .await?;
+        let all = concat_batches(df[0].schema_ref(), &df)?;
+        let population = PopulationData::try_new_from_snapshot(all)?;
+
+        let orders_path = base_url.join(&format!("orders/snapshot-{}.parquet", snapshot_id))?;
+        let df = read_pq(&orders_path, &ctx)
+            .await?
+            .drop_columns(&["timestamp"])?
+            .collect()
+            .await?;
+        let orders_data = cast(
+            &StructArray::from(concat_batches(df[0].schema_ref(), &df)?),
+            &DataType::Struct(ORDER_SCHEMA.fields.clone()),
+        )?
+        .as_struct()
+        .into();
+
+        let order_lines_path =
+            base_url.join(&format!("order_lines/snapshot-{}.parquet", snapshot_id))?;
+        let df = read_pq(&order_lines_path, &ctx)
+            .await?
+            .drop_columns(&["timestamp"])?
+            .collect()
+            .await?;
+        let order_lines_data = cast(
+            &StructArray::from(concat_batches(df[0].schema_ref(), &df)?),
+            &DataType::Struct(ORDER_LINE_SCHEMA.fields.clone()),
+        )?
+        .as_struct()
+        .into();
+
+        let orders = OrderData::try_new(orders_data, order_lines_data)?;
+
+        let objects_path = base_url.join(&format!("objects/snapshot-{}.parquet", snapshot_id))?;
+        let df = read_pq(&objects_path, &ctx)
+            .await?
+            .drop_columns(&["timestamp"])?
+            .collect()
+            .await?;
+        // let objects_data = concat_batches(df[0].schema_ref(), &df)?;
+        let objects_data = cast(
+            &StructArray::from(concat_batches(df[0].schema_ref(), &df)?),
+            &DataType::Struct(OBJECT_SCHEMA.fields.clone()),
+        )?
+        .as_struct()
+        .into();
+        let objects = ObjectData::try_new(objects_data)?;
+
+        let config = config.unwrap_or_default();
+        Ok(Self {
+            time_step: Duration::from_secs(config.time_increment.num_seconds() as u64),
+            time: config.simulation_start,
+            population,
+            objects,
+            routing: routing
+                .into_iter()
+                .map(|(id, data)| (id, data.into_trip_planner()))
+                .collect(),
+            config,
+            orders,
+        })
+    }
 }
 
 pub trait EntityView {
@@ -318,6 +401,12 @@ pub trait EntityView {
             .value(self.valid_index());
         Ok(serde_json::from_str(raw)?)
     }
+}
+
+async fn read_pq(file_path: &Url, ctx: &SessionContext) -> Result<DataFrame> {
+    Ok(ctx
+        .read_parquet(file_path.as_str(), Default::default())
+        .await?)
 }
 
 pub(crate) async fn read_parquet_dir(

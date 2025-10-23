@@ -21,6 +21,6 @@ object_store = { workspace = true }
 thiserror = { workspace = true }
 url = { workspace = true }
 
-pyo3 = "0.25.0"
+pyo3 = "0.26.0"
 pyo3-arrow = "0.12"
 tokio = { version = "1", features = ["rt-multi-thread"] }

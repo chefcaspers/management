@@ -1,0 +1,36 @@
+---
+title: Getting Started
+description: Run your first Caspers simulation.
+---
+
+import { Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+
+<Steps>
+
+1. Install the `caspers-universe` pyhton package:
+
+   <Tabs>
+     <TabItem label="uv">
+       ```bash
+       uv add caspers-universe
+       ```
+     </TabItem>
+     <TabItem label="pip">
+       ```bash
+       pip install caspers-universe
+       ```
+     </TabItem>
+     <TabItem label="poetry">
+       ```bash
+       poetry add caspers-universe
+       ```
+     </TabItem>
+   </Tabs>
+
+2. Import the required methods:
+
+   ```python
+   from caspers_universe import load_simulation_setup, prepare_site, run_simulation
+   ```
+
+</Steps>
