@@ -26,3 +26,6 @@ fmt:
     cargo fmt --all
     buf format proto/ --write
     uvx ruff format .
+
+docs:
+  npm -w docs run dev
