@@ -1,7 +1,7 @@
 use std::sync::{Arc, LazyLock};
 
-use arrow::array::RecordBatch;
 use arrow::array::builder::{FixedSizeBinaryBuilder, StringBuilder};
+use arrow::array::{RecordBatch, StringViewBuilder};
 use arrow_schema::{DataType, Field, Schema, SchemaRef};
 use fake::Fake;
 use geo::{BoundingRect, Centroid, Contains, Point};
@@ -24,7 +24,7 @@ static POPULATION_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
         Field::new("last_name", DataType::Utf8, false),
         Field::new("email", DataType::Utf8, false),
         Field::new("cc_number", DataType::Utf8, true),
-        Field::new("role", DataType::Utf8, false),
+        Field::new("role", DataType::Utf8View, false),
     ]))
 });
 
@@ -34,7 +34,7 @@ pub struct PopulationDataBuilder {
     last_names: StringBuilder,
     emails: StringBuilder,
     cc_numbers: StringBuilder,
-    roles: StringBuilder,
+    roles: StringViewBuilder,
     positions: PointBuilder,
 
     rng: ThreadRng,
@@ -48,7 +48,7 @@ impl PopulationDataBuilder {
             last_names: StringBuilder::new(),
             emails: StringBuilder::new(),
             cc_numbers: StringBuilder::new(),
-            roles: StringBuilder::new(),
+            roles: StringViewBuilder::new(),
             positions: PointBuilder::new(PointType::new(Dimension::XY, Default::default())),
             rng: rand::rng(),
         }

@@ -19,9 +19,9 @@ use serde::{Deserialize, Serialize};
 use strum::AsRefStr;
 use uuid::Uuid;
 
+use crate::OrderData;
 use crate::error::{Error, Result};
 use crate::idents::{OrderId, PersonId};
-use crate::OrderData;
 
 use super::movement::{Journey, Transport};
 
@@ -100,10 +100,11 @@ impl PopulationData {
             .unwrap()
             .as_fixed_size_binary()
             .iter();
-        let state_iter = people
+
+        let state_iter = snapshot
             .column_by_name("state")
             .unwrap()
-            .as_string::<i64>()
+            .as_string_view()
             .iter();
 
         let lookup_index = id_iter
@@ -271,7 +272,7 @@ impl<'a> PersonView<'a> {
         self.data
             .people
             .column(5)
-            .as_string::<i32>()
+            .as_string_view()
             .value(self.valid_index)
             == role.as_ref()
     }

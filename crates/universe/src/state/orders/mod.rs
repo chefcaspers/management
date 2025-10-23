@@ -14,7 +14,7 @@ use strum::{AsRefStr, Display, EnumString};
 use crate::error::{Error, Result};
 use crate::idents::{OrderId, OrderLineId, SiteId};
 
-pub(crate) use self::builder::OrderDataBuilder;
+pub(crate) use self::builder::{ORDER_LINE_SCHEMA, ORDER_SCHEMA, OrderDataBuilder};
 
 mod builder;
 
@@ -77,7 +77,7 @@ impl OrderData {
         }
     }
 
-    fn try_new(orders: RecordBatch, lines: RecordBatch) -> Result<Self> {
+    pub(crate) fn try_new(orders: RecordBatch, lines: RecordBatch) -> Result<Self> {
         if orders.schema().as_ref() != builder::ORDER_SCHEMA.as_ref() {
             return Err(Error::invalid_data("expected orders to have schema"));
         }

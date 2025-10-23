@@ -29,6 +29,12 @@ pub enum Error {
         source: uuid::Error,
     },
 
+    #[error("Invalid url")]
+    InvalidUrl {
+        #[from]
+        source: url::ParseError,
+    },
+
     #[error("Arrow error: {source}")]
     Arrow {
         #[from]

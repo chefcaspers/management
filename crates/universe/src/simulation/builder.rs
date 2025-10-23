@@ -15,7 +15,14 @@ use crate::{Error, PopulationRunner, SimulationSetup, SiteId, SiteRunner, read_p
 
 /// Builder for creating a simulation instance.
 pub struct SimulationBuilder {
+    /// Setup configuration for the simulation
     setup: Option<SimulationSetup>,
+
+    /// Snapshot location for the simulation
+    snapshot_location: Option<Url>,
+
+    /// Snapshot version to start simulation from
+    snapshot_version: Option<u64>,
 
     /// Size of the simulated population
     population_size: usize,
@@ -43,8 +50,10 @@ impl Default for SimulationBuilder {
     fn default() -> Self {
         Self {
             setup: None,
+            snapshot_location: None,
+            snapshot_version: None,
             population_size: 1000,
-            time_increment: Duration::seconds(60),
+            time_increment: Duration::minutes(1),
             start_time: Utc::now(),
             result_storage_location: None,
             snapshot_interval: None,
@@ -63,6 +72,17 @@ impl SimulationBuilder {
     /// Add a brand to the simulation
     pub fn with_setup(mut self, setup: SimulationSetup) -> Self {
         self.setup = Some(setup);
+        self
+    }
+
+    pub fn with_snapshot_location(mut self, snapshot_location: impl Into<Url>) -> Self {
+        self.snapshot_location = Some(snapshot_location.into());
+        self
+    }
+
+    /// Set the snapshot version for the simulation
+    pub fn with_snapshot_version(mut self, snapshot_version: u64) -> Self {
+        self.snapshot_version = Some(snapshot_version);
         self
     }
 
@@ -177,10 +197,16 @@ impl SimulationBuilder {
         };
         let routing = self.routing_data().await?;
 
-        let state = if let Some(setup) = self.setup {
+        let state = if let (Some(sn_path), Some(sn_id)) =
+            (&self.snapshot_location, self.snapshot_version)
+        {
+            State::load_snapshot(Some(config), routing, sn_path, sn_id).await?
+        } else if let Some(setup) = self.setup {
             State::try_new(setup, routing, Some(config))?
         } else {
-            todo!()
+            return Err(Error::MissingInput(
+                "Either simulation setup (new sim) or snapshot details are required.".into(),
+            ));
         };
 
         let site_runners = state

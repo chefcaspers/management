@@ -51,7 +51,7 @@ impl OrderDataBuilder {
     }
 }
 
-pub(super) static ORDER_LINE_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
+pub(crate) static ORDER_LINE_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
     SchemaRef::new(Schema::new(vec![
         Field::new("id", DataType::FixedSizeBinary(16), false),
         Field::new("order_id", DataType::FixedSizeBinary(16), false),
@@ -114,7 +114,7 @@ pub(super) static ORDER_SITE_ID_IDX: usize = 1;
 pub(super) static ORDER_CUSTOMER_ID_IDX: usize = 2;
 pub(super) static ORDER_DESTINATION_IDX: usize = 3;
 pub(super) static ORDER_STATUS_IDX: usize = 4;
-pub(super) static ORDER_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
+pub(crate) static ORDER_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
     let mut fields = Vec::with_capacity(4);
     fields.push(
         Field::new("id", DataType::FixedSizeBinary(16), false).with_extension_type(UuidExtension),
