@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.15.2"
+__generated_with = "0.17.0"
 app = marimo.App(width="medium")
 
 
@@ -14,7 +14,7 @@ def _():
     import plotly.express as px
     import folium
     import marimo as mo
-    return folium, mo, os
+    return folium, mo, os, pl, px
 
 
 @app.cell
@@ -52,19 +52,7 @@ def _(mo):
     order_lines_counts = mo.sql(
         f"""
         SELECT status, count(*) as count
-        FROM './data//order_lines/*.parquet'
-        GROUP BY status
-        """
-    )
-    return
-
-
-@app.cell
-def _(mo):
-    orders_counts = mo.sql(
-        f"""
-        SELECT status, count(*) as count
-        FROM './data//orders/*.parquet'
+        FROM './data/order_lines/*.parquet'
         GROUP BY status
         """
     )
@@ -219,6 +207,58 @@ def _(folium, trip_geo_features, trips):
     ).add_to(m)
 
     m
+    return
+
+
+@app.cell
+def _(pl, px):
+    df = pl.scan_parquet("./data/stats/orders/").collect()
+    px.line(
+        df,
+        x="timestamp",
+        y="count",
+        color="status",
+        template="plotly_dark",
+        title="Order Status",
+    )
+    return
+
+
+@app.cell
+def _(pl, px):
+    df_events = pl.scan_parquet("./data/stats/events/").collect()
+    px.line(
+        df_events,
+        x="timestamp",
+        y="value",
+        color="label",
+        template="plotly_dark",
+        title="Events Raised",
+    )
+    return
+
+
+@app.cell
+def _(px):
+    import math
+
+    sq_sigma = 0.4
+
+
+    def bell(x: float, mu: float) -> float:
+        return (1 / math.sqrt(2 * math.pi * sq_sigma)) * math.e ** (
+            -1 * (x - mu) ** 2 / (2 * sq_sigma)
+        )
+
+
+    x_values = [0 + 24  * idx / 1000 for idx in range(1000)]
+    y_values = [bell(v, 12) + bell(v, 18) for v in x_values]
+
+    px.line(
+        x=x_values,
+        y=y_values,
+        template="plotly_dark",
+    )
     return
 
 

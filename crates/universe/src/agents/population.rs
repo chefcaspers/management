@@ -1,3 +1,5 @@
+use std::f64;
+
 use chrono::Timelike;
 use geo_traits::to_geo::ToGeoPoint;
 use h3o::{LatLng, Resolution};
@@ -56,14 +58,24 @@ impl PopulationRunner {
 }
 
 fn create_order(state: &State) -> Option<Vec<(BrandId, MenuItemId)>> {
+    use std::f64::consts::{E, PI};
+
     let mut rng = rand::rng();
 
     let current_time = state.current_time();
+    let current_minutes = (current_time.hour() * 60 + current_time.minute()) as f64 / 60.0;
 
-    let mid_day_offset = 0.0004 * (1.0_f64 - 12_u32.abs_diff(current_time.hour()) as f64 / 12.0);
+    let sigma_sq = 0.4_f64;
+
+    let bell = |x: f64, mu: f64| {
+        let exponent = -1.0 * (x - mu).powi(2) / (2.0 * sigma_sq);
+        1.0 / (2.0 * PI * sigma_sq).powf(2.0) * E.powf(exponent)
+    };
+
+    let prob = 0.01 * (bell(current_minutes, 12.0) + bell(current_minutes, 18.0));
 
     // TODO: compute probability from person state
-    rng.random_bool(mid_day_offset).then(|| {
+    rng.random_bool(prob).then(|| {
         state
             .objects()
             .sample_menu_items(None, &mut rng)

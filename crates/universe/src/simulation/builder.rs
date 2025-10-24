@@ -9,6 +9,7 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::error::Result;
+use crate::simulation::stats::EventStatsBuffer;
 use crate::simulation::{Simulation, SimulationConfig};
 use crate::state::{EntityView, RoutingData, State};
 use crate::{
@@ -224,6 +225,7 @@ impl SimulationBuilder {
             sites: site_runners,
             population: PopulationRunner::new(),
             event_tracker: EventTracker::new(),
+            stats_buffer: EventStatsBuffer::new(),
         })
     }
 }
