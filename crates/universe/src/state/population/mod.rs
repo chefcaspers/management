@@ -6,7 +6,6 @@ use arrow::array::{RecordBatch, cast::AsArray as _};
 use arrow::datatypes::{Field, Schema};
 use arrow_schema::DataType;
 use chrono::{DateTime, Utc};
-use geo::Point;
 use geo_traits::PointTrait as _;
 use geo_traits::to_geo::ToGeoCoord;
 use geoarrow::array::{PointArray, PointBuilder};
@@ -19,9 +18,9 @@ use serde::{Deserialize, Serialize};
 use strum::AsRefStr;
 use uuid::Uuid;
 
-use crate::OrderData;
 use crate::error::{Error, Result};
 use crate::idents::{OrderId, PersonId};
+use crate::{EventPayload, OrderData, OrderStatus};
 
 use super::movement::{Journey, Transport};
 
@@ -185,13 +184,13 @@ impl PopulationData {
 
     pub(super) fn update_journeys(
         &mut self,
+        current_time: &DateTime<Utc>,
         time_step: std::time::Duration,
         order_data: &OrderData,
-    ) -> Result<(Vec<(PersonId, Vec<Point>)>, Vec<(PersonId, PersonStatus)>)> {
+    ) -> Result<Vec<EventPayload>> {
         let mut new_positions =
             PointBuilder::new(PointType::new(Dimension::XY, Default::default()));
-        let mut journey_slices = Vec::new();
-        let mut status_updates = Vec::new();
+        let mut events = Vec::new();
 
         for (idx, (person_id, state)) in self.lookup_index.iter_mut().enumerate() {
             let (progress, next_status) = match &mut state.status {
@@ -212,11 +211,16 @@ impl PopulationData {
                 }
                 PersonStatus::WaitingForCustomer(order_id, journey) => {
                     if let Some(order) = order_data.order(order_id) {
-                        let customer_id: PersonId =
-                            Uuid::from_slice(order.customer_person_id()).unwrap().into();
-                        status_updates.push((
-                            customer_id,
-                            PersonStatus::Eating(Utc::now() + chrono::Duration::seconds(30 * 60)),
+                        events.push(EventPayload::order_updated(
+                            *order_id,
+                            OrderStatus::Delivered,
+                            None,
+                        ));
+                        events.push(EventPayload::person_updated(
+                            order.customer_person_id().try_into()?,
+                            PersonStatus::Eating(
+                                current_time.clone() + chrono::Duration::seconds(30 * 60),
+                            ),
                         ));
                     };
                     (None, Some(PersonStatus::Moving(journey.clone())))
@@ -225,15 +229,16 @@ impl PopulationData {
             };
 
             if let Some(next_status) = next_status {
-                status_updates.push((*person_id, next_status));
+                events.push(EventPayload::person_updated(*person_id, next_status))
             }
 
             match progress {
                 Some(slice) => {
                     if let Some(last_pos) = slice.last() {
                         new_positions.push_point(Some(last_pos));
+                    } else {
+                        new_positions.push_point(Some(&self.positions.value(idx)?));
                     }
-                    journey_slices.push((*person_id, slice));
                 }
                 None => new_positions.push_point(Some(&self.positions.value(idx)?)),
             }
@@ -241,7 +246,7 @@ impl PopulationData {
 
         self.positions = new_positions.finish();
 
-        Ok((journey_slices, status_updates))
+        Ok(events)
     }
 }
 

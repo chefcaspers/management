@@ -38,7 +38,7 @@ impl Transport {
     fn default_velocity_km_h(&self) -> f64 {
         match self {
             Transport::Foot => 5.0,
-            Transport::Bicycle => 15.0,
+            Transport::Bicycle => 10.0,
             Transport::Car => 60.0,
             Transport::Bus => 30.0,
             Transport::Train => 100.0,
@@ -150,6 +150,10 @@ impl Journey {
     // New method to get the current progress
     pub fn progress(&self) -> (usize, f64) {
         (self.current_leg_index, self.current_leg_progress)
+    }
+
+    pub fn has_started(&self) -> bool {
+        self.current_leg_progress > 1e-10 || self.current_leg_index > 0
     }
 
     /// Returns the total distance of the journey in meters

@@ -174,7 +174,14 @@ impl KitchenRunner {
                             None,
                         ));
                     }
-                    OrderLineProcessingStatus::Blocked(_) => {}
+                    OrderLineProcessingStatus::Blocked(_) => {
+                        events.push(EventPayload::order_line_updated(
+                            recipe_id,
+                            OrderLineStatus::Waiting,
+                            Some(kitchen_id),
+                            None,
+                        ));
+                    }
                 }
 
                 progress.status = status;

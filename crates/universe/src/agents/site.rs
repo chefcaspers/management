@@ -273,14 +273,15 @@ impl SiteRunner {
 
             tracing::trace!(target: "site-agent", "Courier {:?} is delivering order {:?}", courier.id(), order.id());
 
-            events.push(EventPayload::person_updated(
-                *courier.id(),
-                PersonStatus::Delivering(*order.id(), journey),
-            ));
             events.push(EventPayload::order_updated(
                 *order.id(),
                 OrderStatus::PickedUp,
                 Some(*courier.id()),
+            ));
+
+            events.push(EventPayload::person_updated(
+                *courier.id(),
+                PersonStatus::Delivering(*order.id(), journey),
             ));
         }
 

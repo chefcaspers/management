@@ -60,6 +60,8 @@ pub enum OrderLineStatus {
     Ready,
     /// Order line is delivered
     Delivered,
+    /// Order line is waiting
+    Waiting,
 }
 
 pub struct OrderData {

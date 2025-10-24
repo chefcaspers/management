@@ -1,3 +1,4 @@
+use chrono::Timelike;
 use geo_traits::to_geo::ToGeoPoint;
 use h3o::{LatLng, Resolution};
 use rand::Rng as _;
@@ -57,8 +58,12 @@ impl PopulationRunner {
 fn create_order(state: &State) -> Option<Vec<(BrandId, MenuItemId)>> {
     let mut rng = rand::rng();
 
+    let current_time = state.current_time();
+
+    let mid_day_offset = 0.0004 * (1.0_f64 - 12_u32.abs_diff(current_time.hour()) as f64 / 12.0);
+
     // TODO: compute probability from person state
-    rng.random_bool(1.0 / 1000.0).then(|| {
+    rng.random_bool(mid_day_offset).then(|| {
         state
             .objects()
             .sample_menu_items(None, &mut rng)
