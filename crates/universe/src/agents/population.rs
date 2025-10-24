@@ -1,6 +1,7 @@
 use geo_traits::to_geo::ToGeoPoint;
 use h3o::{LatLng, Resolution};
 use rand::Rng as _;
+use tracing::{Level, instrument};
 
 use crate::{
     BrandId, EntityView as _, EventPayload, MenuItemId, OrderCreatedPayload, PersonRole, Result,
@@ -20,6 +21,14 @@ impl PopulationRunner {
         PopulationRunner {}
     }
 
+    #[instrument(
+        name = "step_population",
+        level = Level::TRACE,
+        skip(self, ctx),
+        fields(
+            caspers.site_id = site_id.to_string()
+        )
+    )]
     pub(crate) fn step(
         &self,
         site_id: &SiteId,

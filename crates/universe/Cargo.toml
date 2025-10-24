@@ -58,7 +58,11 @@ geo-traits = "0.3"
 geo-types = { version = "0.7.16", features = ["serde"] }
 fake = { version = "4", features = ["derive"] }
 indexmap = { version = "2.9.0" }
+opentelemetry = "0.31.0"
+opentelemetry_sdk = "0.31.0"
+opentelemetry-otlp = { version = "0.31.0", features = ["grpc-tonic"] }
 strum = { version = "0.27", features = ["derive"] }
+tracing-opentelemetry = "0.32.0"
 fast_paths = "1.0.0"
 bincode = { version = "2", features = ["serde"] }
 

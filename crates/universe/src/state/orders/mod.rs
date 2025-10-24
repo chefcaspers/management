@@ -50,10 +50,15 @@ pub enum OrderStatus {
 #[strum(serialize_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum OrderLineStatus {
+    /// Order line is submitted
     Submitted,
+    /// Order line is assigned to a kitchen
     Assigned,
+    /// Order line is currently processing
     Processing,
+    /// Order line is ready for pick up
     Ready,
+    /// Order line is delivered
     Delivered,
 }
 
@@ -149,6 +154,12 @@ impl OrderData {
         self.index
             .get_key_value(order_id)
             .map(|(id, (idx, _))| OrderView::new(id, self, *idx))
+    }
+
+    pub(crate) fn order_line(&self, order_line_id: &OrderLineId) -> Option<OrderLineView<'_>> {
+        self.lines_index
+            .contains(order_line_id)
+            .then(|| OrderLineView::new(*order_line_id, &self))
     }
 
     pub(crate) fn all_orders(&self) -> impl Iterator<Item = OrderView<'_>> {
@@ -338,7 +349,7 @@ impl<'a> OrderView<'a> {
             .iter()
             .skip(*offset)
             .take(*len)
-            .map(|line_id| OrderLineView::new(self.order_id, line_id, self.data))
+            .map(|line_id| OrderLineView::new(*line_id, self.data))
     }
 
     pub(crate) fn is_processing(&self) -> bool {
@@ -365,40 +376,36 @@ impl<'a> OrderView<'a> {
 }
 
 pub struct OrderLineView<'a> {
-    order_id: &'a OrderId,
-    line_id: &'a OrderLineId,
+    line_id: OrderLineId,
     data: &'a OrderData,
 }
 
 impl<'a> OrderLineView<'a> {
-    fn new(order_id: &'a OrderId, line_id: &'a OrderLineId, data: &'a OrderData) -> Self {
-        Self {
-            order_id,
-            line_id,
-            data,
-        }
+    fn new(line_id: OrderLineId, data: &'a OrderData) -> Self {
+        Self { line_id, data }
     }
 
     pub fn id(&self) -> &OrderLineId {
-        self.line_id
+        &self.line_id
     }
 
-    pub fn order_id(&self) -> &OrderId {
-        self.order_id
+    pub fn order_id(&self) -> &[u8] {
+        let line_id = self.data.lines_index.get_index_of(&self.line_id).unwrap();
+        get_id(&self.data.lines, "order_id", line_id)
     }
 
     pub fn brand_id(&self) -> &[u8] {
-        let line_id = self.data.lines_index.get_index_of(self.line_id).unwrap();
+        let line_id = self.data.lines_index.get_index_of(&self.line_id).unwrap();
         get_id(&self.data.lines, "brand_id", line_id)
     }
 
     pub fn menu_item_id(&self) -> &[u8] {
-        let line_id = self.data.lines_index.get_index_of(self.line_id).unwrap();
+        let line_id = self.data.lines_index.get_index_of(&self.line_id).unwrap();
         get_id(&self.data.lines, "menu_item_id", line_id)
     }
 
     pub fn status(&self) -> &str {
-        let line_id = self.data.lines_index.get_index_of(self.line_id).unwrap();
+        let line_id = self.data.lines_index.get_index_of(&self.line_id).unwrap();
         self.data
             .lines
             .column_by_name("status")

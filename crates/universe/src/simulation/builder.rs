@@ -11,7 +11,9 @@ use uuid::Uuid;
 use crate::error::Result;
 use crate::simulation::{Simulation, SimulationConfig};
 use crate::state::{EntityView, RoutingData, State};
-use crate::{Error, PopulationRunner, SimulationSetup, SiteId, SiteRunner, read_parquet_dir};
+use crate::{
+    Error, EventTracker, PopulationRunner, SimulationSetup, SiteId, SiteRunner, read_parquet_dir,
+};
 
 /// Builder for creating a simulation instance.
 pub struct SimulationBuilder {
@@ -221,6 +223,7 @@ impl SimulationBuilder {
             state,
             sites: site_runners,
             population: PopulationRunner::new(),
+            event_tracker: EventTracker::new(),
         })
     }
 }

@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use chrono::{DateTime, Utc};
 use itertools::Itertools;
 use tabled::Tabled;
+use tracing::{Level, instrument};
 
 use super::OrderLine;
 use crate::error::Result;
@@ -87,6 +88,14 @@ impl Entity for KitchenRunner {
 }
 
 impl KitchenRunner {
+    #[instrument(
+        name = "step_kitchen",
+        level = Level::TRACE,
+        skip(self, ctx),
+        fields(
+            caspers.kitchen_id = self.id.to_string()
+        )
+    )]
     pub(crate) fn step(&mut self, ctx: &State) -> Result<Vec<EventPayload>> {
         let mut events = Vec::new();
 

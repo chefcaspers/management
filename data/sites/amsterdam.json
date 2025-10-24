@@ -15,11 +15,23 @@
           "station_type": "KITCHEN_STATION_WORKSTATION"
         },
         {
+          "name": "workstation-2",
+          "station_type": "KITCHEN_STATION_WORKSTATION"
+        },
+        {
           "name": "oven-1",
           "station_type": "KITCHEN_STATION_OVEN"
         },
         {
+          "name": "oven-2",
+          "station_type": "KITCHEN_STATION_OVEN"
+        },
+        {
           "name": "stove-1",
+          "station_type": "KITCHEN_STATION_STOVE"
+        },
+        {
+          "name": "stove-2",
           "station_type": "KITCHEN_STATION_STOVE"
         }
       ]
