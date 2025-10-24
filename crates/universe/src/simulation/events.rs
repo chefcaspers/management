@@ -1,7 +1,11 @@
 use chrono::{DateTime, Utc};
+use datafusion::common::HashMap;
 use geo::Point;
 use serde::{Deserialize, Serialize};
+use tracing::info_span;
+use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 
+use crate::State;
 use crate::idents::{BrandId, KitchenId, MenuItemId, OrderId, OrderLineId, PersonId, SiteId};
 use crate::state::{OrderLineStatus, OrderStatus, PersonStatus};
 
@@ -86,5 +90,203 @@ impl EventPayload {
             status: OrderStatus::Failed,
             actor_id,
         })
+    }
+}
+
+pub struct EventTracker {
+    order_spans: HashMap<OrderId, tracing::Span>,
+    order_line_spans: HashMap<OrderLineId, tracing::Span>,
+    delivery_spans: HashMap<OrderId, tracing::Span>,
+    pub(super) total_stats: EventStats,
+}
+
+impl EventTracker {
+    pub fn new() -> Self {
+        Self {
+            order_spans: HashMap::new(),
+            order_line_spans: HashMap::new(),
+            total_stats: EventStats::new(),
+            delivery_spans: HashMap::new(),
+        }
+    }
+
+    pub fn process_events(&mut self, events: &[EventPayload], ctx: &State) -> EventStats {
+        let mut stats = EventStats::new();
+        for event in events {
+            self.handle_event(&mut stats, event, ctx);
+        }
+        self.total_stats.add(&stats);
+        stats
+    }
+
+    fn handle_event(&mut self, stats: &mut EventStats, event: &EventPayload, ctx: &State) {
+        match event {
+            EventPayload::OrderCreated(_) => {
+                stats.num_orders_created += 1;
+            }
+            EventPayload::OrderUpdated(payload) => {
+                stats.num_orders_updated += 1;
+                self.handle_order_updated(payload, ctx);
+            }
+            EventPayload::OrderLineUpdated(payload) => {
+                stats.num_order_lines_updated += 1;
+                self.handle_order_line_updated(payload, ctx);
+            }
+            EventPayload::PersonUpdated(payload) => {
+                stats.num_people_updated += 1;
+                self.handle_person_updated(payload, ctx);
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_order_updated(&mut self, payload: &OrderUpdatedPayload, _ctx: &State) {
+        if payload.status == OrderStatus::Submitted {
+            let span = info_span!(
+                parent: None,
+                "order_processing",
+                caspers.order_id = payload.order_id.to_string(),
+            );
+            self.order_spans.insert(payload.order_id, span);
+        }
+
+        if let Some(span) = self.order_spans.get(&payload.order_id) {
+            span.in_scope(|| {
+                tracing::info!(
+                    caspers.new_status = payload.status.to_string(),
+                    "order_updated"
+                );
+            });
+
+            if payload.status == OrderStatus::PickedUp {
+                let span = info_span!(
+                    parent: span,
+                    "delivering_order",
+                    caspers.courier_id = payload.actor_id.map(|id| id.to_string()).unwrap_or_else(|| "missing".to_string()),
+                );
+                self.delivery_spans.insert(payload.order_id, span);
+            }
+        }
+
+        if payload.status == OrderStatus::Delivered {
+            if let Some(span) = self.order_spans.remove(&payload.order_id) {
+                span.set_status(opentelemetry::trace::Status::Ok);
+                if let Some(delivery_span) = self.delivery_spans.get(&payload.order_id) {
+                    delivery_span.in_scope(|| {
+                        tracing::info!("order_delivered");
+                    });
+                    delivery_span.set_status(opentelemetry::trace::Status::Ok);
+                }
+            };
+        }
+
+        if payload.status == OrderStatus::Failed {
+            if let Some(span) = self.order_spans.remove(&payload.order_id) {
+                span.set_status(opentelemetry::trace::Status::Error {
+                    description: "order failed".into(),
+                });
+                if let Some(delivery_span) = self.delivery_spans.get(&payload.order_id) {
+                    delivery_span.set_status(opentelemetry::trace::Status::Error {
+                        description: "order failed".into(),
+                    });
+                }
+            };
+        }
+    }
+
+    fn handle_order_line_updated(&mut self, payload: &OrderLineUpdatedPayload, ctx: &State) {
+        if let Some(line) = ctx.orders().order_line(&payload.order_line_id) {
+            if payload.status == OrderLineStatus::Assigned {
+                let order_id: OrderId = line.order_id().try_into().unwrap();
+                if let Some(order_span) = self.order_spans.get(&order_id) {
+                    let line_span = info_span!(
+                        parent: order_span,
+                        "order_line_processing",
+                        caspers.order_line_id = payload.order_line_id.to_string()
+                    );
+                    self.order_line_spans
+                        .insert(payload.order_line_id, line_span);
+                }
+            }
+        }
+        if let Some(span) = self.order_line_spans.get(&payload.order_line_id) {
+            span.in_scope(|| {
+                tracing::info!(
+                    caspers.new_status = payload.status.to_string(),
+                    "order_line_updated"
+                );
+            });
+        }
+        if payload.status == OrderLineStatus::Ready {
+            self.order_line_spans.remove(&payload.order_line_id);
+        }
+    }
+
+    fn handle_person_updated(&mut self, payload: &PersonUpdatedPayload, ctx: &State) {
+        match &payload.status {
+            PersonStatus::Delivering(order_id, journey) => {
+                if let Some(span) = self.delivery_spans.get(order_id) {
+                    span.set_attribute(
+                        "caspers.total_distance",
+                        format!("{}m", journey.distance_m()),
+                    );
+                    span.in_scope(|| {
+                        tracing::info!(
+                            caspers.delivery_progress = journey.progress_percentage(),
+                            "out_for_delivery"
+                        );
+                    });
+                }
+            }
+            PersonStatus::WaitingForCustomer(order_id, _) => {
+                if let Some(span) = self.delivery_spans.get(order_id) {
+                    span.in_scope(|| {
+                        tracing::info!("waiting_for_customer");
+                    });
+                }
+            }
+            _ => (),
+        }
+    }
+}
+
+pub struct EventStats {
+    pub num_orders_created: u32,
+    pub num_orders_updated: u32,
+    pub num_order_lines_updated: u32,
+    pub num_people_updated: u32,
+}
+
+impl EventStats {
+    pub fn new() -> Self {
+        Self {
+            num_orders_created: 0,
+            num_orders_updated: 0,
+            num_order_lines_updated: 0,
+            num_people_updated: 0,
+        }
+    }
+
+    pub fn add(&mut self, other: &EventStats) {
+        self.num_orders_created += other.num_orders_created;
+        self.num_orders_updated += other.num_orders_updated;
+        self.num_order_lines_updated += other.num_order_lines_updated;
+        self.num_people_updated += other.num_people_updated;
+    }
+
+    pub fn process_events(&mut self, events: &[Event]) {
+        for event in events {
+            self.handle_event(event);
+        }
+    }
+
+    pub fn handle_event(&mut self, event: &Event) {
+        match event.payload {
+            EventPayload::OrderCreated(_) => self.num_orders_created += 1,
+            EventPayload::OrderUpdated(_) => self.num_orders_updated += 1,
+            EventPayload::OrderLineUpdated(_) => self.num_order_lines_updated += 1,
+            EventPayload::PersonUpdated(_) => self.num_people_updated += 1,
+            _ => {}
+        }
     }
 }

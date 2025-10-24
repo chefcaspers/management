@@ -1,7 +1,7 @@
-use chrono::Duration;
 use futures::TryStreamExt;
 use object_store::ObjectStore;
 use object_store::path::Path;
+use tracing::instrument;
 use url::Url;
 
 pub use self::agents::*;
@@ -121,6 +121,7 @@ where
     SimulationSetup::load(&store, &path).await
 }
 
+#[instrument(name = "run_simulation", skip_all)]
 pub async fn run_simulation(
     setup: SimulationSetup,
     duration: usize,
@@ -139,6 +140,7 @@ pub async fn run_simulation(
     Ok(())
 }
 
+#[instrument(name = "continue_simulation", skip_all)]
 pub async fn run_simulation_from(
     setup: SimulationSetup,
     duration: usize,

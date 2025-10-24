@@ -5,6 +5,7 @@ use datafusion::dataframe::DataFrameWriteOptions;
 use itertools::Itertools;
 use rand::distr::{Distribution, Uniform};
 use serde::{Deserialize, Serialize};
+use tracing::{Level, Span, field, instrument};
 use url::Url;
 
 use crate::PopulationRunner;
@@ -84,10 +85,14 @@ pub struct Simulation {
     /// This is used to ensure that the simulation is only initialized once.
     /// e.g. we only create a population once, and load it in subsequent runs.
     initialized: bool,
+
+    /// The event stats for the simulation
+    event_tracker: EventTracker,
 }
 
 impl Simulation {
     /// Advance the simulation by one time step
+    #[instrument(skip(self), fields(caspers.total_events_generated = field::Empty))]
     async fn step(&mut self) -> Result<()> {
         // move people
         let mut events = self.state.move_people()?;
@@ -103,12 +108,18 @@ impl Simulation {
 
             // advance the site and collect events
             if let Ok(site_events) = site.step(&interactions_events, &self.state) {
+                events.extend(interactions_events);
                 self.state.process_site_events(&site_events)?;
                 events.extend(site_events);
             } else {
                 tracing::error!(target: "simulation", "Failed to step site {:?}", site.id());
             }
         }
+
+        let stats = self.event_tracker.process_events(&events, &self.state);
+
+        let span = Span::current();
+        span.record("caspers.total_events_generated", stats.num_orders_created);
 
         tracing::debug!(target: "simulation", "Collected {} events.", events.len());
 
@@ -119,6 +130,7 @@ impl Simulation {
         Ok(())
     }
 
+    #[instrument(skip_all, level = Level::TRACE)]
     async fn write_events(&self, events: impl IntoIterator<Item = EventPayload>) -> Result<()> {
         let range = Uniform::new(0.0_f32, 0.9999_f32).unwrap();
         let events = events.into_iter().map(|payload| {
@@ -152,6 +164,7 @@ impl Simulation {
     }
 
     /// Run the simulation for a specified number of steps
+    #[instrument(skip(self))]
     pub async fn run(&mut self, steps: usize) -> Result<()> {
         for _ in 0..steps {
             self.step().await?;
@@ -164,6 +177,7 @@ impl Simulation {
     }
 
     /// Snapshot the state of the simulation
+    #[instrument(skip(self))]
     async fn snapshot(&mut self) -> Result<()> {
         let base_url = self.state.config().result_storage_location.as_ref();
         let interval = self.state.config().snapshot_interval;

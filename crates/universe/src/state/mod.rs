@@ -241,27 +241,8 @@ impl State {
 
     /// Advance people's journeys and update their statuses on arrival at their destination.
     pub(super) fn move_people(&mut self) -> Result<Vec<EventPayload>> {
-        let (movements, status_updates) = self
-            .population
-            .update_journeys(self.time_step, &self.orders)?;
-        tracing::debug!(
-            target: "state",
-            "Moved {} people with {} status updates",
-            movements.len(),
-            status_updates.len()
-        );
-
-        let mut events = vec![];
-        // update person statuses after positions have been updated.
-        for (person_id, status) in status_updates.into_iter() {
-            // self.population.update_person_status(&person_id, &status)?;
-            events.push(EventPayload::PersonUpdated(PersonUpdatedPayload {
-                person_id,
-                status,
-            }));
-        }
-
-        Ok(events)
+        self.population
+            .update_journeys(&self.time, self.time_step, &self.orders)
     }
 
     pub(super) fn step<'a>(
