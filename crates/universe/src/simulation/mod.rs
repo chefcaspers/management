@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, Duration, Utc};
 use datafusion::dataframe::DataFrameWriteOptions;
+use datafusion::prelude::SessionContext;
 use itertools::Itertools;
 use rand::distr::{Distribution, Uniform};
 use serde::{Deserialize, Serialize};
@@ -13,6 +14,7 @@ use crate::agents::SiteRunner;
 use crate::error::Result;
 use crate::idents::{SiteId, TypedId};
 use crate::simulation::execution::EventDataBuilder;
+use crate::simulation::stats::EventStatsBuffer;
 use crate::state::State;
 
 pub use self::builder::SimulationBuilder;
@@ -21,6 +23,7 @@ pub use self::events::*;
 mod builder;
 pub mod events;
 mod execution;
+mod stats;
 
 /// Core trait that any simulatable entity must implement
 pub trait Entity: Send + Sync + 'static {
@@ -88,6 +91,8 @@ pub struct Simulation {
 
     /// The event stats for the simulation
     event_tracker: EventTracker,
+
+    stats_buffer: EventStatsBuffer,
 }
 
 impl Simulation {
@@ -117,15 +122,37 @@ impl Simulation {
         }
 
         let stats = self.event_tracker.process_events(&events, &self.state);
-
         let span = Span::current();
         span.record("caspers.total_events_generated", stats.num_orders_created);
 
-        tracing::debug!(target: "simulation", "Collected {} events.", events.len());
+        self.stats_buffer
+            .push_stats(self.state.current_time(), &stats)?;
 
         // update the state with the collected events
         self.state.step(&events)?;
+
         self.write_events(events).await?;
+
+        Ok(())
+    }
+
+    #[instrument(skip_all, level = Level::TRACE)]
+    async fn write_event_stats(&mut self) -> Result<()> {
+        let base_url = self.state.config().result_storage_location.as_ref();
+        // we have no place to store results
+        let Some(base_path) = base_url else {
+            return Ok(());
+        };
+
+        let ts = self.state.current_time().timestamp();
+        let events_path = base_path
+            .join(&format!("stats/events/snapshot-{ts}.parquet"))
+            .unwrap();
+
+        let ctx = SessionContext::new();
+        let df = ctx.read_batch(self.stats_buffer.flush()?)?;
+        df.write_parquet(events_path.as_str(), DataFrameWriteOptions::new(), None)
+            .await?;
 
         Ok(())
     }
@@ -166,13 +193,59 @@ impl Simulation {
     /// Run the simulation for a specified number of steps
     #[instrument(skip(self))]
     pub async fn run(&mut self, steps: usize) -> Result<()> {
-        for _ in 0..steps {
+        for step in 0..steps {
             self.step().await?;
+            self.snapshot_stats().await?;
+            if step % 8192 == 0 && step != 0 {
+                self.write_event_stats().await?;
+            };
         }
+
+        self.write_event_stats().await?;
+
         // snapshot the state
         if !self.state.config().dry_run {
             self.snapshot().await?;
         }
+        Ok(())
+    }
+
+    #[instrument(skip(self))]
+    async fn snapshot_stats(&self) -> Result<()> {
+        let base_url = self
+            .state
+            .config()
+            .result_storage_location
+            .as_ref()
+            .unwrap();
+
+        let ctx = self.state.snapshot_session()?;
+
+        let ts = self.state.current_time().timestamp();
+        let path = |name: &str| {
+            base_url
+                .join(&format!("{name}/snapshot-{ts}.parquet"))
+                .unwrap()
+        };
+
+        let timestamp = self.state.current_time().to_rfc3339();
+        let query = format!(
+            r#"
+            SELECT '{timestamp}'::timestamp(6) as timestamp, status, count(*) as count
+            FROM orders
+            GROUP BY status
+        "#
+        );
+
+        let df = ctx.sql(&query).await?;
+        let order_stats_path = path("stats/orders");
+        df.write_parquet(
+            order_stats_path.as_str(),
+            DataFrameWriteOptions::new(),
+            None,
+        )
+        .await?;
+
         Ok(())
     }
 
