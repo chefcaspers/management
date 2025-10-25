@@ -12,6 +12,7 @@ def _():
     import marimo as mo
     import plotly.express as px
     import polars as pl
+
     return folium, mo, os, pl, px
 
 
@@ -175,6 +176,7 @@ def _():
             }
             for trip in trips
         ]
+
     return (trip_geo_features,)
 
 

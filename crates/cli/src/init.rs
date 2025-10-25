@@ -134,16 +134,8 @@ impl BrandTemplate {
 }
 
 fn load_template(template: &Template) -> Result<SimulationSetup> {
-    let sites = template
-        .sites
-        .iter()
-        .map(load_site)
-        .try_collect()?;
-    let brands = template
-        .brands
-        .iter()
-        .map(load_brand)
-        .try_collect()?;
+    let sites = template.sites.iter().map(load_site).try_collect()?;
+    let brands = template.brands.iter().map(load_brand).try_collect()?;
     Ok(SimulationSetup { sites, brands })
 }
 
