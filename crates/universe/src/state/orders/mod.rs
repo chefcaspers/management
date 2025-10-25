@@ -13,7 +13,7 @@ use strum::{AsRefStr, Display, EnumString};
 use crate::error::{Error, Result};
 use crate::idents::{OrderId, OrderLineId, SiteId};
 
-pub(crate) use self::builder::{ORDER_LINE_SCHEMA, ORDER_SCHEMA, OrderDataBuilder};
+pub(crate) use self::builder::OrderDataBuilder;
 
 mod builder;
 

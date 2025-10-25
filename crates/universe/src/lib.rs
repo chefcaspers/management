@@ -1,8 +1,12 @@
+use arrow::array::RecordBatch;
+use datafusion::common::HashMap;
 use futures::TryStreamExt;
+use itertools::Itertools;
 use object_store::ObjectStore;
 use object_store::path::Path;
 use tracing::instrument;
 use url::Url;
+use uuid::Uuid;
 
 pub use self::agents::*;
 pub use self::error::*;
@@ -17,7 +21,6 @@ use pyo3::prelude::*;
 mod agents;
 mod error;
 mod idents;
-pub mod init;
 mod models;
 #[cfg(feature = "python")]
 mod python;
@@ -109,6 +112,29 @@ impl SimulationSetup {
 
         Ok(brands)
     }
+
+    pub(crate) fn object_data(&self) -> Result<RecordBatch> {
+        let brands: HashMap<_, _> = self
+            .brands
+            .iter()
+            .map(|brand| Ok::<_, Error>((Uuid::parse_str(&brand.id)?.into(), brand)))
+            .try_collect()?;
+        generate_objects(&brands, &self.sites)
+    }
+}
+
+fn generate_objects(brands: &HashMap<BrandId, &Brand>, sites: &[SiteSetup]) -> Result<RecordBatch> {
+    let mut builder = ObjectDataBuilder::new();
+
+    for (brand_id, brand) in brands.iter() {
+        builder.append_brand(brand_id, brand);
+    }
+
+    for site in sites {
+        builder.append_site_info(&site)?;
+    }
+
+    builder.finish()
 }
 
 pub async fn load_simulation_setup<I, K, V>(url: &Url, options: I) -> Result<SimulationSetup>

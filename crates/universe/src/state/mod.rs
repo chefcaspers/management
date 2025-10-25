@@ -5,34 +5,21 @@
 //! external data storages that might be used to store the state.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::Duration;
 
-use arrow::array::StructArray;
 use arrow::array::{RecordBatch, cast::AsArray as _};
-use arrow::compute::{cast, concat_batches};
-use arrow::datatypes::DataType;
 use chrono::{DateTime, Utc};
-use datafusion::datasource::file_format::parquet::ParquetFormat;
-use datafusion::datasource::listing::{
-    ListingOptions, ListingTable, ListingTableConfig, ListingTableUrl,
-};
 use datafusion::prelude::*;
 use geo_traits::PointTrait;
 use itertools::Itertools;
-use rand::Rng;
-use url::Url;
 use uuid::Uuid;
 
 use crate::idents::*;
 use crate::{
     Error, EventPayload, OrderLineUpdatedPayload, OrderUpdatedPayload, Result, SimulationConfig,
-    SimulationSetup,
 };
 
 use self::movement::JourneyPlanner;
-use self::objects::OBJECT_SCHEMA;
-use self::orders::{ORDER_LINE_SCHEMA, ORDER_SCHEMA};
 
 pub(crate) use self::movement::RoutingData;
 pub(crate) use self::objects::{ObjectData, ObjectDataBuilder, ObjectLabel};
@@ -82,43 +69,26 @@ pub struct State {
 }
 
 impl State {
-    pub(crate) fn try_new(
-        setup: SimulationSetup,
+    pub(crate) fn new(
+        config: impl Into<Option<SimulationConfig>>,
+        objects: ObjectData,
+        population: PopulationData,
+        orders: OrderData,
         routing: HashMap<SiteId, RoutingData>,
-        config: Option<SimulationConfig>,
-    ) -> Result<Self> {
-        let mut builder = PopulationDataBuilder::new();
-
-        for site in &setup.sites {
-            let n_people = rand::rng().random_range(500..1500);
-            let info = site
-                .info
-                .as_ref()
-                .ok_or(Error::invalid_data("expected site info"))?;
-            builder.add_site(info, n_people)?;
-        }
-
-        let brands: HashMap<_, _> = setup
-            .brands
-            .into_iter()
-            .map(|brand| Ok::<_, Error>((Uuid::parse_str(&brand.id)?.into(), brand)))
-            .try_collect()?;
-
-        let vendors = crate::init::generate_objects(&brands, setup.sites)?;
-
-        let config = config.unwrap_or_default();
-        Ok(State {
+    ) -> Self {
+        let config = config.into().unwrap_or_default();
+        Self {
             time_step: Duration::from_secs(config.time_increment.num_seconds() as u64),
             time: config.simulation_start,
-            population: builder.finish()?,
-            objects: ObjectData::try_new(vendors)?,
+            config,
+            population,
+            objects,
+            orders,
             routing: routing
                 .into_iter()
                 .map(|(id, data)| (id, data.into_trip_planner()))
                 .collect(),
-            config,
-            orders: OrderData::empty(),
-        })
+        }
     }
 
     pub(crate) fn config(&self) -> &SimulationConfig {
@@ -269,85 +239,6 @@ impl State {
         ctx.register_batch("order_lines", self.orders.batch_lines().clone())?;
         Ok(ctx)
     }
-
-    pub(crate) async fn load_snapshot(
-        config: Option<SimulationConfig>,
-        routing: HashMap<SiteId, RoutingData>,
-        base_url: &Url,
-        snapshot_id: u64,
-    ) -> Result<Self> {
-        let ctx = SessionContext::new();
-
-        let people_path = base_url.join(&format!(
-            "population/people/snapshot-{}.parquet",
-            snapshot_id
-        ))?;
-        let df = ctx
-            .read_parquet(people_path.as_str(), Default::default())
-            .await?
-            .collect()
-            .await?;
-        let all = concat_batches(df[0].schema_ref(), &df)?;
-        let population = PopulationData::try_new_from_snapshot(all)?;
-
-        let orders_path = base_url.join(&format!("orders/snapshot-{}.parquet", snapshot_id))?;
-        let df = read_pq(&orders_path, &ctx)
-            .await?
-            .drop_columns(&["timestamp"])?
-            .collect()
-            .await?;
-        let orders_data = cast(
-            &StructArray::from(concat_batches(df[0].schema_ref(), &df)?),
-            &DataType::Struct(ORDER_SCHEMA.fields.clone()),
-        )?
-        .as_struct()
-        .into();
-
-        let order_lines_path =
-            base_url.join(&format!("order_lines/snapshot-{}.parquet", snapshot_id))?;
-        let df = read_pq(&order_lines_path, &ctx)
-            .await?
-            .drop_columns(&["timestamp"])?
-            .collect()
-            .await?;
-        let order_lines_data = cast(
-            &StructArray::from(concat_batches(df[0].schema_ref(), &df)?),
-            &DataType::Struct(ORDER_LINE_SCHEMA.fields.clone()),
-        )?
-        .as_struct()
-        .into();
-
-        let orders = OrderData::try_new(orders_data, order_lines_data)?;
-
-        let objects_path = base_url.join(&format!("objects/snapshot-{}.parquet", snapshot_id))?;
-        let df = read_pq(&objects_path, &ctx)
-            .await?
-            .drop_columns(&["timestamp"])?
-            .collect()
-            .await?;
-        // let objects_data = concat_batches(df[0].schema_ref(), &df)?;
-        let objects_data = cast(
-            &StructArray::from(concat_batches(df[0].schema_ref(), &df)?),
-            &DataType::Struct(OBJECT_SCHEMA.fields.clone()),
-        )?
-        .as_struct()
-        .into();
-        let objects = ObjectData::try_new(objects_data)?;
-
-        let config = config.unwrap_or_default();
-        Ok(Self {
-            time_step: Duration::from_secs(config.time_increment.num_seconds() as u64),
-            time: config.simulation_start,
-            population,
-            objects,
-            routing: routing
-                .into_iter()
-                .map(|(id, data)| (id, data.into_trip_planner()))
-                .collect(),
-            config,
-            orders,
-        })
-    }
 }
 
 pub trait EntityView {
@@ -381,45 +272,4 @@ pub trait EntityView {
             .value(self.valid_index());
         Ok(serde_json::from_str(raw)?)
     }
-}
-
-async fn read_pq(file_path: &Url, ctx: &SessionContext) -> Result<DataFrame> {
-    Ok(ctx
-        .read_parquet(file_path.as_str(), Default::default())
-        .await?)
-}
-
-pub(crate) async fn read_parquet_dir(
-    table_path: &Url,
-    ctx: Option<SessionContext>,
-) -> Result<RecordBatch> {
-    let ctx = ctx.unwrap_or_default();
-    let session_state = ctx.state();
-
-    // Parse the path
-    let table_path = ListingTableUrl::parse(table_path)?;
-
-    // Create default parquet options
-    let file_format = ParquetFormat::new();
-    let listing_options =
-        ListingOptions::new(Arc::new(file_format)).with_file_extension(".parquet");
-
-    // Resolve the schema
-    let resolved_schema = listing_options
-        .infer_schema(&session_state, &table_path)
-        .await?;
-
-    let config = ListingTableConfig::new(table_path)
-        .with_listing_options(listing_options)
-        .with_schema(resolved_schema.clone());
-
-    // Create a new TableProvider
-    let provider = Arc::new(ListingTable::try_new(config)?);
-
-    // This provider can now be read as a dataframe:
-    let df = ctx.read_table(provider.clone())?;
-
-    let batches = df.collect().await?;
-
-    Ok(concat_batches(&resolved_schema, &batches)?)
 }

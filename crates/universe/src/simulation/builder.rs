@@ -1,19 +1,25 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use arrow::compute::concat_batches;
 use chrono::{DateTime, Duration, Utc};
+use datafusion::catalog::MemTable;
 use datafusion::prelude::{col, lit};
 use itertools::Itertools;
+use rand::Rng as _;
 use serde::{Deserialize, Serialize};
 use url::Url;
 use uuid::Uuid;
 
 use crate::error::Result;
 use crate::simulation::Simulation;
-use crate::simulation::session::simulation_context;
+use crate::simulation::session::{SimulationContext, simulation_context};
 use crate::simulation::stats::EventStatsBuffer;
 use crate::state::{EntityView, RoutingData, State};
-use crate::{Error, EventTracker, PopulationRunner, SimulationSetup, SiteId, SiteRunner};
+use crate::{
+    Error, EventTracker, ObjectData, OrderData, PopulationDataBuilder, PopulationRunner,
+    SimulationSetup, SiteRunner,
+};
 
 /// Execution mode for the simulation.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -182,19 +188,36 @@ impl SimulationBuilder {
         self
     }
 
-    /// Load the prepared street network data into routing data objects.
-    async fn routing_data(&self) -> Result<HashMap<SiteId, RoutingData>> {
+    async fn build_context(&self) -> Result<SimulationContext> {
         let Some(setup) = &self.setup else {
-            return Err(Error::MissingInput("Setup file not found".to_string()));
+            return Err(Error::MissingInput(
+                "Simulation setup not found".to_string(),
+            ));
         };
-
         let Some(routing_path) = &self.routing_path else {
             return Err(Error::MissingInput(
                 "Routing data path is required".to_string(),
             ));
         };
 
-        let ctx = simulation_context(&routing_path).await?;
+        let objects = setup.object_data()?;
+        let provider = Arc::new(MemTable::try_new(objects.schema(), vec![vec![objects]])?);
+
+        simulation_context(&routing_path, provider).await
+    }
+
+    /// Load the prepared street network data into routing data objects.
+    async fn build_state(
+        &self,
+        ctx: &SimulationContext,
+        config: SimulationConfig,
+    ) -> Result<State> {
+        let Some(setup) = &self.setup else {
+            return Err(Error::MissingInput("Setup file not found".to_string()));
+        };
+
+        let objects = ctx.system().objects().await?.collect().await?;
+        let objects = ObjectData::try_new(concat_batches(objects[0].schema_ref(), &objects)?)?;
 
         let mut routers = HashMap::new();
         for site in setup.sites.iter().filter_map(|s| s.info.as_ref()) {
@@ -222,7 +245,21 @@ impl SimulationBuilder {
             );
         }
 
-        Ok(routers)
+        let mut builder = PopulationDataBuilder::new();
+        for site in objects.sites()? {
+            let n_people = rand::rng().random_range(500..1500);
+            let info = site.properties()?;
+            builder.add_site(n_people, info.latitude, info.longitude)?;
+        }
+        let population = builder.finish()?;
+
+        Ok(State::new(
+            config,
+            objects,
+            population,
+            OrderData::empty(),
+            routers,
+        ))
     }
 
     /// Build the simulation with the given initial conditions
@@ -235,19 +272,9 @@ impl SimulationBuilder {
             dry_run: self.dry_run,
             write_events: self.write_events,
         };
-        let routing = self.routing_data().await?;
 
-        let state = if let (Some(sn_path), Some(sn_id)) =
-            (&self.snapshot_location, self.snapshot_version)
-        {
-            State::load_snapshot(Some(config), routing, sn_path, sn_id).await?
-        } else if let Some(setup) = self.setup {
-            State::try_new(setup, routing, Some(config))?
-        } else {
-            return Err(Error::MissingInput(
-                "Either simulation setup (new sim) or snapshot details are required.".into(),
-            ));
-        };
+        let ctx = self.build_context().await?;
+        let state = self.build_state(&ctx, config).await?;
 
         let site_runners = state
             .objects()

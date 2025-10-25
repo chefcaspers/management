@@ -13,7 +13,10 @@ use url::Url;
 
 use crate::error::Result;
 
-pub(crate) async fn simulation_context(routing_path: &Url) -> Result<SimulationContext> {
+pub(crate) async fn simulation_context(
+    routing_path: &Url,
+    objects: Arc<dyn TableProvider>,
+) -> Result<SimulationContext> {
     let ctx = SessionContext::new();
 
     let nodes_path = routing_path.join("nodes/").unwrap();
@@ -22,7 +25,7 @@ pub(crate) async fn simulation_context(routing_path: &Url) -> Result<SimulationC
     let routing_nodes = read_parquet_table(&nodes_path, &state).await?;
     let routing_edges = read_parquet_table(&edge_path, &state).await?;
 
-    SimulationContext::try_new(ctx, routing_nodes, routing_edges)
+    SimulationContext::try_new(ctx, routing_nodes, routing_edges, objects)
 }
 
 pub(crate) struct SimulationContext {
@@ -34,10 +37,12 @@ impl SimulationContext {
         ctx: SessionContext,
         routing_nodes: Arc<dyn TableProvider>,
         routing_edges: Arc<dyn TableProvider>,
+        objects: Arc<dyn TableProvider>,
     ) -> Result<Self> {
         let system_schema = Arc::new(MemorySchemaProvider::new());
         system_schema.register_table("routing_nodes".into(), routing_nodes)?;
         system_schema.register_table("routing_edges".into(), routing_edges)?;
+        system_schema.register_table("objects".into(), objects)?;
 
         let catalog = Arc::new(MemoryCatalogProvider::new());
         catalog.register_schema("system", system_schema)?;
@@ -79,7 +84,7 @@ impl SystemSchema<'_> {
 
     pub(crate) async fn objects(&self) -> Result<DataFrame> {
         let query = r#"
-            SELECT location, source, target, properties, geometry
+            SELECT id, parent_id, label, name, properties
             FROM caspers.system.objects
         "#;
         Ok(self.ctx().sql(query).await?)

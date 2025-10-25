@@ -87,41 +87,6 @@ impl PopulationData {
         })
     }
 
-    pub(crate) fn try_new_from_snapshot(snapshot: RecordBatch) -> Result<Self> {
-        let indices = (0..snapshot.columns().len() - 2).collect::<Vec<_>>();
-        let people = snapshot.project(&indices)?;
-        let position_data = snapshot.column_by_name("position").unwrap().as_struct();
-        let point_type = PointType::new(Dimension::XY, Default::default());
-        let positions: PointArray = (position_data, point_type).try_into()?;
-
-        let id_iter = people
-            .column_by_name("id")
-            .unwrap()
-            .as_fixed_size_binary()
-            .iter();
-
-        let state_iter = snapshot
-            .column_by_name("state")
-            .unwrap()
-            .as_string_view()
-            .iter();
-
-        let lookup_index = id_iter
-            .zip(state_iter)
-            .map(|(id, state)| {
-                let id = Uuid::from_slice(id.unwrap()).unwrap().into();
-                let state = serde_json::from_str(state.unwrap()).unwrap();
-                (id, state)
-            })
-            .collect();
-
-        Ok(PopulationData {
-            people,
-            positions,
-            lookup_index,
-        })
-    }
-
     pub fn people(&self) -> &RecordBatch {
         &self.people
     }
