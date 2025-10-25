@@ -87,7 +87,7 @@ impl ObjectData {
         Ok(self)
     }
 
-    pub(super) fn objects(&self) -> &RecordBatch {
+    pub(crate) fn objects(&self) -> &RecordBatch {
         &self.objects
     }
 
@@ -153,7 +153,7 @@ impl ObjectData {
         selected_items
     }
 
-    pub(crate) fn sites(&self) -> Result<impl Iterator<Item = SiteView<'_>>> {
+    pub fn sites(&self) -> Result<impl Iterator<Item = SiteView<'_>>> {
         Ok(self
             .iter_ids()?
             .enumerate()

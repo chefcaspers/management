@@ -47,7 +47,7 @@ impl OrderDataBuilder {
     pub fn finish(self) -> Result<OrderData> {
         let orders = self.orders.finish()?;
         let lines = self.lines.finish()?;
-        OrderData::try_new(orders, lines)
+        OrderData::try_new_from_data(orders, lines)
     }
 }
 
@@ -62,7 +62,7 @@ pub(crate) static ORDER_LINE_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
     ]))
 });
 
-struct OrderLineBuilder {
+pub(crate) struct OrderLineBuilder {
     ids: FixedSizeBinaryBuilder,
     order_ids: FixedSizeBinaryBuilder,
     brand_ids: FixedSizeBinaryBuilder,
@@ -79,6 +79,10 @@ impl OrderLineBuilder {
             menu_item_ids: FixedSizeBinaryBuilder::new(16),
             statuses: StringBuilder::new(),
         }
+    }
+
+    pub(crate) fn snapshot_schema() -> SchemaRef {
+        ORDER_LINE_SCHEMA.clone()
     }
 
     pub fn add_line(
@@ -132,7 +136,7 @@ pub(crate) static ORDER_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
     SchemaRef::new(Schema::new(fields))
 });
 
-struct OrderBuilder {
+pub(crate) struct OrderBuilder {
     ids: FixedSizeBinaryBuilder,
     site_ids: FixedSizeBinaryBuilder,
     customer_ids: FixedSizeBinaryBuilder,
@@ -150,6 +154,10 @@ impl OrderBuilder {
                 .with_field(Field::new("item", DataType::Float64, false)),
             statuses: StringBuilder::new(),
         }
+    }
+
+    pub(crate) fn snapshot_schema() -> SchemaRef {
+        ORDER_SCHEMA.clone()
     }
 
     pub fn add_order(

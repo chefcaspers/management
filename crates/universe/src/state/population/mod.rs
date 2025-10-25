@@ -26,7 +26,7 @@ use crate::{EventPayload, OrderData, OrderStatus, SimulationContext};
 use self::builder::POPULATION_SCHEMA;
 use super::movement::{Journey, Transport};
 
-pub(crate) use builder::PopulationDataBuilder;
+pub use builder::PopulationDataBuilder;
 
 mod builder;
 

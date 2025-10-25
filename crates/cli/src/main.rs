@@ -1,9 +1,8 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use url::Url;
 
-use caspers_universe::{Result, SimulationMode, load_simulation_setup, run_simulation};
+use caspers_universe::{Result, SimulationMode, run_simulation};
 
-use crate::init::InitArgs;
+use crate::init::{InitArgs, resolve_url};
 
 mod error;
 mod init;
@@ -67,9 +66,9 @@ struct RunArgs {
     #[arg(short, long, default_value_t = 100)]
     duration: usize,
 
-    #[arg(long)]
+    #[arg(short, long)]
     /// Path where basic simulation setup is stored.
-    setup_path: String,
+    working_directory: Option<String>,
 
     #[arg(short, long, value_enum, default_value_t = SimulationModeCli::Backfill)]
     mode: SimulationModeCli,
@@ -87,17 +86,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match cli.command {
         Commands::Run(args) => {
-            let data_path =
-                Url::parse("file:///Users/robert.pack/code/management/notebooks/data/")?;
-            let routing_path =
-                Url::parse("file:///Users/robert.pack/code/management/data/routing")?;
-
-            let setup_path = std::fs::canonicalize(args.setup_path)?;
-            let path = Url::from_directory_path(setup_path).expect("Path to be valid directory");
-            let setup = load_simulation_setup(&path, None::<(&str, &str)>).await?;
-
-            run_simulation(setup, args.duration, data_path, routing_path, args.dry_run).await?;
-            // run_simulation_from(setup, args.duration, data_path, routing_path, args.dry_run).await?;
+            let working_directory = resolve_url(args.working_directory)?;
+            let snapshots_location = working_directory.join("snapshots/")?;
+            let routing_location = working_directory.join("routing/")?;
+            run_simulation(
+                args.duration,
+                snapshots_location,
+                routing_location,
+                args.dry_run,
+            )
+            .await?;
         }
         Commands::Init(args) => init::handle(args).await?,
     }

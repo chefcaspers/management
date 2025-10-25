@@ -5,11 +5,11 @@ use itertools::Itertools as _;
 use tracing::{Level, instrument};
 
 use super::OrderLine;
+use crate::EventPayload;
 use crate::error::Result;
 use crate::idents::*;
 use crate::models::{KitchenStation, Station};
 use crate::state::{OrderLineStatus, State};
-use crate::{Entity, EventPayload};
 
 #[derive(Clone)]
 enum StationStatus {
@@ -33,14 +33,6 @@ struct StationRunner {
     status: StationStatus,
 }
 
-impl Entity for StationRunner {
-    type Id = StationId;
-
-    fn id(&self) -> &Self::Id {
-        &self.id
-    }
-}
-
 impl StationRunner {
     pub fn new(id: StationId, station: Station) -> Self {
         StationRunner {
@@ -48,6 +40,11 @@ impl StationRunner {
             station_type: station.station_type(),
             status: StationStatus::Available,
         }
+    }
+
+    #[allow(unused)]
+    pub(crate) fn id(&self) -> &StationId {
+        &self.id
     }
 }
 
@@ -78,15 +75,11 @@ pub struct KitchenRunner {
     accepted_brands: HashSet<BrandId>,
 }
 
-impl Entity for KitchenRunner {
-    type Id = KitchenId;
-
-    fn id(&self) -> &Self::Id {
+impl KitchenRunner {
+    pub(crate) fn id(&self) -> &KitchenId {
         &self.id
     }
-}
 
-impl KitchenRunner {
     #[instrument(
         name = "step_kitchen",
         level = Level::TRACE,
@@ -161,7 +154,6 @@ impl KitchenRunner {
         }
 
         // Apply updates
-        let kitchen_id = *self.id();
         for (recipe_id, status) in to_update {
             if let Some(progress) = self.in_progress.get_mut(&recipe_id) {
                 match status {
@@ -169,7 +161,7 @@ impl KitchenRunner {
                         events.push(EventPayload::order_line_updated(
                             recipe_id,
                             OrderLineStatus::Processing,
-                            Some(kitchen_id),
+                            Some(self.id),
                             None,
                         ));
                     }
@@ -177,7 +169,7 @@ impl KitchenRunner {
                         events.push(EventPayload::order_line_updated(
                             recipe_id,
                             OrderLineStatus::Waiting,
-                            Some(kitchen_id),
+                            Some(self.id),
                             None,
                         ));
                     }

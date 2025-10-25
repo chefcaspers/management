@@ -33,7 +33,7 @@ pub(super) static POPULATION_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
     ]))
 });
 
-pub(crate) struct PopulationDataBuilder {
+pub struct PopulationDataBuilder {
     ids: FixedSizeBinaryBuilder,
     first_names: StringBuilder,
     last_names: StringBuilder,
@@ -59,6 +59,11 @@ impl PopulationDataBuilder {
             states: StringViewBuilder::new(),
             rng: rand::rng(),
         }
+    }
+
+    pub(crate) fn snapshot_schema() -> SchemaRef {
+        let batch = Self::new().finish().unwrap();
+        batch.schema()
     }
 
     pub fn add_site(&mut self, n_people: usize, latitude: f64, longitude: f64) -> Result<()> {

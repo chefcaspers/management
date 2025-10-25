@@ -1,23 +1,19 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use arrow::compute::concat_batches;
 use chrono::{DateTime, Duration, Utc};
-use datafusion::catalog::MemTable;
 use datafusion::prelude::{col, lit};
 use itertools::Itertools as _;
-use rand::Rng as _;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::error::Result;
 use crate::simulation::Simulation;
-use crate::simulation::session::{SimulationContext, simulation_context};
+use crate::simulation::session::SimulationContext;
 use crate::simulation::stats::EventStatsBuffer;
 use crate::state::{EntityView, RoutingData, State};
 use crate::{
-    Error, EventTracker, ObjectData, OrderData, PopulationData, PopulationDataBuilder,
-    PopulationRunner, SimulationSetup, SiteRunner,
+    Error, EventTracker, ObjectData, OrderData, PopulationData, PopulationRunner, SiteRunner,
 };
 
 /// Execution mode for the simulation.
@@ -65,14 +61,8 @@ impl Default for SimulationConfig {
 
 /// Builder for creating a simulation instance.
 pub struct SimulationBuilder {
-    /// Setup configuration for the simulation
-    setup: Option<SimulationSetup>,
-
     /// Snapshot location for the simulation
     snapshot_location: Option<Url>,
-
-    /// Snapshot version to start simulation from
-    snapshot_version: Option<u64>,
 
     /// Size of the simulated population
     population_size: usize,
@@ -102,9 +92,7 @@ pub struct SimulationBuilder {
 impl Default for SimulationBuilder {
     fn default() -> Self {
         Self {
-            setup: None,
             snapshot_location: None,
-            snapshot_version: None,
             population_size: 1000,
             time_increment: Duration::minutes(1),
             start_time: Utc::now(),
@@ -123,20 +111,12 @@ impl SimulationBuilder {
         Self::default()
     }
 
-    /// Add a brand to the simulation
-    pub fn with_setup(mut self, setup: SimulationSetup) -> Self {
-        self.setup = Some(setup);
-        self
-    }
-
     pub fn with_snapshot_location(mut self, snapshot_location: impl Into<Url>) -> Self {
+        let mut snapshot_location = snapshot_location.into();
+        if !snapshot_location.path().ends_with('/') {
+            snapshot_location.set_path(&format!("{}/", snapshot_location.path()));
+        }
         self.snapshot_location = Some(snapshot_location.into());
-        self
-    }
-
-    /// Set the snapshot version for the simulation
-    pub fn with_snapshot_version(mut self, snapshot_version: u64) -> Self {
-        self.snapshot_version = Some(snapshot_version);
         self
     }
 
@@ -188,37 +168,20 @@ impl SimulationBuilder {
     }
 
     async fn build_context(&self) -> Result<SimulationContext> {
-        let Some(setup) = &self.setup else {
-            return Err(Error::MissingInput(
-                "Simulation setup not found".to_string(),
-            ));
-        };
         let Some(routing_path) = &self.routing_path else {
             return Err(Error::MissingInput(
                 "Routing data path is required".to_string(),
             ));
         };
+        let Some(snapshots_path) = &self.snapshot_location else {
+            return Err(Error::MissingInput(
+                "Snapshot data path is required".to_string(),
+            ));
+        };
 
-        let objects = setup.object_data()?;
-        let objects_provider = Arc::new(MemTable::try_new(
-            objects.schema(),
-            vec![vec![objects.clone()]],
-        )?);
+        let ctx = SimulationContext::try_new_local(routing_path, snapshots_path).await?;
 
-        let mut builder = PopulationDataBuilder::new();
-        let object_data = ObjectData::try_new(objects)?;
-        for site in object_data.sites()? {
-            let n_people = rand::rng().random_range(500..1500);
-            let info = site.properties()?;
-            builder.add_site(n_people, info.latitude, info.longitude)?;
-        }
-        let population = builder.finish()?;
-        let population_provider = Arc::new(MemTable::try_new(
-            population.schema(),
-            vec![vec![population]],
-        )?);
-
-        simulation_context(routing_path, objects_provider, population_provider).await
+        Ok(ctx)
     }
 
     /// Load the prepared street network data into routing data objects.
@@ -256,14 +219,9 @@ impl SimulationBuilder {
         }
 
         let population = PopulationData::try_new(ctx).await?;
+        let orders = OrderData::try_new(ctx).await?;
 
-        Ok(State::new(
-            config,
-            objects,
-            population,
-            OrderData::empty(),
-            routers,
-        ))
+        Ok(State::new(config, objects, population, orders, routers))
     }
 
     /// Build the simulation with the given initial conditions
@@ -280,35 +238,19 @@ impl SimulationBuilder {
         let ctx = self.build_context().await?;
         let state = self.build_state(&ctx, config).await?;
 
-        let site_runners = state
+        let sites = state
             .objects()
             .sites()?
             .map(|site| Ok::<_, Error>((site.id(), SiteRunner::try_new(site.id(), &state)?)))
             .try_collect()?;
 
         Ok(Simulation {
-            initialized: false,
-            last_snapshot_time: state.current_time(),
+            ctx,
             state,
-            sites: site_runners,
+            sites,
             population: PopulationRunner::new(),
             event_tracker: EventTracker::new(),
             stats_buffer: EventStatsBuffer::new(),
         })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_build() {
-        let mut builder = PopulationDataBuilder::new();
-        builder
-            .add_site(100, 51.518898098201326, -0.13381370382489707)
-            .unwrap();
-
-        todo!()
     }
 }

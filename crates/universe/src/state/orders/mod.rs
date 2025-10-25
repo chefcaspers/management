@@ -10,10 +10,11 @@ use itertools::Itertools as _;
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, Display, EnumString};
 
+use crate::SimulationContext;
 use crate::error::{Error, Result};
 use crate::idents::{OrderId, OrderLineId, SiteId};
 
-pub(crate) use self::builder::OrderDataBuilder;
+pub(crate) use self::builder::{OrderBuilder, OrderDataBuilder, OrderLineBuilder};
 
 mod builder;
 
@@ -83,7 +84,18 @@ impl OrderData {
         }
     }
 
-    pub(crate) fn try_new(orders: RecordBatch, lines: RecordBatch) -> Result<Self> {
+    pub(crate) async fn try_new(ctx: &SimulationContext) -> Result<Self> {
+        let orders = ctx.system().orders().await?.collect().await?;
+        if orders.is_empty() {
+            return Ok(Self::empty());
+        }
+        let orders = concat_batches(orders[0].schema_ref(), &orders)?;
+        let lines = ctx.system().order_lines().await?.collect().await?;
+        let lines = concat_batches(lines[0].schema_ref(), &lines)?;
+        Self::try_new_from_data(orders, lines)
+    }
+
+    pub(crate) fn try_new_from_data(orders: RecordBatch, lines: RecordBatch) -> Result<Self> {
         if orders.schema().as_ref() != builder::ORDER_SCHEMA.as_ref() {
             return Err(Error::invalid_data("expected orders to have schema"));
         }
@@ -191,7 +203,7 @@ impl OrderData {
             &builder::ORDER_LINE_SCHEMA,
             &[self.lines.clone(), other.lines],
         )?;
-        Self::try_new(orders, lines)
+        Self::try_new_from_data(orders, lines)
     }
 
     /// Update the status of order lines.

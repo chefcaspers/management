@@ -178,7 +178,6 @@ def load_simulation_setup(
     """
 
 def run_simulation(
-    setup: SimulationSetup,
     duration: int,
     output_location: str,
     routing_location: str,
@@ -187,7 +186,6 @@ def run_simulation(
     """Run a simulation using the provided setup.
 
     Args:
-        setup: The simulation setup to use.
         duration: The duration of the simulation in seconds.
         output_location: The location to save the simulation output.
         routing_location: The location where the routing graph is stored.
