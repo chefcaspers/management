@@ -4,6 +4,7 @@ use arrow::array::{Scalar, StringArray};
 use arrow::compute::filter_record_batch;
 use arrow_ord::cmp::eq;
 use chrono::{DateTime, Duration, Utc};
+use clap::ValueEnum;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -16,6 +17,18 @@ use crate::state::{EntityView, RoutingData, State};
 use crate::{
     Error, EventTracker, PopulationRunner, SimulationSetup, SiteId, SiteRunner, read_parquet_dir,
 };
+
+/// Execution mode for the simulation.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+#[value(rename_all = "kebab-case")]
+pub enum SimulationMode {
+    /// Run the simulation for the specified time horizon.
+    Backfill,
+    /// Align time passed in simulation with time passed in real time.
+    Realtime,
+    /// Continue simulation from last snapshot up to current time, then switch to real time.
+    Catchup,
+}
 
 /// Configuration for the simulation engine
 #[derive(Debug, Clone, Serialize, Deserialize)]

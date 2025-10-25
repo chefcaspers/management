@@ -1,4 +1,4 @@
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand};
 use opentelemetry::{global, trace::TracerProvider};
 use opentelemetry_otlp::SpanExporter;
 use opentelemetry_sdk::{
@@ -12,7 +12,7 @@ use tracing_opentelemetry::{MetricsLayer, OpenTelemetryLayer};
 use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
 use url::Url;
 
-use caspers_universe::{Result, load_simulation_setup, run_simulation};
+use caspers_universe::{Result, SimulationMode, load_simulation_setup, run_simulation};
 
 #[derive(clap::Parser)]
 #[command(name = "caspers-universe", version, about = "Running Caspers Universe", long_about = None)]
@@ -65,18 +65,6 @@ struct RunArgs {
 struct InitArgs {
     #[arg(short, long, default_value_t = true)]
     template: bool,
-}
-
-/// Execution mode for the simulation.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-#[value(rename_all = "kebab-case")]
-enum SimulationMode {
-    /// Run the simulation for the specified time horizon.
-    Backfill,
-    /// Align time passed in simulation with time passed in real time.
-    Realtime,
-    /// Continue simulation from last snapshot up to current time, then switch to real time.
-    Catchup,
 }
 
 fn resource() -> Resource {
