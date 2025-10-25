@@ -6,14 +6,13 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
-    import h3
     import os
-    import polars as pl
-    from plotly.subplots import make_subplots
-    import plotly.graph_objects as go
-    import plotly.express as px
+
     import folium
     import marimo as mo
+    import plotly.express as px
+    import polars as pl
+
     return folium, mo, os, pl, px
 
 
@@ -38,7 +37,7 @@ def _(os):
 @app.cell
 def _(mo):
     orders_counts = mo.sql(
-        f"""
+        """
         SELECT status, count(*) as count
         FROM './data/orders/*.parquet'
         GROUP BY status
@@ -50,7 +49,7 @@ def _(mo):
 @app.cell
 def _(mo):
     order_lines_counts = mo.sql(
-        f"""
+        """
         SELECT status, count(*) as count
         FROM './data/order_lines/*.parquet'
         GROUP BY status
@@ -62,7 +61,7 @@ def _(mo):
 @app.cell
 def _(mo):
     object_counts = mo.sql(
-        f"""
+        """
         SELECT label, count(*) as count
         FROM './data//objects/*.parquet'
         GROUP BY label
@@ -74,7 +73,7 @@ def _(mo):
 @app.cell
 def _(mo):
     people_counts = mo.sql(
-        f"""
+        """
         SELECT role, count(*) as count
         FROM './data/population/people/*.parquet'
         GROUP BY role
@@ -86,7 +85,7 @@ def _(mo):
 @app.cell
 def _(mo):
     _df = mo.sql(
-        f"""
+        """
         SELECT type, count(*)
         FROM './data/events/*.json'
         GROUP BY type
@@ -98,7 +97,7 @@ def _(mo):
 @app.cell
 def _(mo):
     trips = mo.sql(
-        f"""
+        """
         SELECT
             -- workaround to not panic during output
             people.id::VARCHAR as id,
@@ -143,8 +142,7 @@ def _(mo):
 @app.cell
 def _():
     import datetime
-
-    from typing import TypedDict, Iterable, Any
+    from typing import Any, Iterable, TypedDict
 
     class TripPoint(TypedDict):
         x: float
@@ -155,7 +153,7 @@ def _():
         positions: list[TripPoint]
 
     def trip_geo_features(trips: Iterable[TripData]) -> list[dict[str, Any]]:
-        """Genearte GeoJson Features from trip data."""
+        """Generate GeoJson Features from trip data."""
 
         return [
             {
@@ -178,6 +176,7 @@ def _():
             }
             for trip in trips
         ]
+
     return (trip_geo_features,)
 
 
@@ -244,14 +243,12 @@ def _(px):
 
     sq_sigma = 0.4
 
-
     def bell(x: float, mu: float) -> float:
         return (1 / math.sqrt(2 * math.pi * sq_sigma)) * math.e ** (
             -1 * (x - mu) ** 2 / (2 * sq_sigma)
         )
 
-
-    x_values = [0 + 24  * idx / 1000 for idx in range(1000)]
+    x_values = [0 + 24 * idx / 1000 for idx in range(1000)]
     y_values = [bell(v, 12) + bell(v, 18) for v in x_values]
 
     px.line(

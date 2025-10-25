@@ -17,6 +17,17 @@ use crate::{
     Error, EventTracker, PopulationRunner, SimulationSetup, SiteId, SiteRunner, read_parquet_dir,
 };
 
+/// Execution mode for the simulation.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum SimulationMode {
+    /// Run the simulation for the specified time horizon.
+    Backfill,
+    /// Align time passed in simulation with time passed in real time.
+    Realtime,
+    /// Continue simulation from last snapshot up to current time, then switch to real time.
+    Catchup,
+}
+
 /// Configuration for the simulation engine
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct SimulationConfig {

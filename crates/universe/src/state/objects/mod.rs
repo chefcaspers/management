@@ -91,6 +91,7 @@ impl ObjectData {
         &self.objects
     }
 
+    #[allow(clippy::type_complexity)]
     fn iter_ids(
         &self,
     ) -> Result<impl Iterator<Item = (Option<&[u8]>, Option<&[u8]>, Option<&str>)>> {

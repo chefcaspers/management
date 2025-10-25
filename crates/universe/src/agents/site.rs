@@ -3,7 +3,6 @@ use std::collections::{HashMap, VecDeque};
 use counter::Counter;
 use h3o::Resolution;
 use itertools::Itertools;
-use tabled::Tabled;
 use tracing::{Level, Span, field, instrument};
 
 use super::kitchen::{KitchenRunner, KitchenStats};
@@ -63,7 +62,7 @@ impl<'a> OrderRouter<'a> {
     }
 }
 
-#[derive(Clone, Debug, Tabled, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SiteStats {
     pub queue_length: usize,
 }
@@ -163,7 +162,7 @@ impl SiteRunner {
     }
 
     /// Receive new orders from the state and queue them for processing.
-    fn receive_orders<'a>(&mut self, orders: &[OrderId], ctx: &State) -> Result<()> {
+    fn receive_orders(&mut self, orders: &[OrderId], ctx: &State) -> Result<()> {
         let orders = orders
             .iter()
             .flat_map(|order_id| ctx.orders().order(order_id));

@@ -4,7 +4,7 @@ set dotenv-load := true
 default:
     @just --list --justfile {{ justfile() }}
 
-# run protobuf code geneartion
+# run protobuf code generation
 [group('build')]
 generate:
     buf generate proto
@@ -16,7 +16,7 @@ build-py:
     uvx --from 'maturin[zig]' maturin develop -m python/Cargo.toml
 
 run duration='100':
-    cargo run --bin caspers-universe -- run --duration {{duration}} --setup-path data/
+    cargo run --bin caspers -- run --duration {{duration}} --setup-path data/
 
 # run marimo notebook server for interactive data exploration
 scratch:
@@ -26,6 +26,9 @@ fmt:
     cargo fmt --all
     buf format proto/ --write
     uvx ruff format .
+
+pre-commit:
+    uvx pre-commit run --all-files
 
 docs:
   npm -w docs run dev

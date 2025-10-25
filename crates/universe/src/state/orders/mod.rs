@@ -160,7 +160,7 @@ impl OrderData {
     pub(crate) fn order_line(&self, order_line_id: &OrderLineId) -> Option<OrderLineView<'_>> {
         self.lines_index
             .contains(order_line_id)
-            .then(|| OrderLineView::new(*order_line_id, &self))
+            .then(|| OrderLineView::new(*order_line_id, self))
     }
 
     pub(crate) fn all_orders(&self) -> impl Iterator<Item = OrderView<'_>> {
