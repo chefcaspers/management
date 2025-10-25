@@ -68,7 +68,7 @@ fn create_order(state: &State) -> Option<Vec<(BrandId, MenuItemId)>> {
     let sigma_sq = 0.4_f64;
 
     let bell = |x: f64, mu: f64| {
-        let exponent = -1.0 * (x - mu).powi(2) / (2.0 * sigma_sq);
+        let exponent = -(x - mu).powi(2) / (2.0 * sigma_sq);
         1.0 / (2.0 * PI * sigma_sq).powf(2.0) * E.powf(exponent)
     };
 

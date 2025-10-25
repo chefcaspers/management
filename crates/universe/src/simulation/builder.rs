@@ -4,7 +4,6 @@ use arrow::array::{Scalar, StringArray};
 use arrow::compute::filter_record_batch;
 use arrow_ord::cmp::eq;
 use chrono::{DateTime, Duration, Utc};
-use clap::ValueEnum;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -19,8 +18,7 @@ use crate::{
 };
 
 /// Execution mode for the simulation.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-#[value(rename_all = "kebab-case")]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SimulationMode {
     /// Run the simulation for the specified time horizon.
     Backfill,

@@ -219,7 +219,7 @@ impl PopulationData {
                         events.push(EventPayload::person_updated(
                             order.customer_person_id().try_into()?,
                             PersonStatus::Eating(
-                                current_time.clone() + chrono::Duration::seconds(30 * 60),
+                                *current_time + chrono::Duration::seconds(30 * 60),
                             ),
                         ));
                     };

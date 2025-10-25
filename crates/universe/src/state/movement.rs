@@ -22,9 +22,10 @@ use uuid::Uuid;
 
 use crate::Result;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum Transport {
     Foot,
+    #[default]
     Bicycle,
     Car,
     Bus,
@@ -69,6 +70,7 @@ impl<T: Into<Point>> From<(T, usize)> for JourneyLeg {
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Journey {
+    transport: Transport,
     // The full journey to be completed
     legs: Vec<JourneyLeg>,
     // The current leg being traveled
@@ -195,14 +197,15 @@ impl Journey {
     }
 
     /// Returns the estimated time remaining in seconds based on the given transport
-    pub(crate) fn estimated_time_remaining_s(&self, transport: &Transport) -> f64 {
-        self.distance_remaining_m() / transport.default_velocity_m_s()
+    pub(crate) fn estimated_time_remaining_s(&self) -> f64 {
+        self.distance_remaining_m() / self.transport.default_velocity_m_s()
     }
 }
 
 impl<T: Into<JourneyLeg>> FromIterator<T> for Journey {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         Journey {
+            transport: Transport::default(),
             legs: iter.into_iter().map(Into::into).collect(),
             current_leg_index: 0,
             current_leg_progress: 0.0,
@@ -540,6 +543,7 @@ mod tests {
     #[test_log::test]
     fn test_journey() {
         let journey = Journey {
+            transport: Transport::default(),
             legs: vec![
                 JourneyLeg {
                     destination: Point::new(-0.1553777, 51.5453468),
@@ -637,6 +641,7 @@ mod tests {
     fn test_journey_progress_tracking() {
         // Create a journey with 4 legs of different lengths
         let journey = Journey {
+            transport: Transport::default(),
             legs: vec![
                 JourneyLeg {
                     destination: Point::new(-0.1553777, 51.5453468),
@@ -699,6 +704,7 @@ mod tests {
 
         // Test estimated time remaining
         let journey = Journey {
+            transport: Transport::default(),
             legs: vec![JourneyLeg {
                 destination: Point::new(0.0, 0.0),
                 distance_m: 1000,
@@ -707,29 +713,12 @@ mod tests {
             current_leg_progress: 0.0,
         };
 
-        // Test with car (60 km/h)
-        let car = Transport::Car;
-        assert_abs_diff_eq!(
-            journey.estimated_time_remaining_s(&car),
-            60.0,
-            epsilon = 0.0001
-        ); // 1km at 60km/h = 60s
-
         // Test with bicycle (15 km/h)
-        let bicycle = Transport::Bicycle;
         assert_abs_diff_eq!(
-            journey.estimated_time_remaining_s(&bicycle),
+            journey.estimated_time_remaining_s(),
             240.0,
             epsilon = 0.0001
         ); // 1km at 15km/h = 240s
-
-        // Test with foot (5 km/h)
-        let foot = Transport::Foot;
-        assert_abs_diff_eq!(
-            journey.estimated_time_remaining_s(&foot),
-            720.0,
-            epsilon = 0.0001
-        ); // 1km at 5km/h = 720s
     }
 
     #[test_log::test]

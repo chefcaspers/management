@@ -2,7 +2,6 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use chrono::{DateTime, Utc};
 use itertools::Itertools;
-use tabled::Tabled;
 use tracing::{Level, instrument};
 
 use super::OrderLine;
@@ -297,7 +296,7 @@ fn release_station(assets: &mut Vec<StationRunner>, asset_type: &i32, recipe_id:
     }
 }
 
-#[derive(Clone, Debug, Tabled, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct KitchenStats {
     pub queued: usize,
     pub in_progress: usize,

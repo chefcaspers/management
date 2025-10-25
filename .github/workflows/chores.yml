@@ -1,0 +1,46 @@
+name: chores
+
+on:
+  pull_request:
+env:
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: "sccache"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      DEFAULT_FEATURES: "azure,datafusion,s3,gcs,glue,hdfs"
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Setup Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: rustfmt,clippy
+          cache: true
+          # if we ever get rid of all the clippy warnings, we can remove this line
+          rustflags: ""
+
+      - name: Rustfmt Check
+        uses: actions-rust-lang/rustfmt@v1
+
+      - name: build and lint with clippy
+        run: cargo clippy --features ${{ env.DEFAULT_FEATURES }} --tests
+
+      - name: Run Machete to check for unused dependencies
+        uses: bnjbvr/cargo-machete@v0.9.1
+
+  typos:
+    name: spell-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check spelling
+        uses: crate-ci/typos@v1

@@ -11,7 +11,6 @@ rust-version = "1.90"
 
 [workspace.dependencies]
 async-trait = { version = "0.1.83" }
-bytes = { version = "1.1" }
 chrono = { version = "^0.4.40", features = ["serde"] }
 itertools = { version = "0.14.0" }
 pbjson = { version = "0.7" }
@@ -21,6 +20,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 strum = { version = "0.27", features = ["derive"] }
 thiserror = { version = "2" }
+tokio = { version = "1", features = ["full"] }
 tracing = { version = "0.1", features = ["log"] }
 url = { version = "2.5.2", features = [
   "serde",
@@ -42,3 +42,6 @@ geoarrow = { version = "0.6.1" }
 geoarrow-array = { version = "0.6.1" }
 geoparquet = { version = "0.6.1" }
 geoarrow-schema = { version = "0.6.1" }
+
+# deltalake
+deltalake-core = { path = "../delta-rs/crates/core/" }

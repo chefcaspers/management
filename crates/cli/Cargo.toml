@@ -1,0 +1,25 @@
+[package]
+name = "caspers-universe-cli"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "caspers"
+path = "src/main.rs"
+
+[dependencies]
+caspers-universe = { path = "../universe" }
+
+tokio = { workspace = true }
+tracing = { workspace = true, features = ["log"] }
+url = { workspace = true }
+
+clap = { version = "4.5.37", features = ["derive", "env"] }
+opentelemetry = "0.31.0"
+opentelemetry_sdk = "0.31.0"
+opentelemetry-otlp = { version = "0.31.0", features = ["grpc-tonic"] }
+tracing-opentelemetry = "0.32.0"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }

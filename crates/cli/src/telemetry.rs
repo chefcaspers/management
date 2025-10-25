@@ -1,4 +1,3 @@
-use clap::{Args, Parser, Subcommand};
 use opentelemetry::{global, trace::TracerProvider};
 use opentelemetry_otlp::SpanExporter;
 use opentelemetry_sdk::{
@@ -10,62 +9,6 @@ use opentelemetry_sdk::{
 use tracing::level_filters::LevelFilter;
 use tracing_opentelemetry::{MetricsLayer, OpenTelemetryLayer};
 use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
-use url::Url;
-
-use caspers_universe::{Result, SimulationMode, load_simulation_setup, run_simulation};
-
-#[derive(clap::Parser)]
-#[command(name = "caspers-universe", version, about = "Running Caspers Universe", long_about = None)]
-#[command(propagate_version = true)]
-struct Cli {
-    #[clap(flatten)]
-    global_opts: GlobalOpts,
-
-    #[clap(subcommand)]
-    command: Commands,
-}
-
-#[derive(Debug, Args)]
-struct GlobalOpts {
-    /// Server URL
-    #[clap(
-        long,
-        global = true,
-        env = "UC_SERVER_URL",
-        default_value = "http://localhost:8080"
-    )]
-    server: String,
-}
-
-#[derive(Subcommand)]
-enum Commands {
-    /// Run a simulation
-    Run(RunArgs),
-    /// Initialize a simulation setup
-    Init(InitArgs),
-}
-
-#[derive(Debug, Clone, clap::Parser)]
-struct RunArgs {
-    #[arg(short, long, default_value_t = 100)]
-    duration: usize,
-
-    #[arg(long)]
-    /// Path where basic simulation setup is stored.
-    setup_path: String,
-
-    #[arg(short, long, value_enum, default_value_t = SimulationMode::Backfill)]
-    mode: SimulationMode,
-
-    #[arg(long, default_value_t = false)]
-    dry_run: bool,
-}
-
-#[derive(Debug, Clone, clap::Parser)]
-struct InitArgs {
-    #[arg(short, long, default_value_t = true)]
-    template: bool,
-}
 
 fn resource() -> Resource {
     Resource::builder()
@@ -73,7 +16,7 @@ fn resource() -> Resource {
         .build()
 }
 
-fn init_meter_provider() -> SdkMeterProvider {
+pub(crate) fn init_meter_provider() -> SdkMeterProvider {
     let exporter = opentelemetry_otlp::MetricExporter::builder()
         .with_tonic()
         .with_temporality(opentelemetry_sdk::metrics::Temporality::default())
@@ -99,7 +42,7 @@ fn init_meter_provider() -> SdkMeterProvider {
     meter_provider
 }
 
-fn init_tracer_provider() {
+pub(crate) fn init_tracer_provider() {
     let exporter = SpanExporter::builder()
         .with_tonic()
         .build()
@@ -113,7 +56,7 @@ fn init_tracer_provider() {
 }
 
 // Initialize tracing-subscriber and return OtelGuard for opentelemetry-related termination processing
-fn init_tracing_subscriber() -> OtelGuard {
+pub(crate) fn init_tracing_subscriber() -> OtelGuard {
     // let tracer_provider = global::tracer_provider();
     let meter_provider = init_meter_provider();
     //
@@ -160,7 +103,7 @@ fn init_tracing_subscriber() -> OtelGuard {
     }
 }
 
-struct OtelGuard {
+pub(crate) struct OtelGuard {
     tracer_provider: SdkTracerProvider,
     meter_provider: SdkMeterProvider,
 }
@@ -174,33 +117,4 @@ impl Drop for OtelGuard {
             eprintln!("{err:?}");
         }
     }
-}
-
-#[tokio::main(flavor = "multi_thread")]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    init_tracer_provider();
-    let _guard = init_tracing_subscriber();
-
-    let cli = Cli::parse();
-
-    match cli.command {
-        Commands::Run(args) => {
-            let data_path =
-                Url::parse("file:///Users/robert.pack/code/management/notebooks/data/")?;
-            let routing_path =
-                Url::parse("file:///Users/robert.pack/code/management/data/routing")?;
-
-            let setup_path = std::fs::canonicalize(args.setup_path)?;
-            let path = Url::from_directory_path(setup_path).expect("Path to be valid directory");
-            let setup = load_simulation_setup(&path, None::<(&str, &str)>).await?;
-
-            run_simulation(setup, args.duration, data_path, routing_path, args.dry_run).await?;
-            // run_simulation_from(setup, args.duration, data_path, routing_path, args.dry_run).await?;
-        }
-        Commands::Init(_args) => {
-            todo!()
-        }
-    }
-
-    Ok(())
 }

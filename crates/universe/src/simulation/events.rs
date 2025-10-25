@@ -100,6 +100,12 @@ pub struct EventTracker {
     pub(super) total_stats: EventStats,
 }
 
+impl Default for EventTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EventTracker {
     pub fn new() -> Self {
         Self {
@@ -157,8 +163,8 @@ impl EventTracker {
             }
         }
 
-        if payload.status == OrderStatus::Delivered {
-            if let Some(span) = self.order_spans.remove(&payload.order_id) {
+        if payload.status == OrderStatus::Delivered
+            && let Some(span) = self.order_spans.remove(&payload.order_id) {
                 span.set_status(opentelemetry::trace::Status::Ok);
                 if let Some(delivery_span) = self.delivery_spans.get(&payload.order_id) {
                     delivery_span.in_scope(|| {
@@ -167,10 +173,9 @@ impl EventTracker {
                     delivery_span.set_status(opentelemetry::trace::Status::Ok);
                 }
             };
-        }
 
-        if payload.status == OrderStatus::Failed {
-            if let Some(span) = self.order_spans.remove(&payload.order_id) {
+        if payload.status == OrderStatus::Failed
+            && let Some(span) = self.order_spans.remove(&payload.order_id) {
                 span.set_status(opentelemetry::trace::Status::Error {
                     description: "order failed".into(),
                 });
@@ -180,12 +185,11 @@ impl EventTracker {
                     });
                 }
             };
-        }
     }
 
     fn handle_order_line_updated(&mut self, payload: &OrderLineUpdatedPayload, ctx: &State) {
-        if let Some(line) = ctx.orders().order_line(&payload.order_line_id) {
-            if payload.status == OrderLineStatus::Assigned {
+        if let Some(line) = ctx.orders().order_line(&payload.order_line_id)
+            && payload.status == OrderLineStatus::Assigned {
                 let order_id: OrderId = line.order_id().try_into().unwrap();
                 if let Some(order_span) = self.order_spans.get(&order_id) {
                     let line_span = info_span!(
@@ -197,7 +201,6 @@ impl EventTracker {
                         .insert(payload.order_line_id, line_span);
                 }
             }
-        }
         if let Some(span) = self.order_line_spans.get(&payload.order_line_id) {
             span.in_scope(|| {
                 tracing::info!(
@@ -222,6 +225,7 @@ impl EventTracker {
                     span.in_scope(|| {
                         tracing::info!(
                             caspers.delivery_progress = journey.progress_percentage(),
+                            caspers.estimated_time_remaining = journey.estimated_time_remaining_s(),
                             "out_for_delivery"
                         );
                     });
@@ -244,6 +248,12 @@ pub struct EventStats {
     pub num_orders_updated: u32,
     pub num_order_lines_updated: u32,
     pub num_people_updated: u32,
+}
+
+impl Default for EventStats {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl EventStats {
