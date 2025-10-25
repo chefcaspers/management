@@ -30,7 +30,6 @@ uuid = { version = "1", features = ["serde"] }
 
 # arrow
 arrow = { version = "56" }
-arrow-ord = { version = "56" }
 arrow-schema = { version = "56" }
 object_store = { version = "0.12.3" }
 parquet = { version = "56", features = ["async", "object_store"] }

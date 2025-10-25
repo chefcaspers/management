@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 
-use arrow::array::{Scalar, StringArray};
-use arrow::compute::filter_record_batch;
-use arrow_ord::cmp::eq;
+use arrow::compute::concat_batches;
 use chrono::{DateTime, Duration, Utc};
+use datafusion::prelude::{col, lit};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -11,11 +10,10 @@ use uuid::Uuid;
 
 use crate::error::Result;
 use crate::simulation::Simulation;
+use crate::simulation::session::simulation_context;
 use crate::simulation::stats::EventStatsBuffer;
 use crate::state::{EntityView, RoutingData, State};
-use crate::{
-    Error, EventTracker, PopulationRunner, SimulationSetup, SiteId, SiteRunner, read_parquet_dir,
-};
+use crate::{Error, EventTracker, PopulationRunner, SimulationSetup, SiteId, SiteRunner};
 
 /// Execution mode for the simulation.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -196,46 +194,31 @@ impl SimulationBuilder {
             ));
         };
 
-        let nodes_path = routing_path.join("nodes/").unwrap();
-        let edge_path = routing_path.join("edges/").unwrap();
-
-        let nodes = read_parquet_dir(&nodes_path, None).await?;
-        let edges = read_parquet_dir(&edge_path, None).await?;
-
-        tracing::info!(
-            target: "builder",
-            "Loaded routing data with {} nodes and {} edges", nodes.num_rows(), edges.num_rows()
-        );
+        let ctx = simulation_context(&routing_path).await?;
 
         let mut routers = HashMap::new();
-        for site in &setup.sites {
-            let site_name = Scalar::new(StringArray::from(vec![
-                site.info.as_ref().map(|i| i.name.clone()),
-            ]));
-            // filter nodes for site
-            let node_filter = eq(nodes.column(0), &site_name)?;
-            let filtered_nodes = filter_record_batch(&nodes, &node_filter)?;
+        for site in setup.sites.iter().filter_map(|s| s.info.as_ref()) {
+            let site_nodes = ctx
+                .system()
+                .routing_nodes()
+                .await?
+                .filter(col("location").eq(lit(&site.name)))?
+                .collect()
+                .await?;
+            let site_nodes = concat_batches(site_nodes[0].schema_ref(), &site_nodes)?;
 
-            // filter edges for site
-            let edge_filter = eq(edges.column(0), &site_name)?;
-            let filtered_edges = filter_record_batch(&edges, &edge_filter)?;
-            let site_id = site
-                .info
-                .as_ref()
-                .and_then(|i| Uuid::parse_str(&i.id).ok())
-                .ok_or(Error::InvalidData("Expected site info".into()))?;
-
-            tracing::info!(
-                target: "builder",
-                "Creating router for site {} with {} nodes and {} edges",
-                site_id,
-                filtered_nodes.num_rows(),
-                filtered_edges.num_rows()
-            );
+            let site_edges = ctx
+                .system()
+                .routing_edges()
+                .await?
+                .filter(col("location").eq(lit(&site.name)))?
+                .collect()
+                .await?;
+            let site_edges = concat_batches(site_edges[0].schema_ref(), &site_edges)?;
 
             routers.insert(
-                site_id.into(),
-                RoutingData::try_new(filtered_nodes, filtered_edges)?,
+                Uuid::parse_str(&site.id)?.into(),
+                RoutingData::try_new(site_nodes, site_edges)?,
             );
         }
 

@@ -12,7 +12,6 @@ def _():
     import marimo as mo
     import plotly.express as px
     import polars as pl
-
     return folium, mo, os, pl, px
 
 
@@ -37,7 +36,7 @@ def _(os):
 @app.cell
 def _(mo):
     orders_counts = mo.sql(
-        """
+        f"""
         SELECT status, count(*) as count
         FROM './data/orders/*.parquet'
         GROUP BY status
@@ -49,7 +48,7 @@ def _(mo):
 @app.cell
 def _(mo):
     order_lines_counts = mo.sql(
-        """
+        f"""
         SELECT status, count(*) as count
         FROM './data/order_lines/*.parquet'
         GROUP BY status
@@ -61,7 +60,7 @@ def _(mo):
 @app.cell
 def _(mo):
     object_counts = mo.sql(
-        """
+        f"""
         SELECT label, count(*) as count
         FROM './data//objects/*.parquet'
         GROUP BY label
@@ -73,7 +72,7 @@ def _(mo):
 @app.cell
 def _(mo):
     people_counts = mo.sql(
-        """
+        f"""
         SELECT role, count(*) as count
         FROM './data/population/people/*.parquet'
         GROUP BY role
@@ -85,7 +84,7 @@ def _(mo):
 @app.cell
 def _(mo):
     _df = mo.sql(
-        """
+        f"""
         SELECT type, count(*)
         FROM './data/events/*.json'
         GROUP BY type
@@ -97,7 +96,7 @@ def _(mo):
 @app.cell
 def _(mo):
     trips = mo.sql(
-        """
+        f"""
         SELECT
             -- workaround to not panic during output
             people.id::VARCHAR as id,
@@ -176,7 +175,6 @@ def _():
             }
             for trip in trips
         ]
-
     return (trip_geo_features,)
 
 
@@ -255,6 +253,18 @@ def _(px):
         x=x_values,
         y=y_values,
         template="plotly_dark",
+    )
+    return
+
+
+@app.cell
+def _(mo):
+    _df = mo.sql(
+        f"""
+        SELECT *
+        FROM '../data/routing/edges/*.parquet'
+        LIMIT 3
+        """
     )
     return
 

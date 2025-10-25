@@ -568,7 +568,6 @@ version = "0.0.1"
 dependencies = [
  "approx",
  "arrow",
- "arrow-ord",
  "arrow-schema",
  "chrono",
  "counter",
@@ -599,6 +598,7 @@ dependencies = [
  "strum 0.27.2",
  "test-log",
  "thiserror 2.0.16",
+ "tokio",
  "tracing",
  "tracing-opentelemetry",
  "url",
