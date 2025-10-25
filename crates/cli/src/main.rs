@@ -3,6 +3,10 @@ use url::Url;
 
 use caspers_universe::{Result, SimulationMode, load_simulation_setup, run_simulation};
 
+use crate::init::InitArgs;
+
+mod error;
+mod init;
 mod telemetry;
 
 #[derive(clap::Parser)]
@@ -74,12 +78,6 @@ struct RunArgs {
     dry_run: bool,
 }
 
-#[derive(Debug, Clone, clap::Parser)]
-struct InitArgs {
-    #[arg(short, long, default_value_t = true)]
-    template: bool,
-}
-
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     telemetry::init_tracer_provider();
@@ -101,9 +99,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             run_simulation(setup, args.duration, data_path, routing_path, args.dry_run).await?;
             // run_simulation_from(setup, args.duration, data_path, routing_path, args.dry_run).await?;
         }
-        Commands::Init(_args) => {
-            todo!()
-        }
+        Commands::Init(args) => init::handle(args).await?,
     }
 
     Ok(())

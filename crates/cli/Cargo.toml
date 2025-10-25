@@ -13,11 +13,15 @@ path = "src/main.rs"
 [dependencies]
 caspers-universe = { path = "../universe" }
 
+itertools = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true, features = ["log"] }
 url = { workspace = true }
 
 clap = { version = "4.5.37", features = ["derive", "env"] }
+dialoguer = "0.12.0"
 opentelemetry = "0.31.0"
 opentelemetry_sdk = "0.31.0"
 opentelemetry-otlp = { version = "0.31.0", features = ["grpc-tonic"] }
