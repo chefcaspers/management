@@ -16,7 +16,7 @@ use crate::models::{MenuItem, Site, Station};
 
 use super::EntityView;
 
-pub(crate) use builder::{OBJECT_SCHEMA, ObjectDataBuilder};
+pub(crate) use builder::ObjectDataBuilder;
 
 mod builder;
 

@@ -21,6 +21,7 @@ pub use self::events::*;
 mod builder;
 pub mod events;
 mod execution;
+mod session;
 mod stats;
 
 /// Core trait that any simulatable entity must implement

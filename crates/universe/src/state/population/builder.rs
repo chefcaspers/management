@@ -15,7 +15,6 @@ use super::{PersonRole, PopulationData};
 use crate::Error;
 use crate::error::Result;
 use crate::idents::PersonId;
-use crate::models::Site;
 
 static POPULATION_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
     SchemaRef::new(Schema::new(vec![
@@ -54,13 +53,12 @@ impl PopulationDataBuilder {
         }
     }
 
-    pub fn add_site(&mut self, site: &Site, n_people: usize) -> Result<()> {
+    pub fn add_site(&mut self, n_people: usize, latitude: f64, longitude: f64) -> Result<()> {
         let gen_first_name = fake::faker::name::en::FirstName();
         let gen_last_name = fake::faker::name::en::LastName();
         let gen_email = fake::faker::internet::en::SafeEmail();
         let gen_cc = fake::faker::creditcard::en::CreditCardNumber();
 
-        tracing::info!("Adding {} people", n_people);
         for _ in 0..n_people {
             let id = PersonId::new();
             self.ids.append_value(id)?;
@@ -75,7 +73,7 @@ impl PopulationDataBuilder {
             self.roles.append_value(PersonRole::Customer.as_ref());
         }
 
-        let latlng = LatLng::new(site.latitude, site.longitude)?;
+        let latlng = LatLng::new(latitude, longitude)?;
         let cell_index = latlng.to_cell(Resolution::Nine);
         let cells = cell_index.grid_disk::<Vec<_>>(10);
         let solvent = SolventBuilder::new().build();
@@ -102,7 +100,7 @@ impl PopulationDataBuilder {
             });
 
         let n_couriers = n_people / 10;
-        tracing::info!("Adding {} couriers", n_couriers);
+
         let loc = geom
             .centroid()
             .ok_or(Error::internal("failed to get centroid"))?;
