@@ -5,16 +5,49 @@ use arrow::compute::filter_record_batch;
 use arrow_ord::cmp::eq;
 use chrono::{DateTime, Duration, Utc};
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 use url::Url;
 use uuid::Uuid;
 
 use crate::error::Result;
+use crate::simulation::Simulation;
 use crate::simulation::stats::EventStatsBuffer;
-use crate::simulation::{Simulation, SimulationConfig};
 use crate::state::{EntityView, RoutingData, State};
 use crate::{
     Error, EventTracker, PopulationRunner, SimulationSetup, SiteId, SiteRunner, read_parquet_dir,
 };
+
+/// Configuration for the simulation engine
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct SimulationConfig {
+    /// all ghost kitchen sites.
+    pub(crate) simulation_start: DateTime<Utc>,
+
+    /// time increment for simulation steps
+    pub(crate) time_increment: Duration,
+
+    /// location to store simulation results
+    pub(crate) result_storage_location: Option<Url>,
+
+    pub(crate) snapshot_interval: Option<Duration>,
+
+    pub(crate) dry_run: bool,
+
+    pub(crate) write_events: bool,
+}
+
+impl Default for SimulationConfig {
+    fn default() -> Self {
+        SimulationConfig {
+            simulation_start: Utc::now(),
+            time_increment: Duration::seconds(60),
+            result_storage_location: None,
+            snapshot_interval: None,
+            dry_run: false,
+            write_events: false,
+        }
+    }
+}
 
 /// Builder for creating a simulation instance.
 pub struct SimulationBuilder {
@@ -47,6 +80,9 @@ pub struct SimulationBuilder {
 
     /// Whether to run the simulation in dry run mode
     dry_run: bool,
+
+    /// Whether to write events to the event tracker
+    write_events: bool,
 }
 
 impl Default for SimulationBuilder {
@@ -62,6 +98,7 @@ impl Default for SimulationBuilder {
             snapshot_interval: None,
             routing_path: None,
             dry_run: false,
+            write_events: false,
         }
     }
 }
@@ -131,6 +168,11 @@ impl SimulationBuilder {
         self
     }
 
+    pub fn with_write_events(mut self, write_events: bool) -> Self {
+        self.write_events = write_events;
+        self
+    }
+
     /// Load the prepared street network data into routing data objects.
     async fn routing_data(&self) -> Result<HashMap<SiteId, RoutingData>> {
         let Some(setup) = &self.setup else {
@@ -197,6 +239,7 @@ impl SimulationBuilder {
             result_storage_location: self.result_storage_location.clone(),
             snapshot_interval: self.snapshot_interval,
             dry_run: self.dry_run,
+            write_events: self.write_events,
         };
         let routing = self.routing_data().await?;
 

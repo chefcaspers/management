@@ -2,7 +2,7 @@ use std::sync::{Arc, LazyLock};
 
 use arrow::array::builder::{FixedSizeBinaryBuilder, StringBuilder};
 use arrow::array::{RecordBatch, StringViewBuilder};
-use arrow_schema::{DataType, Field, Schema, SchemaRef};
+use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use fake::Fake;
 use geo::{BoundingRect, Centroid, Contains, Point};
 use geoarrow::array::PointBuilder;
