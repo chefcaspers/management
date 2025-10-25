@@ -1,13 +1,11 @@
 use std::collections::HashMap;
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use datafusion::dataframe::DataFrameWriteOptions;
 use datafusion::prelude::SessionContext;
 use itertools::Itertools;
 use rand::distr::{Distribution, Uniform};
-use serde::{Deserialize, Serialize};
 use tracing::{Level, Span, field, instrument};
-use url::Url;
 
 use crate::PopulationRunner;
 use crate::agents::SiteRunner;
@@ -17,7 +15,7 @@ use crate::simulation::execution::EventDataBuilder;
 use crate::simulation::stats::EventStatsBuffer;
 use crate::state::State;
 
-pub use self::builder::SimulationBuilder;
+pub use self::builder::*;
 pub use self::events::*;
 
 mod builder;
@@ -37,35 +35,6 @@ pub trait Entity: Send + Sync + 'static {
 pub trait Simulatable: Entity {
     /// Update the entity state based on the current simulation context
     fn step(&mut self, events: &[EventPayload], context: &State) -> Result<Vec<EventPayload>>;
-}
-
-/// Configuration for the simulation engine
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct SimulationConfig {
-    /// all ghost kitchen sites.
-    pub(crate) simulation_start: DateTime<Utc>,
-
-    /// time increment for simulation steps
-    pub(crate) time_increment: Duration,
-
-    /// location to store simulation results
-    pub(crate) result_storage_location: Option<Url>,
-
-    pub(crate) snapshot_interval: Option<Duration>,
-
-    pub(crate) dry_run: bool,
-}
-
-impl Default for SimulationConfig {
-    fn default() -> Self {
-        SimulationConfig {
-            simulation_start: Utc::now(),
-            time_increment: Duration::seconds(60),
-            result_storage_location: None,
-            snapshot_interval: None,
-            dry_run: false,
-        }
-    }
 }
 
 /// The main simulation engine

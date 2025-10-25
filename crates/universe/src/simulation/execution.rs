@@ -1,14 +1,8 @@
-use std::{
-    pin::Pin,
-    sync::{Arc, LazyLock},
-    task::{Context, Poll},
-};
+use std::sync::{Arc, LazyLock};
 
 use arrow::array::{ArrayRef, FixedSizeBinaryBuilder, LargeStringBuilder, RecordBatch};
-use arrow_schema::{DataType, Field, Schema, SchemaRef};
-use datafusion::common::{DataFusionError, Result};
-use datafusion::execution::RecordBatchStream;
-use futures::Stream;
+use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
+use datafusion::common::Result;
 use uuid::{ContextV7, Timestamp, Uuid};
 
 use crate::{Event, EventPayload};
@@ -95,28 +89,5 @@ impl EventDataBuilder {
             Arc::new(self.data.finish()),
         ];
         Ok(RecordBatch::try_new(EVENT_SCHEMA.clone(), arrays)?)
-    }
-}
-
-struct EventStream {
-    events: Vec<String>,
-}
-
-impl Stream for EventStream {
-    type Item = Result<RecordBatch, DataFusionError>;
-
-    fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        if self.events.is_empty() {
-            Poll::Ready(None)
-        } else {
-            let batch = RecordBatch::try_new(EVENT_SCHEMA.clone(), vec![])?;
-            Poll::Ready(Some(Ok(batch)))
-        }
-    }
-}
-
-impl RecordBatchStream for EventStream {
-    fn schema(&self) -> SchemaRef {
-        EVENT_SCHEMA.clone()
     }
 }

@@ -11,7 +11,7 @@ use std::time::Duration;
 use arrow::array::StructArray;
 use arrow::array::{RecordBatch, cast::AsArray as _};
 use arrow::compute::{cast, concat_batches};
-use arrow_schema::DataType;
+use arrow::datatypes::DataType;
 use chrono::{DateTime, Utc};
 use datafusion::datasource::file_format::parquet::ParquetFormat;
 use datafusion::datasource::listing::{
@@ -24,16 +24,15 @@ use rand::Rng;
 use url::Url;
 use uuid::Uuid;
 
-use crate::error::Result;
 use crate::idents::*;
-use crate::state::objects::OBJECT_SCHEMA;
-use crate::state::orders::{ORDER_LINE_SCHEMA, ORDER_SCHEMA};
 use crate::{
-    Error, OrderLineUpdatedPayload, OrderUpdatedPayload, PersonUpdatedPayload, SimulationSetup,
+    Error, EventPayload, OrderLineUpdatedPayload, OrderUpdatedPayload, Result, SimulationConfig,
+    SimulationSetup,
 };
 
 use self::movement::JourneyPlanner;
-use super::{EventPayload, SimulationConfig};
+use self::objects::OBJECT_SCHEMA;
+use self::orders::{ORDER_LINE_SCHEMA, ORDER_SCHEMA};
 
 pub(crate) use self::movement::RoutingData;
 pub(crate) use self::objects::{ObjectData, ObjectDataBuilder, ObjectLabel};

@@ -15,8 +15,8 @@ generate:
 build-py:
     uvx --from 'maturin[zig]' maturin develop -m python/Cargo.toml
 
-run:
-    cargo run --bin caspers-universe -- run --duration 100 --setup-path data/
+run duration='100':
+    cargo run --bin caspers-universe -- run --duration {{duration}} --setup-path data/
 
 # run marimo notebook server for interactive data exploration
 scratch:

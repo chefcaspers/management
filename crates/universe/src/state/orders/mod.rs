@@ -3,8 +3,7 @@ use std::sync::Arc;
 
 use arrow::array::types::Float64Type;
 use arrow::array::{RecordBatch, StringArray, cast::AsArray as _};
-use arrow_ord::partition::partition;
-use arrow_select::concat::concat_batches;
+use arrow::compute::{concat_batches, partition};
 use h3o::LatLng;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;

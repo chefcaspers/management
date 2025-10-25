@@ -12,7 +12,7 @@ use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
 use url::Url;
 
-use caspers_universe::{Result, load_simulation_setup, run_simulation, run_simulation_from};
+use caspers_universe::{Result, load_simulation_setup, run_simulation};
 
 #[derive(clap::Parser)]
 #[command(name = "caspers-universe", version, about = "Running Caspers Universe", long_about = None)]

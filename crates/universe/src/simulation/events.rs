@@ -113,30 +113,19 @@ impl EventTracker {
     pub fn process_events(&mut self, events: &[EventPayload], ctx: &State) -> EventStats {
         let mut stats = EventStats::new();
         for event in events {
-            self.handle_event(&mut stats, event, ctx);
+            stats.handle_event(event);
+            self.handle_event(event, ctx);
         }
         self.total_stats.add(&stats);
         stats
     }
 
-    fn handle_event(&mut self, stats: &mut EventStats, event: &EventPayload, ctx: &State) {
+    fn handle_event(&mut self, event: &EventPayload, ctx: &State) {
         match event {
-            EventPayload::OrderCreated(_) => {
-                stats.num_orders_created += 1;
-            }
-            EventPayload::OrderUpdated(payload) => {
-                stats.num_orders_updated += 1;
-                self.handle_order_updated(payload, ctx);
-            }
-            EventPayload::OrderLineUpdated(payload) => {
-                stats.num_order_lines_updated += 1;
-                self.handle_order_line_updated(payload, ctx);
-            }
-            EventPayload::PersonUpdated(payload) => {
-                stats.num_people_updated += 1;
-                self.handle_person_updated(payload, ctx);
-            }
-            _ => {}
+            EventPayload::OrderCreated(_) => {}
+            EventPayload::OrderUpdated(payload) => self.handle_order_updated(payload, ctx),
+            EventPayload::OrderLineUpdated(payload) => self.handle_order_line_updated(payload, ctx),
+            EventPayload::PersonUpdated(payload) => self.handle_person_updated(payload, ctx),
         }
     }
 
@@ -222,7 +211,7 @@ impl EventTracker {
         }
     }
 
-    fn handle_person_updated(&mut self, payload: &PersonUpdatedPayload, ctx: &State) {
+    fn handle_person_updated(&mut self, payload: &PersonUpdatedPayload, _ctx: &State) {
         match &payload.status {
             PersonStatus::Delivering(order_id, journey) => {
                 if let Some(span) = self.delivery_spans.get(order_id) {
@@ -274,19 +263,12 @@ impl EventStats {
         self.num_people_updated += other.num_people_updated;
     }
 
-    pub fn process_events(&mut self, events: &[Event]) {
-        for event in events {
-            self.handle_event(event);
-        }
-    }
-
-    pub fn handle_event(&mut self, event: &Event) {
-        match event.payload {
+    pub fn handle_event(&mut self, event: &EventPayload) {
+        match event {
             EventPayload::OrderCreated(_) => self.num_orders_created += 1,
             EventPayload::OrderUpdated(_) => self.num_orders_updated += 1,
             EventPayload::OrderLineUpdated(_) => self.num_order_lines_updated += 1,
             EventPayload::PersonUpdated(_) => self.num_people_updated += 1,
-            _ => {}
         }
     }
 }

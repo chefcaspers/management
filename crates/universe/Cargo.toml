@@ -31,18 +31,11 @@ tokio = { version = "1", features = ["full"] }
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 
 arrow = { workspace = true }
-arrow-arith = { workspace = true }
-arrow-buffer = { workspace = true }
-arrow-cast = { workspace = true }
-arrow-ipc = { workspace = true }
-arrow-json = { workspace = true }
 arrow-ord = { workspace = true }
-arrow-row = { workspace = true }
 arrow-schema = { workspace = true, features = [
   "serde",
   "canonical_extension_types",
 ] }
-arrow-select = { workspace = true }
 datafusion = { workspace = true }
 object_store = { workspace = true }
 parquet = { workspace = true }

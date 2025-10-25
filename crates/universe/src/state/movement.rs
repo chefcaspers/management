@@ -194,26 +194,6 @@ impl Journey {
         self.distance_completed_m() / self.total_distance_m() as f64
     }
 
-    /// Returns the current leg if there is one
-    pub(crate) fn current_leg(&self) -> Option<&JourneyLeg> {
-        self.legs.get(self.current_leg_index)
-    }
-
-    /// Returns the next leg if there is one
-    pub(crate) fn next_leg(&self) -> Option<&JourneyLeg> {
-        self.legs.get(self.current_leg_index + 1)
-    }
-
-    /// Returns the number of legs completed
-    pub(crate) fn legs_completed(&self) -> usize {
-        self.current_leg_index
-    }
-
-    /// Returns the number of legs remaining
-    pub(crate) fn legs_remaining(&self) -> usize {
-        self.legs.len().saturating_sub(self.current_leg_index)
-    }
-
     /// Returns the estimated time remaining in seconds based on the given transport
     pub(crate) fn estimated_time_remaining_s(&self, transport: &Transport) -> f64 {
         self.distance_remaining_m() / transport.default_velocity_m_s()
@@ -684,10 +664,6 @@ mod tests {
         assert_eq!(journey.distance_completed_m(), 0.0);
         assert_eq!(journey.distance_remaining_m(), 500.0);
         assert_eq!(journey.progress_percentage(), 0.0);
-        assert_eq!(journey.legs_completed(), 0);
-        assert_eq!(journey.legs_remaining(), 4);
-        assert!(journey.current_leg().is_some());
-        assert!(journey.next_leg().is_some());
         assert!(!journey.is_done());
 
         // Test after completing first leg
@@ -701,8 +677,6 @@ mod tests {
         assert_eq!(journey.distance_completed_m(), 100.0);
         assert_eq!(journey.distance_remaining_m(), 400.0);
         assert_eq!(journey.progress_percentage(), 0.2);
-        assert_eq!(journey.legs_completed(), 1);
-        assert_eq!(journey.legs_remaining(), 3);
 
         // Test partial progress in second leg
         let time_step = std::time::Duration::from_secs(36); // 36s at 5km/h = 50m
@@ -713,8 +687,6 @@ mod tests {
         assert_eq!(journey.distance_completed_m(), 150.0);
         assert_eq!(journey.distance_remaining_m(), 350.0);
         assert_eq!(journey.progress_percentage(), 0.3);
-        assert_eq!(journey.legs_completed(), 1);
-        assert_eq!(journey.legs_remaining(), 3);
 
         // Test completing the journey
         let time_step = std::time::Duration::from_secs(252); // 252s at 5km/h = 350m
@@ -724,10 +696,6 @@ mod tests {
         assert_eq!(journey.distance_completed_m(), 500.0);
         assert_eq!(journey.distance_remaining_m(), 0.0);
         assert_eq!(journey.progress_percentage(), 1.0);
-        assert_eq!(journey.legs_completed(), 4);
-        assert_eq!(journey.legs_remaining(), 0);
-        assert!(journey.current_leg().is_none());
-        assert!(journey.next_leg().is_none());
 
         // Test estimated time remaining
         let journey = Journey {
@@ -772,10 +740,6 @@ mod tests {
         assert_eq!(journey.distance_completed_m(), 0.0);
         assert_eq!(journey.distance_remaining_m(), 0.0);
         assert_eq!(journey.progress_percentage(), 1.0);
-        assert_eq!(journey.legs_completed(), 0);
-        assert_eq!(journey.legs_remaining(), 0);
-        assert!(journey.current_leg().is_none());
-        assert!(journey.next_leg().is_none());
         assert!(journey.is_done());
     }
 }
