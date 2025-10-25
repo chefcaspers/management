@@ -24,8 +24,6 @@ jobs:
           toolchain: stable
           components: rustfmt,clippy
           cache: true
-          # if we ever get rid of all the clippy warnings, we can remove this line
-          rustflags: ""
 
       - name: Rustfmt Check
         uses: actions-rust-lang/rustfmt@v1
