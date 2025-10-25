@@ -162,7 +162,7 @@ impl SiteRunner {
     }
 
     /// Receive new orders from the state and queue them for processing.
-    fn receive_orders<'a>(&mut self, orders: &[OrderId], ctx: &State) -> Result<()> {
+    fn receive_orders(&mut self, orders: &[OrderId], ctx: &State) -> Result<()> {
         let orders = orders
             .iter()
             .flat_map(|order_id| ctx.orders().order(order_id));

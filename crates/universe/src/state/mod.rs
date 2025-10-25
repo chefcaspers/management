@@ -157,7 +157,7 @@ impl State {
         self.time + self.time_step
     }
 
-    pub(crate) fn process_site_events<'a>(&mut self, events: &[EventPayload]) -> Result<()> {
+    pub(crate) fn process_site_events(&mut self, events: &[EventPayload]) -> Result<()> {
         let order_line_updates = events.iter().filter_map(|event| match event {
             EventPayload::OrderLineUpdated(payload) => Some(payload),
             _ => None,
@@ -172,7 +172,7 @@ impl State {
         Ok(())
     }
 
-    pub(crate) fn process_population_events<'a>(
+    pub(crate) fn process_population_events(
         &mut self,
         events: &[EventPayload],
     ) -> Result<Vec<EventPayload>> {

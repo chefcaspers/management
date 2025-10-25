@@ -115,25 +115,20 @@ pub(super) static ORDER_CUSTOMER_ID_IDX: usize = 2;
 pub(super) static ORDER_DESTINATION_IDX: usize = 3;
 pub(super) static ORDER_STATUS_IDX: usize = 4;
 pub(crate) static ORDER_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
-    let mut fields = Vec::with_capacity(4);
-    fields.push(
+    let fields = vec![
         Field::new("id", DataType::FixedSizeBinary(16), false).with_extension_type(UuidExtension),
-    );
-    fields.push(
         Field::new("site_id", DataType::FixedSizeBinary(16), false)
             .with_extension_type(UuidExtension),
-    );
-    fields.push(
         Field::new("customer_id", DataType::FixedSizeBinary(16), false)
             .with_extension_type(UuidExtension),
-    );
-    fields.push(Field::new_fixed_size_list(
-        "destination",
-        Field::new("item", DataType::Float64, false),
-        2,
-        false,
-    ));
-    fields.push(Field::new("status", DataType::Utf8, false));
+        Field::new_fixed_size_list(
+            "destination",
+            Field::new("item", DataType::Float64, false),
+            2,
+            false,
+        ),
+        Field::new("status", DataType::Utf8, false),
+    ];
     SchemaRef::new(Schema::new(fields))
 });
 
