@@ -203,7 +203,7 @@ impl SimulationBuilder {
         let objects = setup.object_data()?;
         let provider = Arc::new(MemTable::try_new(objects.schema(), vec![vec![objects]])?);
 
-        simulation_context(&routing_path, provider).await
+        simulation_context(routing_path, provider).await
     }
 
     /// Load the prepared street network data into routing data objects.

@@ -131,7 +131,7 @@ fn generate_objects(brands: &HashMap<BrandId, &Brand>, sites: &[SiteSetup]) -> R
     }
 
     for site in sites {
-        builder.append_site_info(&site)?;
+        builder.append_site_info(site)?;
     }
 
     builder.finish()

@@ -137,12 +137,12 @@ fn load_template(template: &Template) -> Result<SimulationSetup> {
     let sites = template
         .sites
         .iter()
-        .map(|site| load_site(site))
+        .map(load_site)
         .try_collect()?;
     let brands = template
         .brands
         .iter()
-        .map(|brand| load_brand(brand))
+        .map(load_brand)
         .try_collect()?;
     Ok(SimulationSetup { sites, brands })
 }
