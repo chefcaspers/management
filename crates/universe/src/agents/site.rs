@@ -2,7 +2,7 @@ use std::collections::{HashMap, VecDeque};
 
 use counter::Counter;
 use h3o::Resolution;
-use itertools::Itertools;
+use itertools::Itertools as _;
 use tracing::{Level, Span, field, instrument};
 
 use super::kitchen::{KitchenRunner, KitchenStats};

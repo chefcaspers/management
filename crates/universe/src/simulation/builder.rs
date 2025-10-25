@@ -5,11 +5,10 @@ use arrow::compute::concat_batches;
 use chrono::{DateTime, Duration, Utc};
 use datafusion::catalog::MemTable;
 use datafusion::prelude::{col, lit};
-use itertools::Itertools;
+use itertools::Itertools as _;
 use rand::Rng as _;
 use serde::{Deserialize, Serialize};
 use url::Url;
-use uuid::Uuid;
 
 use crate::error::Result;
 use crate::simulation::Simulation;
@@ -17,8 +16,8 @@ use crate::simulation::session::{SimulationContext, simulation_context};
 use crate::simulation::stats::EventStatsBuffer;
 use crate::state::{EntityView, RoutingData, State};
 use crate::{
-    Error, EventTracker, ObjectData, OrderData, PopulationDataBuilder, PopulationRunner,
-    SimulationSetup, SiteRunner,
+    Error, EventTracker, ObjectData, OrderData, PopulationData, PopulationDataBuilder,
+    PopulationRunner, SimulationSetup, SiteRunner,
 };
 
 /// Execution mode for the simulation.
@@ -201,9 +200,25 @@ impl SimulationBuilder {
         };
 
         let objects = setup.object_data()?;
-        let provider = Arc::new(MemTable::try_new(objects.schema(), vec![vec![objects]])?);
+        let objects_provider = Arc::new(MemTable::try_new(
+            objects.schema(),
+            vec![vec![objects.clone()]],
+        )?);
 
-        simulation_context(routing_path, provider).await
+        let mut builder = PopulationDataBuilder::new();
+        let object_data = ObjectData::try_new(objects)?;
+        for site in object_data.sites()? {
+            let n_people = rand::rng().random_range(500..1500);
+            let info = site.properties()?;
+            builder.add_site(n_people, info.latitude, info.longitude)?;
+        }
+        let population = builder.finish()?;
+        let population_provider = Arc::new(MemTable::try_new(
+            population.schema(),
+            vec![vec![population]],
+        )?);
+
+        simulation_context(routing_path, objects_provider, population_provider).await
     }
 
     /// Load the prepared street network data into routing data objects.
@@ -212,20 +227,18 @@ impl SimulationBuilder {
         ctx: &SimulationContext,
         config: SimulationConfig,
     ) -> Result<State> {
-        let Some(setup) = &self.setup else {
-            return Err(Error::MissingInput("Setup file not found".to_string()));
-        };
-
         let objects = ctx.system().objects().await?.collect().await?;
         let objects = ObjectData::try_new(concat_batches(objects[0].schema_ref(), &objects)?)?;
 
         let mut routers = HashMap::new();
-        for site in setup.sites.iter().filter_map(|s| s.info.as_ref()) {
+        for site in objects.sites()? {
+            let info = site.properties()?;
+
             let site_nodes = ctx
                 .system()
                 .routing_nodes()
                 .await?
-                .filter(col("location").eq(lit(&site.name)))?
+                .filter(col("location").eq(lit(&info.name)))?
                 .collect()
                 .await?;
             let site_nodes = concat_batches(site_nodes[0].schema_ref(), &site_nodes)?;
@@ -234,24 +247,15 @@ impl SimulationBuilder {
                 .system()
                 .routing_edges()
                 .await?
-                .filter(col("location").eq(lit(&site.name)))?
+                .filter(col("location").eq(lit(&info.name)))?
                 .collect()
                 .await?;
             let site_edges = concat_batches(site_edges[0].schema_ref(), &site_edges)?;
 
-            routers.insert(
-                Uuid::parse_str(&site.id)?.into(),
-                RoutingData::try_new(site_nodes, site_edges)?,
-            );
+            routers.insert(site.id(), RoutingData::try_new(site_nodes, site_edges)?);
         }
 
-        let mut builder = PopulationDataBuilder::new();
-        for site in objects.sites()? {
-            let n_people = rand::rng().random_range(500..1500);
-            let info = site.properties()?;
-            builder.add_site(n_people, info.latitude, info.longitude)?;
-        }
-        let population = builder.finish()?;
+        let population = PopulationData::try_new(ctx).await?;
 
         Ok(State::new(
             config,
@@ -291,5 +295,20 @@ impl SimulationBuilder {
             event_tracker: EventTracker::new(),
             stats_buffer: EventStatsBuffer::new(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_build() {
+        let mut builder = PopulationDataBuilder::new();
+        builder
+            .add_site(100, 51.518898098201326, -0.13381370382489707)
+            .unwrap();
+
+        todo!()
     }
 }

@@ -1,7 +1,7 @@
 use arrow::array::RecordBatch;
 use datafusion::common::HashMap;
 use futures::TryStreamExt;
-use itertools::Itertools;
+use itertools::Itertools as _;
 use object_store::ObjectStore;
 use object_store::path::Path;
 use tracing::instrument;

@@ -11,7 +11,7 @@ use arrow::array::{RecordBatch, cast::AsArray as _};
 use chrono::{DateTime, Utc};
 use datafusion::prelude::*;
 use geo_traits::PointTrait;
-use itertools::Itertools;
+use itertools::Itertools as _;
 use uuid::Uuid;
 
 use crate::idents::*;

@@ -6,17 +6,23 @@ use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use fake::Fake;
 use geo::{BoundingRect, Centroid, Contains, Point};
 use geoarrow::array::PointBuilder;
+use geoarrow_array::IntoArrow;
 use geoarrow_schema::{Dimension, PointType};
 use h3o::{LatLng, Resolution, geom::SolventBuilder};
+use itertools::Itertools as _;
 use rand::distr::{Distribution, Uniform};
 use rand::rngs::ThreadRng;
 
-use super::{PersonRole, PopulationData};
+use super::PersonRole;
 use crate::Error;
 use crate::error::Result;
 use crate::idents::PersonId;
+use crate::state::population::PersonState;
 
-static POPULATION_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
+static DEFAULT_STATE: LazyLock<String> =
+    LazyLock::new(|| serde_json::to_string(&PersonState::default()).unwrap());
+
+pub(super) static POPULATION_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
     SchemaRef::new(Schema::new(vec![
         Field::new("id", DataType::FixedSizeBinary(16), false),
         Field::new("first_name", DataType::Utf8, false),
@@ -27,7 +33,7 @@ static POPULATION_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
     ]))
 });
 
-pub struct PopulationDataBuilder {
+pub(crate) struct PopulationDataBuilder {
     ids: FixedSizeBinaryBuilder,
     first_names: StringBuilder,
     last_names: StringBuilder,
@@ -35,6 +41,7 @@ pub struct PopulationDataBuilder {
     cc_numbers: StringBuilder,
     roles: StringViewBuilder,
     positions: PointBuilder,
+    states: StringViewBuilder,
 
     rng: ThreadRng,
 }
@@ -49,6 +56,7 @@ impl PopulationDataBuilder {
             cc_numbers: StringBuilder::new(),
             roles: StringViewBuilder::new(),
             positions: PointBuilder::new(PointType::new(Dimension::XY, Default::default())),
+            states: StringViewBuilder::new(),
             rng: rand::rng(),
         }
     }
@@ -71,6 +79,7 @@ impl PopulationDataBuilder {
             self.cc_numbers
                 .append_value(gen_cc.fake_with_rng::<String, _>(&mut self.rng));
             self.roles.append_value(PersonRole::Customer.as_ref());
+            self.states.append_value(DEFAULT_STATE.as_str());
         }
 
         let latlng = LatLng::new(latitude, longitude)?;
@@ -117,24 +126,45 @@ impl PopulationDataBuilder {
                 .append_value(gen_cc.fake_with_rng::<String, _>(&mut self.rng));
             self.roles.append_value(PersonRole::Courier.as_ref());
             self.positions.push_point(Some(&loc));
+            self.states.append_value(DEFAULT_STATE.as_str());
         }
 
         Ok(())
     }
 
-    pub fn finish(mut self) -> Result<PopulationData> {
+    pub fn finish(mut self) -> Result<RecordBatch> {
         let ids = Arc::new(self.ids.finish());
         let first_names = Arc::new(self.first_names.finish());
         let last_names = Arc::new(self.last_names.finish());
         let emails = Arc::new(self.emails.finish());
         let cc_numbers = Arc::new(self.cc_numbers.finish());
         let roles = Arc::new(self.roles.finish());
+        let positions = self.positions.finish().into_arrow();
+        let states = Arc::new(self.states.finish());
 
-        let people = RecordBatch::try_new(
-            POPULATION_SCHEMA.clone(),
-            vec![ids, first_names, last_names, emails, cc_numbers, roles],
-        )?;
+        let all_fields = POPULATION_SCHEMA
+            .as_ref()
+            .fields()
+            .iter()
+            .cloned()
+            .chain(vec![
+                Arc::new(Field::new("position", positions.data_type().clone(), false)),
+                Arc::new(Field::new("state", DataType::Utf8View, false)),
+            ])
+            .collect_vec();
 
-        PopulationData::try_new(people, self.positions.finish())
+        Ok(RecordBatch::try_new(
+            Arc::new(Schema::new(all_fields)),
+            vec![
+                ids,
+                first_names,
+                last_names,
+                emails,
+                cc_numbers,
+                roles,
+                positions,
+                states,
+            ],
+        )?)
     }
 }

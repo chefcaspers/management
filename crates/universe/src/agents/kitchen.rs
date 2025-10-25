@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use chrono::{DateTime, Utc};
-use itertools::Itertools;
+use itertools::Itertools as _;
 use tracing::{Level, instrument};
 
 use super::OrderLine;

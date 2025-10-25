@@ -5,7 +5,7 @@ use arrow::array::cast::AsArray as _;
 use dashmap::DashMap;
 use dashmap::mapref::one::Ref;
 use indexmap::IndexMap;
-use itertools::Itertools;
+use itertools::Itertools as _;
 use rand::Rng as _;
 use strum::AsRefStr;
 

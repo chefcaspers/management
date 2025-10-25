@@ -16,6 +16,7 @@ use crate::error::Result;
 pub(crate) async fn simulation_context(
     routing_path: &Url,
     objects: Arc<dyn TableProvider>,
+    population: Arc<dyn TableProvider>,
 ) -> Result<SimulationContext> {
     let ctx = SessionContext::new();
 
@@ -25,7 +26,7 @@ pub(crate) async fn simulation_context(
     let routing_nodes = read_parquet_table(&nodes_path, &state).await?;
     let routing_edges = read_parquet_table(&edge_path, &state).await?;
 
-    SimulationContext::try_new(ctx, routing_nodes, routing_edges, objects)
+    SimulationContext::try_new(ctx, routing_nodes, routing_edges, objects, population)
 }
 
 pub(crate) struct SimulationContext {
@@ -38,11 +39,13 @@ impl SimulationContext {
         routing_nodes: Arc<dyn TableProvider>,
         routing_edges: Arc<dyn TableProvider>,
         objects: Arc<dyn TableProvider>,
+        population: Arc<dyn TableProvider>,
     ) -> Result<Self> {
         let system_schema = Arc::new(MemorySchemaProvider::new());
         system_schema.register_table("routing_nodes".into(), routing_nodes)?;
         system_schema.register_table("routing_edges".into(), routing_edges)?;
         system_schema.register_table("objects".into(), objects)?;
+        system_schema.register_table("population".into(), population)?;
 
         let catalog = Arc::new(MemoryCatalogProvider::new());
         catalog.register_schema("system", system_schema)?;
@@ -86,6 +89,14 @@ impl SystemSchema<'_> {
         let query = r#"
             SELECT id, parent_id, label, name, properties
             FROM caspers.system.objects
+        "#;
+        Ok(self.ctx().sql(query).await?)
+    }
+
+    pub(crate) async fn population(&self) -> Result<DataFrame> {
+        let query = r#"
+            SELECT id, first_name, last_name, email, cc_number, role, position, state
+            FROM caspers.system.population
         "#;
         Ok(self.ctx().sql(query).await?)
     }

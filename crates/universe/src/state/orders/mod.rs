@@ -6,7 +6,7 @@ use arrow::array::{RecordBatch, StringArray, cast::AsArray as _};
 use arrow::compute::{concat_batches, partition};
 use h3o::LatLng;
 use indexmap::{IndexMap, IndexSet};
-use itertools::Itertools;
+use itertools::Itertools as _;
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, Display, EnumString};
 

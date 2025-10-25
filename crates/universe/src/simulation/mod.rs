@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use datafusion::dataframe::DataFrameWriteOptions;
 use datafusion::prelude::SessionContext;
-use itertools::Itertools;
+use itertools::Itertools as _;
 use rand::distr::{Distribution, Uniform};
 use tracing::{Level, Span, field, instrument};
 
@@ -17,6 +17,7 @@ use crate::state::State;
 
 pub use self::builder::*;
 pub use self::events::*;
+pub(crate) use self::session::*;
 
 mod builder;
 pub mod events;

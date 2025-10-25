@@ -2,7 +2,7 @@ use caspers_universe::{
     Brand, BrandId, Error, KitchenId, MenuItemId, SimulationSetup, SiteId, SiteSetup, StationId,
 };
 use dialoguer::MultiSelect;
-use itertools::Itertools;
+use itertools::Itertools as _;
 
 use crate::error::Result;
 
