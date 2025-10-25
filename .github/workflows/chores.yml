@@ -31,7 +31,7 @@ jobs:
         uses: actions-rust-lang/rustfmt@v1
 
       - name: build and lint with clippy
-        run: cargo clippy --features ${{ env.DEFAULT_FEATURES }} --tests
+        run: cargo clippy --all-features --tests
 
       - name: Run Machete to check for unused dependencies
         uses: bnjbvr/cargo-machete@v0.9.1
