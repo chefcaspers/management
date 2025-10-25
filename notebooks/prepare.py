@@ -6,11 +6,16 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
+    from pathlib import Path
+
     import marimo as mo
     import pyarrow.parquet as pq
-    from caspers_universe import prepare_site, Site, load_simulation_setup, run_simulation
-    import polars as pl
-    from pathlib import Path
+    from caspers_universe import (
+        load_simulation_setup,
+        prepare_site,
+        run_simulation,
+    )
+
     return Path, load_simulation_setup, mo, pq, prepare_site, run_simulation
 
 
@@ -20,7 +25,7 @@ def _(mo):
         r"""
     ### Prepare data to efficiently compute courier routes at runtime
 
-    We want to have a realistic simuation and provide realisitic looking data.
+    We want to have a realistic simulation and provide realisitic looking data.
     Especially when plotting movement data it, sticking to roads / pathways make
     visulaizations much more compelling.
 

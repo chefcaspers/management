@@ -56,15 +56,14 @@ fn run_simulation(
 ) -> PyResult<()> {
     let output_location = resolve_url(&output_location)?;
     let routing_location = resolve_url(&routing_location)?;
-    rt()
-        .block_on(run_simulation_inner(
-            setup,
-            duration,
-            output_location,
-            routing_location,
-            dry_run,
-        ))
-        .map_err(Error::from)?;
+    rt().block_on(run_simulation_inner(
+        setup,
+        duration,
+        output_location,
+        routing_location,
+        dry_run,
+    ))
+    .map_err(Error::from)?;
     Ok(())
 }
 

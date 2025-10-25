@@ -4,7 +4,7 @@ set dotenv-load := true
 default:
     @just --list --justfile {{ justfile() }}
 
-# run protobuf code geneartion
+# run protobuf code generation
 [group('build')]
 generate:
     buf generate proto
