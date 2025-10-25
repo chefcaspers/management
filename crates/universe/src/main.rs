@@ -8,7 +8,7 @@ use opentelemetry_sdk::{
     trace::SdkTracerProvider,
 };
 use tracing::level_filters::LevelFilter;
-use tracing_opentelemetry::OpenTelemetryLayer;
+use tracing_opentelemetry::{MetricsLayer, OpenTelemetryLayer};
 use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
 use url::Url;
 
@@ -127,7 +127,7 @@ fn init_tracer_provider() {
 // Initialize tracing-subscriber and return OtelGuard for opentelemetry-related termination processing
 fn init_tracing_subscriber() -> OtelGuard {
     // let tracer_provider = global::tracer_provider();
-    // let meter_provider = init_meter_provider();
+    let meter_provider = init_meter_provider();
     //
     let exporter = SpanExporter::builder()
         .with_tonic()
@@ -158,7 +158,7 @@ fn init_tracing_subscriber() -> OtelGuard {
                 .parse_lossy("caspers_universe=debug"),
         )
         .with(tracing_subscriber::fmt::layer())
-        // .with(MetricsLayer::new(meter_provider.clone()))
+        .with(MetricsLayer::new(meter_provider.clone()))
         .with(
             OpenTelemetryLayer::new(tracer)
                 .with_location(false)
@@ -168,13 +168,13 @@ fn init_tracing_subscriber() -> OtelGuard {
 
     OtelGuard {
         tracer_provider,
-        //meter_provider,
+        meter_provider,
     }
 }
 
 struct OtelGuard {
     tracer_provider: SdkTracerProvider,
-    // meter_provider: SdkMeterProvider,
+    meter_provider: SdkMeterProvider,
 }
 
 impl Drop for OtelGuard {
@@ -182,9 +182,9 @@ impl Drop for OtelGuard {
         if let Err(err) = self.tracer_provider.shutdown() {
             eprintln!("{err:?}");
         }
-        // if let Err(err) = self.meter_provider.shutdown() {
-        //     eprintln!("{err:?}");
-        // }
+        if let Err(err) = self.meter_provider.shutdown() {
+            eprintln!("{err:?}");
+        }
     }
 }
 
@@ -209,7 +209,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             run_simulation(setup, args.duration, data_path, routing_path, args.dry_run).await?;
             // run_simulation_from(setup, args.duration, data_path, routing_path, args.dry_run).await?;
         }
-        Commands::Init(args) => {
+        Commands::Init(_args) => {
             todo!()
         }
     }
