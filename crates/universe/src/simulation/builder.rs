@@ -165,7 +165,7 @@ impl SimulationBuilder {
         ctx: &SimulationContext,
         config: SimulationConfig,
     ) -> Result<State> {
-        let objects = ctx.system().objects().await?.collect().await?;
+        let objects = ctx.snapshots().objects().await?.collect().await?;
         let objects = ObjectData::try_new(concat_batches(objects[0].schema_ref(), &objects)?)?;
 
         let mut routers = HashMap::new();

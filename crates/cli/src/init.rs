@@ -93,7 +93,7 @@ async fn initialize_template(caspers_directory: &url::Url, template: Template) -
     let setup = template.load()?;
 
     let objects = setup.object_data()?;
-    ctx.system().write_objects(objects.clone()).await?;
+    ctx.snapshots().write_objects(objects.clone()).await?;
 
     let mut builder = PopulationDataBuilder::new();
     let object_data = ObjectData::try_new(objects)?;
@@ -103,7 +103,7 @@ async fn initialize_template(caspers_directory: &url::Url, template: Template) -
         builder.add_site(n_people, info.latitude, info.longitude)?;
     }
     let population = builder.finish()?;
-    ctx.system().write_population(population).await?;
+    ctx.snapshots().write_population(population).await?;
 
     Ok(())
 }

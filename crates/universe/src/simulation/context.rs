@@ -15,6 +15,7 @@ use url::Url;
 use crate::error::Result;
 use crate::{ObjectDataBuilder, OrderBuilder, OrderLineBuilder, PopulationDataBuilder};
 
+mod snapshots;
 mod system;
 
 pub struct SimulationContext {
@@ -27,10 +28,13 @@ impl SimulationContext {
 
         let system_schema = Arc::new(MemorySchemaProvider::new());
         register_routing(&ctx, system_schema.as_ref(), routing_path).await?;
-        register_snapshots(system_schema.as_ref(), snapshots_path).await?;
+
+        let snapshots_schema = Arc::new(MemorySchemaProvider::new());
+        register_snapshots(snapshots_schema.as_ref(), snapshots_path).await?;
 
         let catalog = Arc::new(MemoryCatalogProvider::new());
         catalog.register_schema("system", system_schema)?;
+        catalog.register_schema("snapshots", snapshots_schema)?;
         ctx.register_catalog("caspers", catalog);
 
         Ok(Self { ctx })
@@ -38,6 +42,10 @@ impl SimulationContext {
 
     pub fn system(&self) -> system::SystemSchema<'_> {
         system::SystemSchema { ctx: self }
+    }
+
+    pub fn snapshots(&self) -> snapshots::SnapshotsSchema<'_> {
+        snapshots::SnapshotsSchema { ctx: self }
     }
 }
 
@@ -60,7 +68,7 @@ async fn register_routing(
 }
 
 async fn register_snapshots(schema: &dyn SchemaProvider, snapshots_path: &Url) -> Result<()> {
-    use self::system::{
+    use self::snapshots::{
         SNAPSHOT_OBJECTS_REF, SNAPSHOT_ORDER_LINES_REF, SNAPSHOT_ORDERS_REF,
         SNAPSHOT_POPULATION_REF,
     };

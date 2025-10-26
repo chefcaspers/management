@@ -76,7 +76,7 @@ pub struct PopulationData {
 
 impl PopulationData {
     pub(crate) async fn try_new(ctx: &SimulationContext) -> Result<Self> {
-        let population = ctx.system().population().await?.cache().await?;
+        let population = ctx.snapshots().population().await?.cache().await?;
 
         let people_columns = POPULATION_SCHEMA
             .fields()
