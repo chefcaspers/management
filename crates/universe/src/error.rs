@@ -79,6 +79,12 @@ pub enum Error {
         #[from]
         source: object_store::Error,
     },
+
+    #[error("Io error: {source}")]
+    Url {
+        #[from]
+        source: std::io::Error,
+    },
 }
 
 impl From<h3o::error::DissolutionError> for Error {

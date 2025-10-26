@@ -75,7 +75,7 @@ pub struct OrderData {
 }
 
 impl OrderData {
-    pub(crate) fn empty() -> Self {
+    pub fn empty() -> Self {
         Self {
             orders: RecordBatch::new_empty(builder::ORDER_SCHEMA.clone()),
             lines: RecordBatch::new_empty(builder::ORDER_LINE_SCHEMA.clone()),

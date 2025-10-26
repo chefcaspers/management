@@ -46,22 +46,11 @@ fn load_simulation_setup(
 }
 
 #[pyfunction]
-#[pyo3(signature = (duration, output_location, routing_location, dry_run = false))]
-fn run_simulation(
-    duration: usize,
-    output_location: String,
-    routing_location: String,
-    dry_run: bool,
-) -> PyResult<()> {
-    let output_location = resolve_url(&output_location)?;
-    let routing_location = resolve_url(&routing_location)?;
-    rt().block_on(run_simulation_inner(
-        duration,
-        output_location,
-        routing_location,
-        dry_run,
-    ))
-    .map_err(Error::from)?;
+#[pyo3(signature = (duration, working_directory, dry_run = false))]
+fn run_simulation(duration: usize, working_directory: String, dry_run: bool) -> PyResult<()> {
+    let working_directory = resolve_url(&working_directory)?;
+    rt().block_on(run_simulation_inner(duration, working_directory, dry_run))
+        .map_err(Error::from)?;
     Ok(())
 }
 

@@ -203,22 +203,6 @@ impl Simulation {
     /// Snapshot the state of the simulation
     #[instrument(skip(self))]
     async fn snapshot(&mut self) -> Result<()> {
-        self.ctx
-            .snapshots()
-            .write_objects(self.state.objects().objects().clone())
-            .await?;
-        self.ctx
-            .snapshots()
-            .write_population(self.state.population().snapshot())
-            .await?;
-        self.ctx
-            .snapshots()
-            .write_orders(self.state.orders().batch_orders().clone())
-            .await?;
-        self.ctx
-            .snapshots()
-            .write_order_lines(self.state.orders().batch_lines().clone())
-            .await?;
-        Ok(())
+        self.ctx.write_snapshot(&self.state).await
     }
 }

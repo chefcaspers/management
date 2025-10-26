@@ -150,14 +150,11 @@ where
 #[instrument(name = "run_simulation", skip_all)]
 pub async fn run_simulation(
     duration: usize,
-    output_location: Url,
-    routing_location: Url,
+    working_directory: Url,
     dry_run: bool,
 ) -> Result<(), Error> {
     let mut simulation = SimulationBuilder::new()
-        .with_result_storage_location(output_location.clone())
-        .with_snapshot_location(output_location)
-        .with_routing_data_path(routing_location)
+        .with_working_directory(working_directory)
         .with_dry_run(dry_run)
         .build()
         .await?;

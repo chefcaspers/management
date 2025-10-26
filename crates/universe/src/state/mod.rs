@@ -24,8 +24,9 @@ use self::movement::JourneyPlanner;
 pub(crate) use self::movement::RoutingData;
 pub(crate) use self::objects::ObjectDataBuilder;
 pub use self::objects::{ObjectData, ObjectLabel};
+pub use self::orders::OrderData;
 pub(crate) use self::orders::{
-    OrderBuilder, OrderData, OrderDataBuilder, OrderLineBuilder, OrderLineStatus, OrderStatus,
+    OrderBuilder, OrderDataBuilder, OrderLineBuilder, OrderLineStatus, OrderStatus,
 };
 pub use self::population::{PersonRole, PersonStatus, PopulationData, PopulationDataBuilder};
 

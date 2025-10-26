@@ -14,10 +14,9 @@ use rand::distr::{Distribution, Uniform};
 use rand::rngs::ThreadRng;
 
 use super::PersonRole;
-use crate::Error;
-use crate::error::Result;
 use crate::idents::PersonId;
 use crate::state::population::PersonState;
+use crate::{Error, Result};
 
 static DEFAULT_STATE: LazyLock<String> =
     LazyLock::new(|| serde_json::to_string(&PersonState::default()).unwrap());

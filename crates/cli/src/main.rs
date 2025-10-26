@@ -87,15 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match cli.command {
         Commands::Run(args) => {
             let working_directory = resolve_url(args.working_directory)?;
-            let snapshots_location = working_directory.join("snapshots/")?;
-            let routing_location = working_directory.join("routing/")?;
-            run_simulation(
-                args.duration,
-                snapshots_location,
-                routing_location,
-                args.dry_run,
-            )
-            .await?;
+            run_simulation(args.duration, working_directory, args.dry_run).await?;
         }
         Commands::Init(args) => init::handle(args).await?,
     }

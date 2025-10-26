@@ -1,5 +1,5 @@
 use caspers_universe::{
-    Brand, BrandId, EntityView, Error, KitchenId, MenuItemId, ObjectData, PopulationDataBuilder,
+    Brand, BrandId, EntityView, Error, KitchenId, MenuItemId, ObjectData, PopulationData,
     SimulationContext, SimulationSetup, SiteId, SiteSetup, StationId,
 };
 use dialoguer::MultiSelect;
@@ -86,24 +86,24 @@ pub(super) async fn handle(args: InitArgs) -> Result<()> {
 }
 
 async fn initialize_template(caspers_directory: &url::Url, template: Template) -> Result<()> {
-    let routing_location = caspers_directory.join("routing/")?;
-    let snapshots_location = caspers_directory.join("snapshots/")?;
-    let ctx = SimulationContext::try_new_local(&routing_location, &snapshots_location).await?;
-
     let setup = template.load()?;
-
     let objects = setup.object_data()?;
-    ctx.snapshots().write_objects(objects.clone()).await?;
-
-    let mut builder = PopulationDataBuilder::new();
     let object_data = ObjectData::try_new(objects)?;
+
+    let mut builder = PopulationData::builder();
     for site in object_data.sites()? {
         let n_people = rand::rng().random_range(500..1500);
         let info = site.properties()?;
         builder.add_site(n_people, info.latitude, info.longitude)?;
     }
-    let population = builder.finish()?;
-    ctx.snapshots().write_population(population).await?;
+    let population_data = builder.finish()?;
+
+    let _ctx = SimulationContext::builder()
+        .with_working_directory(caspers_directory.clone())
+        .with_object_data(object_data)
+        .with_population_data(population_data)
+        .build()
+        .await?;
 
     Ok(())
 }
