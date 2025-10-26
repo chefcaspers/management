@@ -3,9 +3,7 @@ title: Simulation Execution
 description: Internal workings of a caspers universe simulation.
 ---
 
-Reference pages are ideal for outlining how things work in terse and clear terms.
-Less concerned with telling a story or addressing a specific use case, they should give a comprehensive outline of what you're documenting.
+### Time travel
 
-## Further reading
-
-- Read [about reference](https://diataxis.fr/reference/) in the Diátaxis framework
+- use uuidv7 for all assets generated in simulation
+  - this may be encoded in file names, as id fields o.a.

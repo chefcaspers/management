@@ -82,7 +82,7 @@ def run_simulation(Path, run_simulation, setup):
 @app.cell(hide_code=True)
 def site_input(mo):
     dropdown = mo.ui.dropdown(
-        options={"london": 0, "amsterdam": 1},
+        options={},
         value="london",
         label="pick a location",
     )
@@ -91,23 +91,11 @@ def site_input(mo):
 
 
 @app.cell(hide_code=True)
-def site_plot(dropdown, sites):
+def site_plot(dropdown, setup):
     from caspers_universe import plot_site
 
-    plot_site(sites[dropdown.value])
+    plot_site(setup.sites[dropdown.value].info)
 
-    # population = pl.read_parquet("./data/population/1745768936.parquet")
-    # if plot_people:
-    #    for row in population.select(["position", "role"]).rows():
-    #         folium.Marker(
-    #             location=[row[0][1], row[0][0]],
-    #             popup="Person",
-    #             icon=folium.Icon(
-    #                 color="blue" if row[1] == "customer" else "red",
-    #                 icon="user",
-    #                 prefix="fa",
-    #             ),
-    #         ).add_to(m)
     return
 
 

@@ -14,13 +14,13 @@ use crate::simulation::stats::EventStatsBuffer;
 use crate::state::State;
 
 pub use self::builder::*;
+pub use self::context::*;
 pub use self::events::*;
-pub use self::session::*;
 
 mod builder;
+mod context;
 mod events;
 mod execution;
-mod session;
 mod stats;
 
 /// Trait for entities that need to be updated each simulation step

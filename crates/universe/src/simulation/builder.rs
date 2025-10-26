@@ -7,14 +7,11 @@ use itertools::Itertools as _;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use crate::error::Result;
-use crate::simulation::Simulation;
-use crate::simulation::session::SimulationContext;
-use crate::simulation::stats::EventStatsBuffer;
+use crate::agents::{PopulationRunner, SiteRunner};
 use crate::state::{EntityView, RoutingData, State};
-use crate::{
-    Error, EventTracker, ObjectData, OrderData, PopulationData, PopulationRunner, SiteRunner,
-};
+use crate::{Error, EventTracker, ObjectData, OrderData, PopulationData, Result};
+
+use super::{EventStatsBuffer, Simulation, SimulationContext};
 
 /// Execution mode for the simulation.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
