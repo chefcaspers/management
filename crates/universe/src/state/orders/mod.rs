@@ -75,7 +75,7 @@ pub struct OrderData {
 }
 
 impl OrderData {
-    pub(crate) fn empty() -> Self {
+    pub fn empty() -> Self {
         Self {
             orders: RecordBatch::new_empty(builder::ORDER_SCHEMA.clone()),
             lines: RecordBatch::new_empty(builder::ORDER_LINE_SCHEMA.clone()),
@@ -85,12 +85,12 @@ impl OrderData {
     }
 
     pub(crate) async fn try_new(ctx: &SimulationContext) -> Result<Self> {
-        let orders = ctx.system().orders().await?.collect().await?;
+        let orders = ctx.snapshots().orders().await?.collect().await?;
         if orders.is_empty() {
             return Ok(Self::empty());
         }
         let orders = concat_batches(orders[0].schema_ref(), &orders)?;
-        let lines = ctx.system().order_lines().await?.collect().await?;
+        let lines = ctx.snapshots().order_lines().await?.collect().await?;
         let lines = concat_batches(lines[0].schema_ref(), &lines)?;
         Self::try_new_from_data(orders, lines)
     }

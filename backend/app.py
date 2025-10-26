@@ -10,7 +10,6 @@ from models import (
     Menu,
     Category,
     Item,
-    brand_kitchen_association,
 )
 from sqlalchemy.engine import URL
 

@@ -1,3 +1,9 @@
+<p align="center">
+  <a href="https://delta.io/">
+    <img src="https://github.com/chefcaspers/management/blob/main/docs\caspers.jpeg?raw=true" alt="chefcaspers logo" height="200">
+  </a>
+</p>
+
 # Chef Casper's Management System
 
 ## Overview

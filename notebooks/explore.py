@@ -264,7 +264,7 @@ def _(mo):
     _df = mo.sql(
         """
         SELECT *
-        FROM './data/order_lines/*.parquet'
+        FROM '../.caspers/snapshots/population/*.parquet'
         LIMIT 3
         """
     )

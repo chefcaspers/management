@@ -7,14 +7,11 @@ use itertools::Itertools as _;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use crate::error::Result;
-use crate::simulation::Simulation;
-use crate::simulation::session::SimulationContext;
-use crate::simulation::stats::EventStatsBuffer;
+use crate::agents::{PopulationRunner, SiteRunner};
 use crate::state::{EntityView, RoutingData, State};
-use crate::{
-    Error, EventTracker, ObjectData, OrderData, PopulationData, PopulationRunner, SiteRunner,
-};
+use crate::{Error, EventTracker, ObjectData, OrderData, PopulationData, Result};
+
+use super::{EventStatsBuffer, Simulation, SimulationContext};
 
 /// Execution mode for the simulation.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -29,7 +26,7 @@ pub enum SimulationMode {
 
 /// Configuration for the simulation engine
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct SimulationConfig {
+pub struct SimulationConfig {
     /// all ghost kitchen sites.
     pub(crate) simulation_start: DateTime<Utc>,
 
@@ -68,7 +65,7 @@ pub struct SimulationBuilder {
     start_time: DateTime<Utc>,
 
     /// location to store simulation results
-    result_storage_location: Option<Url>,
+    working_directory: Option<Url>,
 
     /// Path where routing data is stored
     routing_path: Option<Url>,
@@ -86,7 +83,7 @@ impl Default for SimulationBuilder {
             snapshot_location: None,
             time_increment: Duration::minutes(1),
             start_time: Utc::now(),
-            result_storage_location: None,
+            working_directory: None,
             routing_path: None,
             dry_run: false,
             write_events: false,
@@ -122,8 +119,8 @@ impl SimulationBuilder {
     }
 
     /// Set the result storage location for the simulation
-    pub fn with_result_storage_location(mut self, result_storage_location: impl Into<Url>) -> Self {
-        self.result_storage_location = Some(result_storage_location.into());
+    pub fn with_working_directory(mut self, result_storage_location: impl Into<Url>) -> Self {
+        self.working_directory = Some(result_storage_location.into());
         self
     }
 
@@ -146,20 +143,12 @@ impl SimulationBuilder {
     }
 
     async fn build_context(&self) -> Result<SimulationContext> {
-        let Some(routing_path) = &self.routing_path else {
-            return Err(Error::MissingInput(
-                "Routing data path is required".to_string(),
-            ));
-        };
-        let Some(snapshots_path) = &self.snapshot_location else {
-            return Err(Error::MissingInput(
-                "Snapshot data path is required".to_string(),
-            ));
-        };
-
-        let ctx = SimulationContext::try_new_local(routing_path, snapshots_path).await?;
-
-        Ok(ctx)
+        SimulationContext::builder()
+            .with_routing_location(self.routing_path.clone())
+            .with_snapshots_location(self.snapshot_location.clone())
+            .with_working_directory(self.working_directory.clone())
+            .build()
+            .await
     }
 
     /// Load the prepared street network data into routing data objects.
@@ -168,7 +157,7 @@ impl SimulationBuilder {
         ctx: &SimulationContext,
         config: SimulationConfig,
     ) -> Result<State> {
-        let objects = ctx.system().objects().await?.collect().await?;
+        let objects = ctx.snapshots().objects().await?.collect().await?;
         let objects = ObjectData::try_new(concat_batches(objects[0].schema_ref(), &objects)?)?;
 
         let mut routers = HashMap::new();
@@ -207,12 +196,13 @@ impl SimulationBuilder {
         let config = SimulationConfig {
             simulation_start: self.start_time,
             time_increment: self.time_increment,
-            result_storage_location: self.result_storage_location.clone(),
+            result_storage_location: self.working_directory.clone(),
             dry_run: self.dry_run,
             write_events: self.write_events,
         };
 
         let ctx = self.build_context().await?;
+
         let state = self.build_state(&ctx, config).await?;
 
         let sites = state

@@ -7,6 +7,7 @@ use arrow::compute::concat_batches;
 use arrow::datatypes::{Field, Schema};
 use arrow_schema::DataType;
 use chrono::{DateTime, Utc};
+use datafusion::prelude::DataFrame;
 use geo_traits::PointTrait as _;
 use geo_traits::to_geo::ToGeoCoord;
 use geoarrow::array::{PointArray, PointBuilder};
@@ -75,9 +76,11 @@ pub struct PopulationData {
 }
 
 impl PopulationData {
-    pub(crate) async fn try_new(ctx: &SimulationContext) -> Result<Self> {
-        let population = ctx.system().population().await?.cache().await?;
+    pub fn builder() -> PopulationDataBuilder {
+        PopulationDataBuilder::default()
+    }
 
+    pub async fn try_new_with_frame(population: DataFrame) -> Result<Self> {
         let people_columns = POPULATION_SCHEMA
             .fields()
             .iter()
@@ -119,6 +122,11 @@ impl PopulationData {
             positions,
             lookup_index,
         })
+    }
+
+    pub(crate) async fn try_new(ctx: &SimulationContext) -> Result<Self> {
+        let population = ctx.snapshots().population().await?.cache().await?;
+        Self::try_new_with_frame(population).await
     }
 
     pub fn people(&self) -> &RecordBatch {

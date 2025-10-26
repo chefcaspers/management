@@ -14,13 +14,13 @@ use crate::simulation::stats::EventStatsBuffer;
 use crate::state::State;
 
 pub use self::builder::*;
+pub use self::context::*;
 pub use self::events::*;
-pub use self::session::*;
 
 mod builder;
+mod context;
 mod events;
 mod execution;
-mod session;
 mod stats;
 
 /// Trait for entities that need to be updated each simulation step
@@ -203,22 +203,6 @@ impl Simulation {
     /// Snapshot the state of the simulation
     #[instrument(skip(self))]
     async fn snapshot(&mut self) -> Result<()> {
-        self.ctx
-            .system()
-            .write_objects(self.state.objects().objects().clone())
-            .await?;
-        self.ctx
-            .system()
-            .write_population(self.state.population().snapshot())
-            .await?;
-        self.ctx
-            .system()
-            .write_orders(self.state.orders().batch_orders().clone())
-            .await?;
-        self.ctx
-            .system()
-            .write_order_lines(self.state.orders().batch_lines().clone())
-            .await?;
-        Ok(())
+        self.ctx.write_snapshot(&self.state).await
     }
 }
