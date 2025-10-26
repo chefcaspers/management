@@ -1,39 +1,30 @@
 use std::collections::HashMap;
 
-use chrono::{DateTime, Utc};
 use datafusion::dataframe::DataFrameWriteOptions;
 use datafusion::prelude::SessionContext;
-use itertools::Itertools;
+use itertools::Itertools as _;
 use rand::distr::{Distribution, Uniform};
 use tracing::{Level, Span, field, instrument};
 
-use crate::PopulationRunner;
-use crate::agents::SiteRunner;
+use crate::agents::{PopulationRunner, SiteRunner};
 use crate::error::Result;
-use crate::idents::{SiteId, TypedId};
+use crate::idents::SiteId;
 use crate::simulation::execution::EventDataBuilder;
 use crate::simulation::stats::EventStatsBuffer;
 use crate::state::State;
 
 pub use self::builder::*;
 pub use self::events::*;
+pub use self::session::*;
 
 mod builder;
-pub mod events;
+mod events;
 mod execution;
 mod session;
 mod stats;
 
-/// Core trait that any simulatable entity must implement
-pub trait Entity: Send + Sync + 'static {
-    type Id: TypedId;
-
-    /// Unique identifier for the entity
-    fn id(&self) -> &Self::Id;
-}
-
 /// Trait for entities that need to be updated each simulation step
-pub trait Simulatable: Entity {
+pub trait Simulatable {
     /// Update the entity state based on the current simulation context
     fn step(&mut self, events: &[EventPayload], context: &State) -> Result<Vec<EventPayload>>;
 }
@@ -43,6 +34,8 @@ pub trait Simulatable: Entity {
 /// Single entry point to run simulations.
 /// This will drive progress in all entities and make sure results are reported.
 pub struct Simulation {
+    ctx: SimulationContext,
+
     /// Global simulation state
     state: State,
 
@@ -50,14 +43,6 @@ pub struct Simulation {
     sites: HashMap<SiteId, SiteRunner>,
 
     population: PopulationRunner,
-
-    last_snapshot_time: DateTime<Utc>,
-
-    /// whether the simulation has been initialized
-    ///
-    /// This is used to ensure that the simulation is only initialized once.
-    /// e.g. we only create a population once, and load it in subsequent runs.
-    initialized: bool,
 
     /// The event stats for the simulation
     event_tracker: EventTracker,
@@ -108,16 +93,12 @@ impl Simulation {
 
     #[instrument(skip_all, level = Level::TRACE)]
     async fn write_event_stats(&mut self) -> Result<()> {
-        let base_url = self.state.config().result_storage_location.as_ref();
-        // we have no place to store results
-        let Some(base_path) = base_url else {
+        let Some(base_path) = self.state.config().result_storage_location.as_ref() else {
             return Ok(());
         };
 
         let ts = self.state.current_time().timestamp();
-        let events_path = base_path
-            .join(&format!("stats/events/snapshot-{ts}.parquet"))
-            .unwrap();
+        let events_path = base_path.join(&format!("stats/events/snapshot-{ts}.parquet"))?;
 
         let ctx = SessionContext::new();
         let df = ctx.read_batch(self.stats_buffer.flush()?)?;
@@ -204,7 +185,7 @@ impl Simulation {
             SELECT '{timestamp}'::timestamp(6) as timestamp, status, count(*) as count
             FROM orders
             GROUP BY status
-        "#
+            "#
         );
 
         let df = ctx.sql(&query).await?;
@@ -222,80 +203,22 @@ impl Simulation {
     /// Snapshot the state of the simulation
     #[instrument(skip(self))]
     async fn snapshot(&mut self) -> Result<()> {
-        let base_url = self.state.config().result_storage_location.as_ref();
-        let interval = self.state.config().snapshot_interval;
-
-        // we have no place to store results
-        let (Some(base_path), Some(interval)) = (base_url, interval) else {
-            return Ok(());
-        };
-
-        // we don't need to snapshot more often than the interval
-        let should_snapshot = self.state.current_time() - self.last_snapshot_time >= interval;
-
-        // create helper functions to create paths and queries
-        let ts = self.state.current_time().timestamp();
-        let path = |name: &str| {
-            base_path
-                .join(&format!("{name}/snapshot-{ts}.parquet"))
-                .unwrap()
-        };
-
-        let timestamp = self.state.current_time().to_rfc3339();
-        let query =
-            |name: &str| format!("SELECT '{timestamp}'::timestamp(6) as timestamp, * FROM {name}");
-
-        // create storage paths for each table
-        let people_path = path("population/people");
-        let positions_path = path("population/positions");
-        let objects_path = path("objects");
-        let orders_path = path("orders");
-        let order_lines_path = path("order_lines");
-
-        let ctx = self.state.snapshot_session()?;
-
-        // people are only written once
-        if !self.initialized {
-            let df = ctx.sql(&query("population")).await?;
-            df.write_parquet(people_path.as_str(), DataFrameWriteOptions::new(), None)
-                .await?;
-
-            // TODO: once we allow adding more brands etc. we need to make this more dynamic.
-            // or rather this information should be written from outside the simulation.
-            let df = ctx.sql(&query("objects")).await?;
-            df.write_parquet(objects_path.as_str(), DataFrameWriteOptions::new(), None)
-                .await?;
-        }
-
-        if should_snapshot {
-            let df = ctx.sql(&query("orders")).await?;
-            df.write_parquet(orders_path.as_str(), DataFrameWriteOptions::new(), None)
-                .await?;
-
-            let df = ctx.sql(&query("order_lines")).await?;
-            df.write_parquet(
-                order_lines_path.as_str(),
-                DataFrameWriteOptions::new(),
-                None,
-            )
+        self.ctx
+            .system()
+            .write_objects(self.state.objects().objects().clone())
             .await?;
-        }
-
-        // write courier positions at every call.
-        let df = ctx
-                .sql(&format!(
-                    "SELECT id, '{timestamp}'::timestamp(6) as timestamp, position FROM population WHERE role = 'courier'"
-                ))
-                .await?;
-        df.write_parquet(positions_path.as_str(), DataFrameWriteOptions::new(), None)
+        self.ctx
+            .system()
+            .write_population(self.state.population().snapshot())
             .await?;
-
-        if should_snapshot {
-            self.last_snapshot_time = self.state.current_time();
-        }
-
-        self.initialized = true;
-
+        self.ctx
+            .system()
+            .write_orders(self.state.orders().batch_orders().clone())
+            .await?;
+        self.ctx
+            .system()
+            .write_order_lines(self.state.orders().batch_lines().clone())
+            .await?;
         Ok(())
     }
 }

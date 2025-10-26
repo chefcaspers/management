@@ -2,16 +2,14 @@ use std::collections::{HashMap, VecDeque};
 
 use counter::Counter;
 use h3o::Resolution;
-use itertools::Itertools;
+use itertools::Itertools as _;
 use tracing::{Level, Span, field, instrument};
 
 use super::kitchen::{KitchenRunner, KitchenStats};
-use crate::simulation::events::EventPayload;
+use crate::idents::*;
+use crate::simulation::EventPayload;
 use crate::state::{EntityView, OrderLineStatus, OrderStatus, PersonRole, PersonStatus, State};
-use crate::{Entity, Error, Result, Simulatable};
-use crate::{OrderUpdatedPayload, idents::*};
-
-// TODO: Move order data management to simulation level.
+use crate::{Error, OrderUpdatedPayload, Result, Simulatable};
 
 #[derive(Clone)]
 pub struct OrderLine {
@@ -91,14 +89,6 @@ pub struct SiteRunner {
     order_lines: HashMap<OrderLineId, OrderLine>,
 }
 
-impl Entity for SiteRunner {
-    type Id = SiteId;
-
-    fn id(&self) -> &Self::Id {
-        &self.id
-    }
-}
-
 impl Simulatable for SiteRunner {
     #[instrument(
         name = "step_site",
@@ -159,6 +149,10 @@ impl SiteRunner {
             order_queue: VecDeque::new(),
             order_lines: HashMap::new(),
         })
+    }
+
+    pub(crate) fn id(&self) -> &SiteId {
+        &self.id
     }
 
     /// Receive new orders from the state and queue them for processing.

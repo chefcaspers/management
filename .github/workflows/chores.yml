@@ -9,9 +9,6 @@ env:
 jobs:
   check:
     runs-on: ubuntu-latest
-    env:
-      DEFAULT_FEATURES: "azure,datafusion,s3,gcs,glue,hdfs"
-
     steps:
       - uses: actions/checkout@v5
 

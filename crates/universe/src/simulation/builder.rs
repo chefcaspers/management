@@ -1,24 +1,19 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use arrow::compute::concat_batches;
 use chrono::{DateTime, Duration, Utc};
-use datafusion::catalog::MemTable;
 use datafusion::prelude::{col, lit};
-use itertools::Itertools;
-use rand::Rng as _;
+use itertools::Itertools as _;
 use serde::{Deserialize, Serialize};
 use url::Url;
-use uuid::Uuid;
 
 use crate::error::Result;
 use crate::simulation::Simulation;
-use crate::simulation::session::{SimulationContext, simulation_context};
+use crate::simulation::session::SimulationContext;
 use crate::simulation::stats::EventStatsBuffer;
 use crate::state::{EntityView, RoutingData, State};
 use crate::{
-    Error, EventTracker, ObjectData, OrderData, PopulationDataBuilder, PopulationRunner,
-    SimulationSetup, SiteRunner,
+    Error, EventTracker, ObjectData, OrderData, PopulationData, PopulationRunner, SiteRunner,
 };
 
 /// Execution mode for the simulation.
@@ -44,8 +39,6 @@ pub(crate) struct SimulationConfig {
     /// location to store simulation results
     pub(crate) result_storage_location: Option<Url>,
 
-    pub(crate) snapshot_interval: Option<Duration>,
-
     pub(crate) dry_run: bool,
 
     pub(crate) write_events: bool,
@@ -57,7 +50,6 @@ impl Default for SimulationConfig {
             simulation_start: Utc::now(),
             time_increment: Duration::seconds(60),
             result_storage_location: None,
-            snapshot_interval: None,
             dry_run: false,
             write_events: false,
         }
@@ -66,17 +58,8 @@ impl Default for SimulationConfig {
 
 /// Builder for creating a simulation instance.
 pub struct SimulationBuilder {
-    /// Setup configuration for the simulation
-    setup: Option<SimulationSetup>,
-
     /// Snapshot location for the simulation
     snapshot_location: Option<Url>,
-
-    /// Snapshot version to start simulation from
-    snapshot_version: Option<u64>,
-
-    /// Size of the simulated population
-    population_size: usize,
 
     /// Time resolution for simulation steps
     time_increment: Duration,
@@ -86,9 +69,6 @@ pub struct SimulationBuilder {
 
     /// location to store simulation results
     result_storage_location: Option<Url>,
-
-    /// Interval at which to take snapshots of the simulation state
-    snapshot_interval: Option<Duration>,
 
     /// Path where routing data is stored
     routing_path: Option<Url>,
@@ -103,14 +83,10 @@ pub struct SimulationBuilder {
 impl Default for SimulationBuilder {
     fn default() -> Self {
         Self {
-            setup: None,
             snapshot_location: None,
-            snapshot_version: None,
-            population_size: 1000,
             time_increment: Duration::minutes(1),
             start_time: Utc::now(),
             result_storage_location: None,
-            snapshot_interval: None,
             routing_path: None,
             dry_run: false,
             write_events: false,
@@ -124,26 +100,12 @@ impl SimulationBuilder {
         Self::default()
     }
 
-    /// Add a brand to the simulation
-    pub fn with_setup(mut self, setup: SimulationSetup) -> Self {
-        self.setup = Some(setup);
-        self
-    }
-
     pub fn with_snapshot_location(mut self, snapshot_location: impl Into<Url>) -> Self {
-        self.snapshot_location = Some(snapshot_location.into());
-        self
-    }
-
-    /// Set the snapshot version for the simulation
-    pub fn with_snapshot_version(mut self, snapshot_version: u64) -> Self {
-        self.snapshot_version = Some(snapshot_version);
-        self
-    }
-
-    /// Set the population size for the simulation
-    pub fn with_population_size(mut self, population_size: usize) -> Self {
-        self.population_size = population_size;
+        let mut snapshot_location = snapshot_location.into();
+        if !snapshot_location.path().ends_with('/') {
+            snapshot_location.set_path(&format!("{}/", snapshot_location.path()));
+        }
+        self.snapshot_location = Some(snapshot_location);
         self
     }
 
@@ -162,11 +124,6 @@ impl SimulationBuilder {
     /// Set the result storage location for the simulation
     pub fn with_result_storage_location(mut self, result_storage_location: impl Into<Url>) -> Self {
         self.result_storage_location = Some(result_storage_location.into());
-        self
-    }
-
-    pub fn with_snapshot_interval(mut self, snapshot_interval: Duration) -> Self {
-        self.snapshot_interval = Some(snapshot_interval);
         self
     }
 
@@ -189,21 +146,20 @@ impl SimulationBuilder {
     }
 
     async fn build_context(&self) -> Result<SimulationContext> {
-        let Some(setup) = &self.setup else {
-            return Err(Error::MissingInput(
-                "Simulation setup not found".to_string(),
-            ));
-        };
         let Some(routing_path) = &self.routing_path else {
             return Err(Error::MissingInput(
                 "Routing data path is required".to_string(),
             ));
         };
+        let Some(snapshots_path) = &self.snapshot_location else {
+            return Err(Error::MissingInput(
+                "Snapshot data path is required".to_string(),
+            ));
+        };
 
-        let objects = setup.object_data()?;
-        let provider = Arc::new(MemTable::try_new(objects.schema(), vec![vec![objects]])?);
+        let ctx = SimulationContext::try_new_local(routing_path, snapshots_path).await?;
 
-        simulation_context(routing_path, provider).await
+        Ok(ctx)
     }
 
     /// Load the prepared street network data into routing data objects.
@@ -212,20 +168,18 @@ impl SimulationBuilder {
         ctx: &SimulationContext,
         config: SimulationConfig,
     ) -> Result<State> {
-        let Some(setup) = &self.setup else {
-            return Err(Error::MissingInput("Setup file not found".to_string()));
-        };
-
         let objects = ctx.system().objects().await?.collect().await?;
         let objects = ObjectData::try_new(concat_batches(objects[0].schema_ref(), &objects)?)?;
 
         let mut routers = HashMap::new();
-        for site in setup.sites.iter().filter_map(|s| s.info.as_ref()) {
+        for site in objects.sites()? {
+            let info = site.properties()?;
+
             let site_nodes = ctx
                 .system()
                 .routing_nodes()
                 .await?
-                .filter(col("location").eq(lit(&site.name)))?
+                .filter(col("location").eq(lit(&info.name)))?
                 .collect()
                 .await?;
             let site_nodes = concat_batches(site_nodes[0].schema_ref(), &site_nodes)?;
@@ -234,32 +188,18 @@ impl SimulationBuilder {
                 .system()
                 .routing_edges()
                 .await?
-                .filter(col("location").eq(lit(&site.name)))?
+                .filter(col("location").eq(lit(&info.name)))?
                 .collect()
                 .await?;
             let site_edges = concat_batches(site_edges[0].schema_ref(), &site_edges)?;
 
-            routers.insert(
-                Uuid::parse_str(&site.id)?.into(),
-                RoutingData::try_new(site_nodes, site_edges)?,
-            );
+            routers.insert(site.id(), RoutingData::try_new(site_nodes, site_edges)?);
         }
 
-        let mut builder = PopulationDataBuilder::new();
-        for site in objects.sites()? {
-            let n_people = rand::rng().random_range(500..1500);
-            let info = site.properties()?;
-            builder.add_site(n_people, info.latitude, info.longitude)?;
-        }
-        let population = builder.finish()?;
+        let population = PopulationData::try_new(ctx).await?;
+        let orders = OrderData::try_new(ctx).await?;
 
-        Ok(State::new(
-            config,
-            objects,
-            population,
-            OrderData::empty(),
-            routers,
-        ))
+        Ok(State::new(config, objects, population, orders, routers))
     }
 
     /// Build the simulation with the given initial conditions
@@ -268,7 +208,6 @@ impl SimulationBuilder {
             simulation_start: self.start_time,
             time_increment: self.time_increment,
             result_storage_location: self.result_storage_location.clone(),
-            snapshot_interval: self.snapshot_interval,
             dry_run: self.dry_run,
             write_events: self.write_events,
         };
@@ -276,17 +215,16 @@ impl SimulationBuilder {
         let ctx = self.build_context().await?;
         let state = self.build_state(&ctx, config).await?;
 
-        let site_runners = state
+        let sites = state
             .objects()
             .sites()?
             .map(|site| Ok::<_, Error>((site.id(), SiteRunner::try_new(site.id(), &state)?)))
             .try_collect()?;
 
         Ok(Simulation {
-            initialized: false,
-            last_snapshot_time: state.current_time(),
+            ctx,
             state,
-            sites: site_runners,
+            sites,
             population: PopulationRunner::new(),
             event_tracker: EventTracker::new(),
             stats_buffer: EventStatsBuffer::new(),

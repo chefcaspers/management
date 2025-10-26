@@ -12,4 +12,16 @@ pub enum Error {
         #[from]
         source: dialoguer::Error,
     },
+
+    #[error(transparent)]
+    Io {
+        #[from]
+        source: std::io::Error,
+    },
+
+    #[error(transparent)]
+    Url {
+        #[from]
+        source: url::ParseError,
+    },
 }

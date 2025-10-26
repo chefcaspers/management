@@ -1,8 +1,10 @@
 use caspers_universe::{
-    Brand, BrandId, Error, KitchenId, MenuItemId, SimulationSetup, SiteId, SiteSetup, StationId,
+    Brand, BrandId, EntityView, Error, KitchenId, MenuItemId, ObjectData, PopulationDataBuilder,
+    SimulationContext, SimulationSetup, SiteId, SiteSetup, StationId,
 };
 use dialoguer::MultiSelect;
-use itertools::Itertools;
+use itertools::Itertools as _;
+use rand::Rng as _;
 
 use crate::error::Result;
 
@@ -10,9 +12,28 @@ use crate::error::Result;
 pub(super) struct InitArgs {
     #[arg(short, long, default_value_t = true)]
     template: bool,
+
+    #[arg(short, long)]
+    working_directory: Option<String>,
+}
+
+pub fn resolve_url(path: Option<impl AsRef<str>>) -> Result<url::Url> {
+    match path {
+        Some(path) => match url::Url::parse(path.as_ref()) {
+            Ok(url) => Ok(url),
+            Err(_) => {
+                let path = std::fs::canonicalize(path.as_ref())?;
+                Ok(url::Url::from_directory_path(path).unwrap())
+            }
+        },
+        None => {
+            Ok(url::Url::from_directory_path(std::env::current_dir()?.join(".caspers/")).unwrap())
+        }
+    }
 }
 
 pub(super) async fn handle(args: InitArgs) -> Result<()> {
+    let caspers_directory = resolve_url(args.working_directory)?;
     if args.template {
         let sites = vec![
             SiteTemplate::Amsterdam,
@@ -55,12 +76,35 @@ pub(super) async fn handle(args: InitArgs) -> Result<()> {
 
         let template = Template::new(selected_sites, selected_brands);
 
-        let _setup = template.load()?;
+        initialize_template(&caspers_directory, template).await?;
 
         println!("Template loaded successfully");
     } else {
         println!("Initializing without template");
     }
+    Ok(())
+}
+
+async fn initialize_template(caspers_directory: &url::Url, template: Template) -> Result<()> {
+    let routing_location = caspers_directory.join("routing/")?;
+    let snapshots_location = caspers_directory.join("snapshots/")?;
+    let ctx = SimulationContext::try_new_local(&routing_location, &snapshots_location).await?;
+
+    let setup = template.load()?;
+
+    let objects = setup.object_data()?;
+    ctx.system().write_objects(objects.clone()).await?;
+
+    let mut builder = PopulationDataBuilder::new();
+    let object_data = ObjectData::try_new(objects)?;
+    for site in object_data.sites()? {
+        let n_people = rand::rng().random_range(500..1500);
+        let info = site.properties()?;
+        builder.add_site(n_people, info.latitude, info.longitude)?;
+    }
+    let population = builder.finish()?;
+    ctx.system().write_population(population).await?;
+
     Ok(())
 }
 

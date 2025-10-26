@@ -3,25 +3,27 @@ use std::sync::Arc;
 
 use arrow::array::{Array, LargeStringArray};
 use arrow::array::{RecordBatch, cast::AsArray as _};
+use arrow::compute::concat_batches;
 use arrow::datatypes::{Field, Schema};
 use arrow_schema::DataType;
 use chrono::{DateTime, Utc};
 use geo_traits::PointTrait as _;
 use geo_traits::to_geo::ToGeoCoord;
 use geoarrow::array::{PointArray, PointBuilder};
-use geoarrow_array::{GeoArrowArray, GeoArrowArrayAccessor as _, IntoArrow};
+use geoarrow_array::{GeoArrowArrayAccessor as _, IntoArrow};
 use geoarrow_schema::{Dimension, PointType};
 use h3o::{CellIndex, LatLng, Resolution};
 use indexmap::IndexMap;
-use itertools::Itertools;
+use itertools::Itertools as _;
 use serde::{Deserialize, Serialize};
 use strum::AsRefStr;
 use uuid::Uuid;
 
 use crate::error::{Error, Result};
 use crate::idents::{OrderId, PersonId};
-use crate::{EventPayload, OrderData, OrderStatus};
+use crate::{EventPayload, OrderData, OrderStatus, SimulationContext};
 
+use self::builder::POPULATION_SCHEMA;
 use super::movement::{Journey, Transport};
 
 pub use builder::PopulationDataBuilder;
@@ -73,13 +75,45 @@ pub struct PopulationData {
 }
 
 impl PopulationData {
-    pub(crate) fn try_new(people: RecordBatch, positions: PointArray) -> Result<Self> {
-        if people.num_rows() != positions.len() {
-            return Err(Error::internal(
-                "people and positions data must have the same length",
-            ));
-        }
-        let lookup_index = lookup_index(&people)?;
+    pub(crate) async fn try_new(ctx: &SimulationContext) -> Result<Self> {
+        let population = ctx.system().population().await?.cache().await?;
+
+        let people_columns = POPULATION_SCHEMA
+            .fields()
+            .iter()
+            .map(|f| f.name().as_str())
+            .collect_vec();
+        let people = population
+            .clone()
+            .select_columns(&people_columns)?
+            .collect()
+            .await?;
+        let people = concat_batches(people[0].schema_ref(), &people)?;
+
+        let positions = population
+            .clone()
+            .select_columns(&["position"])?
+            .collect()
+            .await?;
+        let positions = concat_batches(positions[0].schema_ref(), &positions)?;
+        let point_type = PointType::new(Dimension::XY, Default::default());
+        let positions: PointArray = (positions.column(0).as_struct(), point_type).try_into()?;
+
+        let state = population.select_columns(&["state"])?.collect().await?;
+        let state = concat_batches(state[0].schema_ref(), &state)?;
+
+        let id_iter = people.column(0).as_fixed_size_binary().iter();
+        let state_iter = state.column(0).as_string_view().iter();
+
+        let lookup_index = id_iter
+            .zip(state_iter)
+            .map(|(id, state)| {
+                let id = Uuid::from_slice(id.unwrap()).unwrap().into();
+                let state = serde_json::from_str(state.unwrap()).unwrap();
+                (id, state)
+            })
+            .collect();
+
         Ok(PopulationData {
             people,
             positions,
@@ -311,15 +345,4 @@ impl std::fmt::Debug for PersonView<'_> {
             .field("cc_number", &self.cc_number())
             .finish()
     }
-}
-
-fn lookup_index(batch: &RecordBatch) -> Result<IndexMap<PersonId, PersonState>> {
-    Ok(batch
-        .column(0)
-        .as_fixed_size_binary()
-        .iter()
-        .filter_map(|data| {
-            data.and_then(|data| Some((PersonId(Uuid::from_slice(data).ok()?), Default::default())))
-        })
-        .collect())
 }

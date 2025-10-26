@@ -16,7 +16,7 @@ use geoarrow_array::scalar::{LineString as ArrowLineString, Point as ArrowPoint}
 use geoarrow_schema::{Dimension, LineStringType, PointType};
 use h3o::{CellIndex, LatLng, Resolution};
 use indexmap::IndexSet;
-use itertools::Itertools;
+use itertools::Itertools as _;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 

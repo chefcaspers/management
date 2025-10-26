@@ -1,10 +1,8 @@
 use std::sync::{Arc, LazyLock};
 
-use arrow::array::builder::{
-    FixedSizeBinaryBuilder, ListBuilder, StringBuilder, TimestampMillisecondBuilder,
-};
+use arrow::array::builder::{FixedSizeBinaryBuilder, ListBuilder, StringBuilder};
 use arrow::array::{LargeStringBuilder, RecordBatch, StringViewBuilder};
-use arrow::datatypes::{DataType, Field, Schema, SchemaRef, TimeUnit};
+use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use arrow_schema::extension::{Json as JsonExtension, Uuid as UuidExtension};
 
 use crate::Error;
@@ -26,16 +24,6 @@ pub(crate) static OBJECT_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
         ),
         Field::new("properties", DataType::LargeUtf8, true)
             .with_extension_type(JsonExtension::default()),
-        Field::new(
-            "created_at",
-            DataType::Timestamp(TimeUnit::Millisecond, Some("UTC".into())),
-            false,
-        ),
-        Field::new(
-            "updated_at",
-            DataType::Timestamp(TimeUnit::Millisecond, Some("UTC".into())),
-            true,
-        ),
     ]))
 });
 
@@ -45,8 +33,6 @@ pub struct ObjectDataBuilder {
     name: ListBuilder<StringBuilder>,
     label: StringViewBuilder,
     properties: LargeStringBuilder,
-    created_at: TimestampMillisecondBuilder,
-    updated_at: TimestampMillisecondBuilder,
 }
 
 impl Default for ObjectDataBuilder {
@@ -63,9 +49,11 @@ impl ObjectDataBuilder {
             name: ListBuilder::new(StringBuilder::new()),
             label: StringViewBuilder::new(),
             properties: LargeStringBuilder::new(),
-            created_at: TimestampMillisecondBuilder::new().with_timezone("UTC"),
-            updated_at: TimestampMillisecondBuilder::new().with_timezone("UTC"),
         }
+    }
+
+    pub(crate) fn snapshot_schema() -> SchemaRef {
+        OBJECT_SCHEMA.clone()
     }
 
     pub fn append_brand(&mut self, brand_id: &BrandId, brand: &Brand) {
@@ -74,9 +62,6 @@ impl ObjectDataBuilder {
         self.label.append_value(ObjectLabel::Brand);
         self.name.append_value([Some("brands"), Some(&brand.name)]);
         self.properties.append_null();
-        self.created_at
-            .append_value(chrono::Utc::now().timestamp_millis());
-        self.updated_at.append_null();
 
         for item in &brand.items {
             let item_name = format!("brands/{}/items/{}", brand.name, item.name);
@@ -92,9 +77,6 @@ impl ObjectDataBuilder {
             ]);
             self.properties
                 .append_value(serde_json::to_string(&item).unwrap());
-            self.created_at
-                .append_value(chrono::Utc::now().timestamp_millis());
-            self.updated_at.append_null();
         }
     }
 
@@ -112,9 +94,6 @@ impl ObjectDataBuilder {
             .append_value([Some("sites"), Some(&site_info.name)]);
         self.properties
             .append_value(serde_json::to_string(site_info)?);
-        self.created_at
-            .append_value(chrono::Utc::now().timestamp_millis());
-        self.updated_at.append_null();
 
         for kitchen in &site.kitchens {
             let kitchen_info = kitchen
@@ -133,9 +112,6 @@ impl ObjectDataBuilder {
                 Some(&kitchen_info.name),
             ]);
             self.properties.append_null();
-            self.created_at
-                .append_value(chrono::Utc::now().timestamp_millis());
-            self.updated_at.append_null();
 
             for station in &kitchen.stations {
                 let station_id: StationId = uuid::Uuid::parse_str(&station.id)?.into();
@@ -152,9 +128,6 @@ impl ObjectDataBuilder {
                 ]);
                 self.properties
                     .append_value(serde_json::to_string(station).unwrap());
-                self.created_at
-                    .append_value(chrono::Utc::now().timestamp_millis());
-                self.updated_at.append_null();
             }
         }
 
@@ -167,14 +140,10 @@ impl ObjectDataBuilder {
         let label = Arc::new(self.label.finish());
         let name = Arc::new(self.name.finish());
         let properties = Arc::new(self.properties.finish());
-        let created_at = Arc::new(self.created_at.finish());
-        let updated_at = Arc::new(self.updated_at.finish());
 
         Ok(RecordBatch::try_new(
             OBJECT_SCHEMA.clone(),
-            vec![
-                id, parent_id, label, name, properties, created_at, updated_at,
-            ],
+            vec![id, parent_id, label, name, properties],
         )?)
     }
 }

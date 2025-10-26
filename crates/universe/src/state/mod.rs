@@ -11,7 +11,7 @@ use arrow::array::{RecordBatch, cast::AsArray as _};
 use chrono::{DateTime, Utc};
 use datafusion::prelude::*;
 use geo_traits::PointTrait;
-use itertools::Itertools;
+use itertools::Itertools as _;
 use uuid::Uuid;
 
 use crate::idents::*;
@@ -22,11 +22,12 @@ use crate::{
 use self::movement::JourneyPlanner;
 
 pub(crate) use self::movement::RoutingData;
-pub(crate) use self::objects::{ObjectData, ObjectDataBuilder, ObjectLabel};
-pub(crate) use self::orders::{OrderData, OrderDataBuilder, OrderLineStatus, OrderStatus};
-pub(crate) use self::population::{
-    PersonRole, PersonStatus, PopulationData, PopulationDataBuilder,
+pub(crate) use self::objects::ObjectDataBuilder;
+pub use self::objects::{ObjectData, ObjectLabel};
+pub(crate) use self::orders::{
+    OrderBuilder, OrderData, OrderDataBuilder, OrderLineBuilder, OrderLineStatus, OrderStatus,
 };
+pub use self::population::{PersonRole, PersonStatus, PopulationData, PopulationDataBuilder};
 
 mod movement;
 mod objects;
@@ -162,13 +163,6 @@ impl State {
                 )
             })
             .finish()?;
-
-        tracing::debug!(
-            target: "state",
-            "Created {} new orders with {} lines",
-            order_data.batch_orders().num_rows(),
-            order_data.batch_lines().num_rows()
-        );
 
         let order_ids = order_data
             .all_orders()

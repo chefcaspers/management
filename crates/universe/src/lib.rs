@@ -1,7 +1,7 @@
 use arrow::array::RecordBatch;
 use datafusion::common::HashMap;
 use futures::TryStreamExt;
-use itertools::Itertools;
+use itertools::Itertools as _;
 use object_store::ObjectStore;
 use object_store::path::Path;
 use tracing::instrument;
@@ -113,7 +113,7 @@ impl SimulationSetup {
         Ok(brands)
     }
 
-    pub(crate) fn object_data(&self) -> Result<RecordBatch> {
+    pub fn object_data(&self) -> Result<RecordBatch> {
         let brands: HashMap<_, _> = self
             .brands
             .iter()
@@ -149,37 +149,14 @@ where
 
 #[instrument(name = "run_simulation", skip_all)]
 pub async fn run_simulation(
-    setup: SimulationSetup,
     duration: usize,
     output_location: Url,
     routing_location: Url,
     dry_run: bool,
 ) -> Result<(), Error> {
     let mut simulation = SimulationBuilder::new()
-        .with_setup(setup)
-        .with_result_storage_location(output_location)
-        .with_routing_data_path(routing_location)
-        .with_dry_run(dry_run)
-        .build()
-        .await?;
-    simulation.run(duration).await?;
-    Ok(())
-}
-
-#[instrument(name = "continue_simulation", skip_all)]
-pub async fn run_simulation_from(
-    setup: SimulationSetup,
-    duration: usize,
-    output_location: Url,
-    routing_location: Url,
-    dry_run: bool,
-) -> Result<(), Error> {
-    let base_url = url::Url::parse("file:///Users/robert.pack/code/management/notebooks/data/")?;
-    let mut simulation = SimulationBuilder::new()
-        .with_setup(setup)
-        .with_snapshot_location(base_url)
-        .with_snapshot_version(1761133489)
-        .with_result_storage_location(output_location)
+        .with_result_storage_location(output_location.clone())
+        .with_snapshot_location(output_location)
         .with_routing_data_path(routing_location)
         .with_dry_run(dry_run)
         .build()

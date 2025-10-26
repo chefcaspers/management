@@ -46,9 +46,8 @@ fn load_simulation_setup(
 }
 
 #[pyfunction]
-#[pyo3(signature = (setup, duration, output_location, routing_location, dry_run = false))]
+#[pyo3(signature = (duration, output_location, routing_location, dry_run = false))]
 fn run_simulation(
-    setup: SimulationSetup,
     duration: usize,
     output_location: String,
     routing_location: String,
@@ -57,7 +56,6 @@ fn run_simulation(
     let output_location = resolve_url(&output_location)?;
     let routing_location = resolve_url(&routing_location)?;
     rt().block_on(run_simulation_inner(
-        setup,
         duration,
         output_location,
         routing_location,
