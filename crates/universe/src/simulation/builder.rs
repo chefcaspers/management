@@ -39,8 +39,6 @@ pub(crate) struct SimulationConfig {
     /// location to store simulation results
     pub(crate) result_storage_location: Option<Url>,
 
-    pub(crate) snapshot_interval: Option<Duration>,
-
     pub(crate) dry_run: bool,
 
     pub(crate) write_events: bool,
@@ -52,7 +50,6 @@ impl Default for SimulationConfig {
             simulation_start: Utc::now(),
             time_increment: Duration::seconds(60),
             result_storage_location: None,
-            snapshot_interval: None,
             dry_run: false,
             write_events: false,
         }
@@ -64,9 +61,6 @@ pub struct SimulationBuilder {
     /// Snapshot location for the simulation
     snapshot_location: Option<Url>,
 
-    /// Size of the simulated population
-    population_size: usize,
-
     /// Time resolution for simulation steps
     time_increment: Duration,
 
@@ -75,9 +69,6 @@ pub struct SimulationBuilder {
 
     /// location to store simulation results
     result_storage_location: Option<Url>,
-
-    /// Interval at which to take snapshots of the simulation state
-    snapshot_interval: Option<Duration>,
 
     /// Path where routing data is stored
     routing_path: Option<Url>,
@@ -93,11 +84,9 @@ impl Default for SimulationBuilder {
     fn default() -> Self {
         Self {
             snapshot_location: None,
-            population_size: 1000,
             time_increment: Duration::minutes(1),
             start_time: Utc::now(),
             result_storage_location: None,
-            snapshot_interval: None,
             routing_path: None,
             dry_run: false,
             write_events: false,
@@ -120,12 +109,6 @@ impl SimulationBuilder {
         self
     }
 
-    /// Set the population size for the simulation
-    pub fn with_population_size(mut self, population_size: usize) -> Self {
-        self.population_size = population_size;
-        self
-    }
-
     /// Set the start time for the simulation
     pub fn with_start_time(mut self, start_time: DateTime<Utc>) -> Self {
         self.start_time = start_time;
@@ -141,11 +124,6 @@ impl SimulationBuilder {
     /// Set the result storage location for the simulation
     pub fn with_result_storage_location(mut self, result_storage_location: impl Into<Url>) -> Self {
         self.result_storage_location = Some(result_storage_location.into());
-        self
-    }
-
-    pub fn with_snapshot_interval(mut self, snapshot_interval: Duration) -> Self {
-        self.snapshot_interval = Some(snapshot_interval);
         self
     }
 
@@ -230,7 +208,6 @@ impl SimulationBuilder {
             simulation_start: self.start_time,
             time_increment: self.time_increment,
             result_storage_location: self.result_storage_location.clone(),
-            snapshot_interval: self.snapshot_interval,
             dry_run: self.dry_run,
             write_events: self.write_events,
         };
