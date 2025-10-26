@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://delta.io/">
-    <img src="https://github.com/chefcaspers/management/blob/main/docs\caspers.jpeg?raw=true" alt="chefcaspers logo" height="200">
+    <img src="https://github.com/chefcaspers/management/blob/main/docs\src\assets\caspers.jpeg?raw=true" alt="chefcaspers logo" height="200">
   </a>
 </p>
 
