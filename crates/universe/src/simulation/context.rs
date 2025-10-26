@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use arrow_schema::SchemaRef;
+use arrow::datatypes::SchemaRef;
 use datafusion::catalog::{
     CatalogProvider, MemoryCatalogProvider, MemorySchemaProvider, SchemaProvider, Session,
     TableProvider,
@@ -54,15 +54,17 @@ async fn register_routing(
     schema: &dyn SchemaProvider,
     routing_path: &Url,
 ) -> Result<()> {
-    let nodes_path = routing_path.join("nodes/")?;
-    let edge_path = routing_path.join("edges/")?;
+    use self::system::{ROUTING_EDGES_REF, ROUTING_NODES_REF};
+
+    let nodes_path = routing_path.join(&format!("{}/", ROUTING_NODES_REF.table()))?;
+    let edge_path = routing_path.join(&format!("{}/", ROUTING_EDGES_REF.table()))?;
 
     let state = ctx.state();
     let routing_nodes = read_parquet_table(&nodes_path, &state).await?;
     let routing_edges = read_parquet_table(&edge_path, &state).await?;
 
-    schema.register_table("routing_nodes".into(), routing_nodes)?;
-    schema.register_table("routing_edges".into(), routing_edges)?;
+    schema.register_table(ROUTING_NODES_REF.table().into(), routing_nodes)?;
+    schema.register_table(ROUTING_EDGES_REF.table().into(), routing_edges)?;
 
     Ok(())
 }
