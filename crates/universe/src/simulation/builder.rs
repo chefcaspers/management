@@ -55,6 +55,8 @@ impl Default for SimulationConfig {
 
 /// Builder for creating a simulation instance.
 pub struct SimulationBuilder {
+    ctx: Option<SimulationContext>,
+
     /// Snapshot location for the simulation
     snapshot_location: Option<Url>,
 
@@ -80,6 +82,7 @@ pub struct SimulationBuilder {
 impl Default for SimulationBuilder {
     fn default() -> Self {
         Self {
+            ctx: None,
             snapshot_location: None,
             time_increment: Duration::minutes(1),
             start_time: Utc::now(),
@@ -95,6 +98,12 @@ impl SimulationBuilder {
     /// Create a new simulation builder with default parameters
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Set the simulation context for the simulation
+    pub fn with_context(mut self, ctx: SimulationContext) -> Self {
+        self.ctx = Some(ctx);
+        self
     }
 
     pub fn with_snapshot_location(mut self, snapshot_location: impl Into<Url>) -> Self {
@@ -192,7 +201,7 @@ impl SimulationBuilder {
     }
 
     /// Build the simulation with the given initial conditions
-    pub async fn build(self) -> Result<Simulation> {
+    pub async fn build(mut self) -> Result<Simulation> {
         let config = SimulationConfig {
             simulation_start: self.start_time,
             time_increment: self.time_increment,
@@ -201,7 +210,11 @@ impl SimulationBuilder {
             write_events: self.write_events,
         };
 
-        let ctx = self.build_context().await?;
+        let ctx = if let Some(ctx) = std::mem::take(&mut self.ctx) {
+            ctx
+        } else {
+            self.build_context().await?
+        };
 
         let state = self.build_state(&ctx, config).await?;
 

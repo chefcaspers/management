@@ -1,11 +1,12 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
-use caspers_universe::{Result, SimulationMode, run_simulation};
+use caspers_universe::{Result, SimulationMode};
 
-use crate::init::{InitArgs, resolve_url};
+use crate::{init::InitArgs, run::RunArgs};
 
 mod error;
 mod init;
+mod run;
 mod telemetry;
 
 #[derive(clap::Parser)]
@@ -61,22 +62,6 @@ impl From<SimulationModeCli> for SimulationMode {
     }
 }
 
-#[derive(Debug, Clone, clap::Parser)]
-struct RunArgs {
-    #[arg(short, long, default_value_t = 100)]
-    duration: usize,
-
-    #[arg(short, long)]
-    /// Path where basic simulation setup is stored.
-    working_directory: Option<String>,
-
-    #[arg(short, long, value_enum, default_value_t = SimulationModeCli::Backfill)]
-    mode: SimulationModeCli,
-
-    #[arg(long, default_value_t = false)]
-    dry_run: bool,
-}
-
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     telemetry::init_tracer_provider();
@@ -85,10 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Run(args) => {
-            let working_directory = resolve_url(args.working_directory)?;
-            run_simulation(args.duration, working_directory, args.dry_run).await?;
-        }
+        Commands::Run(args) => run::handle(args).await?,
         Commands::Init(args) => init::handle(args).await?,
     }
 

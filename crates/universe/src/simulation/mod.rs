@@ -51,6 +51,10 @@ pub struct Simulation {
 }
 
 impl Simulation {
+    pub fn builder() -> SimulationBuilder {
+        SimulationBuilder::new()
+    }
+
     /// Advance the simulation by one time step
     #[instrument(skip(self), fields(caspers.total_events_generated = field::Empty))]
     async fn step(&mut self) -> Result<()> {

@@ -108,29 +108,25 @@ pub(super) async fn create_snapshot(state: &State, ctx: &SimulationContext) -> R
     let batch_objects = state.objects().objects();
     if batch_objects.num_rows() > 0 {
         let df_objects = ctx.ctx().read_batch(batch_objects.clone())?;
-        let df_objects = append_cols(df_objects)?;
-        tasks_defs.push((OBJECTS_REF.to_string(), df_objects))
+        tasks_defs.push((OBJECTS_REF.to_string(), append_cols(df_objects)?))
     }
 
     let batch_population = state.population().snapshot();
     if batch_population.num_rows() > 0 {
         let df_population = ctx.ctx().read_batch(batch_population)?;
-        let df_population = append_cols(df_population)?;
-        tasks_defs.push((POPULATION_REF.to_string(), df_population))
+        tasks_defs.push((POPULATION_REF.to_string(), append_cols(df_population)?))
     }
 
     let batch_orders = state.orders().batch_orders();
     if batch_orders.num_rows() > 0 {
         let df_orders = ctx.ctx().read_batch(batch_orders.clone())?;
-        let df_orders = append_cols(df_orders)?;
-        tasks_defs.push((ORDERS_REF.to_string(), df_orders))
+        tasks_defs.push((ORDERS_REF.to_string(), append_cols(df_orders)?))
     }
 
     let batch_order_lines = state.orders().batch_lines();
     if batch_order_lines.num_rows() > 0 {
         let df_order_lines = ctx.ctx().read_batch(batch_order_lines.clone())?;
-        let df_order_lines = append_cols(df_order_lines)?;
-        tasks_defs.push((ORDER_LINES_REF.to_string(), df_order_lines))
+        tasks_defs.push((ORDER_LINES_REF.to_string(), append_cols(df_order_lines)?))
     }
 
     let mut batch_sn = SnapshotMetaBuilder::new();
@@ -140,9 +136,8 @@ pub(super) async fn create_snapshot(state: &State, ctx: &SimulationContext) -> R
     tasks_defs.push((SNAPSHOT_META_REF.to_string(), df_sn));
 
     let write_table = async |df: DataFrame, table_name: String| {
-        let write_options = DataFrameWriteOptions::default()
-            .with_insert_operation(InsertOp::Append)
-            .with_partition_by(vec!["simulation_id".into()]);
+        let write_options =
+            DataFrameWriteOptions::default().with_insert_operation(InsertOp::Append);
         df.write_table(table_name.as_str(), write_options).await
     };
 

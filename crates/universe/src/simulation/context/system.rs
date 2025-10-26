@@ -8,8 +8,7 @@ use datafusion::prelude::{DataFrame, SessionContext};
 use datafusion::sql::TableReference;
 use uuid::Uuid;
 
-use crate::Error;
-use crate::error::Result;
+use crate::{Error, Result};
 
 use super::SimulationContext;
 

@@ -15,14 +15,16 @@ use datafusion::datasource::listing::{
 };
 use datafusion::execution::SessionStateBuilder;
 use datafusion::logical_expr::dml::InsertOp;
-use datafusion::prelude::{DataFrame, SessionContext};
+use datafusion::prelude::{DataFrame, SessionContext, col, lit};
+use datafusion::scalar::ScalarValue;
 use url::Url;
 use uuid::Uuid;
 
 use crate::error::Result;
 use crate::simulation::context::snapshots::create_snapshot;
 use crate::simulation::context::system::{
-    SIMULATION_META_REF, SNAPSHOT_META_REF, SimulationMetaBuilder,
+    SIMULATION_META_REF, SIMULATION_META_SCHEMA, SNAPSHOT_META_REF, SNAPSHOT_META_SCHEMA,
+    SimulationMetaBuilder,
 };
 use crate::{
     Error, ObjectData, ObjectDataBuilder, OrderBuilder, OrderData, OrderLineBuilder,
@@ -96,32 +98,40 @@ impl SimulationContextBuilder {
 
     pub async fn load_snapshots(&self) -> Result<DataFrame> {
         let (ctx, _) = self.session();
-        let schema = {
-            let state = ctx.state_ref();
-            state.read().schema_for_ref(SNAPSHOT_META_REF.clone())?
+        let Some(working_directory) = &self.working_directory else {
+            return Err(Error::internal("System location not set"));
         };
-        let Some(table) = schema.table(SNAPSHOT_META_REF.table()).await? else {
-            return Err(Error::internal(format!(
-                "Table '{}' not registered",
-                *SNAPSHOT_META_REF
-            )));
-        };
-        Ok(ctx.read_table(table)?)
+        let system_location =
+            working_directory.join(&format!("{}/", SNAPSHOT_META_REF.schema().unwrap()))?;
+        let snapshots_location =
+            system_location.join(&format!("{}/", SNAPSHOT_META_REF.table()))?;
+        let snapshots = json_provider(&snapshots_location, SNAPSHOT_META_SCHEMA.clone())?;
+
+        let df = ctx.read_table(snapshots)?;
+        if let Some(simulation_id) = self.simulation_id {
+            return Ok(df
+                .filter(
+                    col("simulation_id")
+                        .eq(lit(ScalarValue::Utf8View(Some(simulation_id.to_string())))),
+                )?
+                .sort(vec![col("id").sort(false, false)])?);
+        }
+        Ok(df)
     }
 
     pub async fn load_simulations(&self) -> Result<DataFrame> {
         let (ctx, _) = self.session();
-        let schema = {
-            let state = ctx.state_ref();
-            state.read().schema_for_ref(SIMULATION_META_REF.clone())?
+
+        let Some(working_directory) = &self.working_directory else {
+            return Err(Error::internal("System location not set"));
         };
-        let Some(table) = schema.table(SIMULATION_META_REF.table()).await? else {
-            return Err(Error::internal(format!(
-                "Table '{}' not registered",
-                *SIMULATION_META_REF
-            )));
-        };
-        Ok(ctx.read_table(table)?)
+        let system_location =
+            working_directory.join(&format!("{}/", SIMULATION_META_REF.schema().unwrap()))?;
+        let simulations_location =
+            system_location.join(&format!("{}/", SIMULATION_META_REF.table()))?;
+        let simulations = json_provider(&simulations_location, SIMULATION_META_SCHEMA.clone())?;
+
+        Ok(ctx.read_table(simulations)?)
     }
 
     pub async fn build(self) -> Result<SimulationContext> {
@@ -186,10 +196,10 @@ impl SimulationContextBuilder {
     async fn build_system(&self, ctx: &SessionContext) -> Result<Arc<dyn SchemaProvider>> {
         let system_schema = Arc::new(MemorySchemaProvider::new());
         if let Some(routing_location) = &self.routing_location {
-            register_routing(ctx, system_schema.as_ref(), routing_location).await?;
+            register_system(ctx, system_schema.as_ref(), routing_location).await?;
         } else if let Some(working_directory) = &self.working_directory {
             let routing_location = working_directory.join("system/")?;
-            register_routing(ctx, system_schema.as_ref(), &routing_location).await?;
+            register_system(ctx, system_schema.as_ref(), &routing_location).await?;
         } else {
             return Err(Error::internal("Routing location is not provided"));
         }
@@ -244,7 +254,7 @@ impl SimulationContext {
     }
 }
 
-async fn register_routing(
+async fn register_system(
     ctx: &SessionContext,
     schema: &dyn SchemaProvider,
     system_location: &Url,
