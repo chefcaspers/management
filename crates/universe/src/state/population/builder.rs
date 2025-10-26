@@ -46,6 +46,12 @@ pub struct PopulationDataBuilder {
     rng: ThreadRng,
 }
 
+impl Default for PopulationDataBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PopulationDataBuilder {
     pub fn new() -> Self {
         Self {

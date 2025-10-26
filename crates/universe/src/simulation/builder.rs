@@ -116,7 +116,7 @@ impl SimulationBuilder {
         if !snapshot_location.path().ends_with('/') {
             snapshot_location.set_path(&format!("{}/", snapshot_location.path()));
         }
-        self.snapshot_location = Some(snapshot_location.into());
+        self.snapshot_location = Some(snapshot_location);
         self
     }
 

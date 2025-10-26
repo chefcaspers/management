@@ -84,7 +84,7 @@ impl SystemSchema<'_> {
                 SELECT id, parent_id, label, name, properties
                 FROM {}
                 "#,
-                SNAPSHOT_OBJECTS_REF.to_string()
+                *SNAPSHOT_OBJECTS_REF
             )
         });
         Ok(self.ctx().sql(QUERY.as_str()).await?)
@@ -107,7 +107,7 @@ impl SystemSchema<'_> {
                 SELECT id, first_name, last_name, email, cc_number, role, position, state
                 FROM {}
                 "#,
-                SNAPSHOT_POPULATION_REF.to_string()
+                *SNAPSHOT_POPULATION_REF
             )
         });
         Ok(self.ctx().sql(QUERY.as_str()).await?)
@@ -130,7 +130,7 @@ impl SystemSchema<'_> {
                 SELECT id, site_id, customer_id, destination, status
                 FROM {}
                 "#,
-                SNAPSHOT_ORDERS_REF.to_string()
+                *SNAPSHOT_ORDERS_REF
             )
         });
         Ok(self.ctx().sql(QUERY.as_str()).await?)
@@ -153,7 +153,7 @@ impl SystemSchema<'_> {
                 SELECT id, order_id, brand_id, menu_item_id, status
                 FROM {}
                 "#,
-                SNAPSHOT_ORDER_LINES_REF.to_string()
+                *SNAPSHOT_ORDER_LINES_REF
             )
         });
         Ok(self.ctx().sql(QUERY.as_str()).await?)
