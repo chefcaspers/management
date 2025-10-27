@@ -157,13 +157,16 @@ impl SimulationContextBuilder {
             snapshot_id,
         };
 
+        // TODO: this is a but of a backdoor to allow for initializing a simulation
+        // with some data. Idelly this would move to somewhere more separated.
         match (self.population_data, self.object_data) {
             (None, None) => (),
             (Some(population_data), Some(object_data)) => {
                 let population = sim_ctx.ctx().read_batch(population_data)?;
                 let population_data = PopulationData::try_new_with_frame(population).await?;
+                let config = Default::default();
                 let sim_state = State::new(
-                    None,
+                    &Default::default(),
                     object_data,
                     population_data,
                     OrderData::empty(),

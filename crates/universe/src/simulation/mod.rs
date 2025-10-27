@@ -36,6 +36,8 @@ pub trait Simulatable {
 pub struct Simulation {
     ctx: SimulationContext,
 
+    config: SimulationConfig,
+
     /// Global simulation state
     state: State,
 
@@ -53,6 +55,10 @@ pub struct Simulation {
 impl Simulation {
     pub fn builder() -> SimulationBuilder {
         SimulationBuilder::new()
+    }
+
+    pub fn config(&self) -> &SimulationConfig {
+        &self.config
     }
 
     /// Advance the simulation by one time step
@@ -97,7 +103,7 @@ impl Simulation {
 
     #[instrument(skip_all, level = Level::TRACE)]
     async fn write_event_stats(&mut self) -> Result<()> {
-        let Some(base_path) = self.state.config().result_storage_location.as_ref() else {
+        let Some(base_path) = self.config().result_storage_location.as_ref() else {
             return Ok(());
         };
 
@@ -127,7 +133,7 @@ impl Simulation {
         }
         let batch = builder.build()?;
 
-        let base_url = self.state.config().result_storage_location.as_ref();
+        let base_url = self.config().result_storage_location.as_ref();
         // we have no place to store results
         let Some(base_path) = base_url else {
             return Ok(());
@@ -159,7 +165,7 @@ impl Simulation {
         self.write_event_stats().await?;
 
         // snapshot the state
-        if !self.state.config().dry_run {
+        if !self.config().dry_run {
             self.snapshot().await?;
         }
         Ok(())
@@ -167,12 +173,7 @@ impl Simulation {
 
     #[instrument(skip(self))]
     async fn snapshot_stats(&self) -> Result<()> {
-        let base_url = self
-            .state
-            .config()
-            .result_storage_location
-            .as_ref()
-            .unwrap();
+        let base_url = self.config().result_storage_location.as_ref().unwrap();
 
         let ctx = self.state.snapshot_session()?;
 

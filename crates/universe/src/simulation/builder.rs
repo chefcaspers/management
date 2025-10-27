@@ -164,7 +164,7 @@ impl SimulationBuilder {
     async fn build_state(
         &self,
         ctx: &SimulationContext,
-        config: SimulationConfig,
+        config: &SimulationConfig,
     ) -> Result<State> {
         let objects = ctx.snapshots().objects().await?.collect().await?;
         let objects = ObjectData::try_new(concat_batches(objects[0].schema_ref(), &objects)?)?;
@@ -216,7 +216,7 @@ impl SimulationBuilder {
             self.build_context().await?
         };
 
-        let state = self.build_state(&ctx, config).await?;
+        let state = self.build_state(&ctx, &config).await?;
 
         let sites = state
             .objects()
@@ -226,6 +226,7 @@ impl SimulationBuilder {
 
         Ok(Simulation {
             ctx,
+            config,
             state,
             sites,
             population: PopulationRunner::new(),

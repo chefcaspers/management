@@ -49,8 +49,6 @@ impl From<StateError> for Error {
 }
 
 pub struct State {
-    config: SimulationConfig,
-
     /// Current simulation time
     time: DateTime<Utc>,
 
@@ -72,17 +70,15 @@ pub struct State {
 
 impl State {
     pub(crate) fn new(
-        config: impl Into<Option<SimulationConfig>>,
+        config: &SimulationConfig,
         objects: ObjectData,
         population: PopulationData,
         orders: OrderData,
         routing: HashMap<SiteId, RoutingData>,
     ) -> Self {
-        let config = config.into().unwrap_or_default();
         Self {
             time_step: Duration::from_secs(config.time_increment.num_seconds() as u64),
             time: config.simulation_start,
-            config,
             population,
             objects,
             orders,
@@ -91,10 +87,6 @@ impl State {
                 .map(|(id, data)| (id, data.into_trip_planner()))
                 .collect(),
         }
-    }
-
-    pub(crate) fn config(&self) -> &SimulationConfig {
-        &self.config
     }
 
     pub fn people(&self) -> &RecordBatch {
