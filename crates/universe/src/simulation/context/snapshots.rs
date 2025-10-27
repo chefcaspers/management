@@ -2,16 +2,15 @@ use std::sync::LazyLock;
 
 use datafusion::dataframe::DataFrameWriteOptions;
 use datafusion::logical_expr::dml::InsertOp;
-use datafusion::prelude::{DataFrame, SessionContext, col, lit};
+use datafusion::prelude::{DataFrame, lit};
 use datafusion::scalar::ScalarValue;
 use datafusion::sql::TableReference;
 use itertools::Itertools;
 use uuid::Uuid;
 
-use crate::error::Result;
 use crate::simulation::context::SNAPSHOT_META_REF;
 use crate::simulation::context::system::SnapshotMetaBuilder;
-use crate::{Error, State};
+use crate::{Result, State};
 
 use super::SimulationContext;
 
@@ -19,23 +18,24 @@ pub struct SnapshotsSchema<'a> {
     pub(super) ctx: &'a SimulationContext,
 }
 
+pub(super) static SNAPSHOTS_SCHEMA_NAME: &str = "snapshots";
 pub(super) static POPULATION_REF: LazyLock<TableReference> =
-    LazyLock::new(|| TableReference::full("caspers", "snapshots", "population"));
+    LazyLock::new(|| TableReference::full("caspers", SNAPSHOTS_SCHEMA_NAME, "population"));
 pub(super) static OBJECTS_REF: LazyLock<TableReference> =
-    LazyLock::new(|| TableReference::full("caspers", "snapshots", "objects"));
+    LazyLock::new(|| TableReference::full("caspers", SNAPSHOTS_SCHEMA_NAME, "objects"));
 pub(super) static ORDERS_REF: LazyLock<TableReference> =
-    LazyLock::new(|| TableReference::full("caspers", "snapshots", "orders"));
+    LazyLock::new(|| TableReference::full("caspers", SNAPSHOTS_SCHEMA_NAME, "orders"));
 pub(super) static ORDER_LINES_REF: LazyLock<TableReference> =
-    LazyLock::new(|| TableReference::full("caspers", "snapshots", "order_lines"));
+    LazyLock::new(|| TableReference::full("caspers", SNAPSHOTS_SCHEMA_NAME, "order_lines"));
 
 impl SnapshotsSchema<'_> {
-    fn ctx(&self) -> &SessionContext {
-        &self.ctx.ctx
-    }
-
     pub async fn objects(&self) -> Result<DataFrame> {
         static COLUMNS: &[&str; 5] = &["id", "parent_id", "label", "name", "properties"];
-        self.select_table(&OBJECTS_REF, COLUMNS).await
+        Ok(self
+            .ctx
+            .scan_scoped(&OBJECTS_REF)
+            .await?
+            .select_columns(COLUMNS)?)
     }
 
     pub async fn population(&self) -> Result<DataFrame> {
@@ -49,46 +49,29 @@ impl SnapshotsSchema<'_> {
             "position",
             "state",
         ];
-        self.select_table(&POPULATION_REF, COLUMNS).await
+        Ok(self
+            .ctx
+            .scan_scoped(&POPULATION_REF)
+            .await?
+            .select_columns(COLUMNS)?)
     }
 
     pub async fn orders(&self) -> Result<DataFrame> {
         static COLUMNS: &[&str] = &["id", "site_id", "customer_id", "destination", "status"];
-        self.select_table(&ORDERS_REF, COLUMNS).await
+        Ok(self
+            .ctx
+            .scan_scoped(&ORDERS_REF)
+            .await?
+            .select_columns(COLUMNS)?)
     }
 
     pub async fn order_lines(&self) -> Result<DataFrame> {
         static COLUMNS: &[&str] = &["id", "order_id", "brand_id", "menu_item_id", "status"];
-        self.select_table(&ORDER_LINES_REF, COLUMNS).await
-    }
-
-    async fn select_table(
-        &self,
-        table_ref: &TableReference,
-        columns: &[&str],
-    ) -> Result<DataFrame> {
-        let schema = {
-            let state = self.ctx().state_ref();
-            state.read().schema_for_ref(table_ref.clone())?
-        };
-        let Some(table) = schema.table(table_ref.table()).await? else {
-            return Err(Error::internal(format!(
-                "Table '{}' not registered",
-                table_ref
-            )));
-        };
-        let predicate = col("simulation_id")
-            .eq(lit(ScalarValue::Utf8View(Some(
-                self.ctx.simulation_id.to_string(),
-            ))))
-            .and(col("snapshot_id").eq(lit(ScalarValue::Utf8View(Some(
-                self.ctx.snapshot_id.to_string(),
-            )))));
         Ok(self
-            .ctx()
-            .read_table(table)?
-            .filter(predicate)?
-            .select_columns(columns)?)
+            .ctx
+            .scan_scoped(&ORDER_LINES_REF)
+            .await?
+            .select_columns(COLUMNS)?)
     }
 }
 

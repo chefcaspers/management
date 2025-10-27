@@ -12,7 +12,7 @@ static DEFAULT_SOURCE: &str = "caspers/universe/default";
 static DEFAULT_SPECVERSION: &str = "1.0";
 static DEFAULT_CONTENT_TYPE: &str = "application/json";
 
-static EVENT_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
+pub(crate) static EVENTS_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
     Arc::new(Schema::new(vec![
         Field::new("id", DataType::FixedSizeBinary(16), false),
         Field::new("source", DataType::LargeUtf8, false),
@@ -88,6 +88,6 @@ impl EventDataBuilder {
             Arc::new(self.time.finish()),
             Arc::new(self.data.finish()),
         ];
-        Ok(RecordBatch::try_new(EVENT_SCHEMA.clone(), arrays)?)
+        Ok(RecordBatch::try_new(EVENTS_SCHEMA.clone(), arrays)?)
     }
 }

@@ -12,18 +12,15 @@ use crate::{Error, Result};
 
 use super::SimulationContext;
 
-pub struct SystemSchema<'a> {
-    pub(super) ctx: &'a SimulationContext,
-}
-
+pub(super) static SYSTEM_SCHEMA_NAME: &str = "system";
 pub(super) static ROUTING_NODES_REF: LazyLock<TableReference> =
-    LazyLock::new(|| TableReference::full("caspers", "system", "routing_nodes"));
+    LazyLock::new(|| TableReference::full("caspers", SYSTEM_SCHEMA_NAME, "routing_nodes"));
 pub(super) static ROUTING_EDGES_REF: LazyLock<TableReference> =
-    LazyLock::new(|| TableReference::full("caspers", "system", "routing_edges"));
+    LazyLock::new(|| TableReference::full("caspers", SYSTEM_SCHEMA_NAME, "routing_edges"));
 pub(super) static SNAPSHOT_META_REF: LazyLock<TableReference> =
-    LazyLock::new(|| TableReference::full("caspers", "system", "snapshots"));
+    LazyLock::new(|| TableReference::full("caspers", SYSTEM_SCHEMA_NAME, "snapshots"));
 pub(super) static SIMULATION_META_REF: LazyLock<TableReference> =
-    LazyLock::new(|| TableReference::full("caspers", "system", "simulations"));
+    LazyLock::new(|| TableReference::full("caspers", SYSTEM_SCHEMA_NAME, "simulations"));
 
 pub(crate) static SNAPSHOT_META_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
     Arc::new(Schema::new(vec![
@@ -134,6 +131,10 @@ impl SimulationMetaBuilder {
             ],
         )?)
     }
+}
+
+pub struct SystemSchema<'a> {
+    pub(super) ctx: &'a SimulationContext,
 }
 
 impl SystemSchema<'_> {

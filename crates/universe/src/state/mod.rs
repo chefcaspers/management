@@ -9,7 +9,6 @@ use std::time::Duration;
 
 use arrow::array::{RecordBatch, cast::AsArray as _};
 use chrono::{DateTime, Utc};
-use datafusion::prelude::*;
 use geo_traits::PointTrait;
 use itertools::Itertools as _;
 use uuid::Uuid;
@@ -215,16 +214,6 @@ impl State {
         self.time += self.time_step;
 
         Ok(())
-    }
-
-    /// Create a new session context with the current state of the simulation.
-    pub(crate) fn snapshot_session(&self) -> Result<SessionContext> {
-        let ctx = SessionContext::new();
-        ctx.register_batch("population", self.population.snapshot().clone())?;
-        ctx.register_batch("objects", self.objects.objects().clone())?;
-        ctx.register_batch("orders", self.orders.batch_orders().clone())?;
-        ctx.register_batch("order_lines", self.orders.batch_lines().clone())?;
-        Ok(ctx)
     }
 }
 
