@@ -9,7 +9,6 @@ use std::time::Duration;
 
 use arrow::array::{RecordBatch, cast::AsArray as _};
 use chrono::{DateTime, Utc};
-use datafusion::prelude::*;
 use geo_traits::PointTrait;
 use itertools::Itertools as _;
 use uuid::Uuid;
@@ -49,8 +48,6 @@ impl From<StateError> for Error {
 }
 
 pub struct State {
-    config: SimulationConfig,
-
     /// Current simulation time
     time: DateTime<Utc>,
 
@@ -72,17 +69,15 @@ pub struct State {
 
 impl State {
     pub(crate) fn new(
-        config: impl Into<Option<SimulationConfig>>,
+        config: &SimulationConfig,
         objects: ObjectData,
         population: PopulationData,
         orders: OrderData,
         routing: HashMap<SiteId, RoutingData>,
     ) -> Self {
-        let config = config.into().unwrap_or_default();
         Self {
             time_step: Duration::from_secs(config.time_increment.num_seconds() as u64),
             time: config.simulation_start,
-            config,
             population,
             objects,
             orders,
@@ -91,10 +86,6 @@ impl State {
                 .map(|(id, data)| (id, data.into_trip_planner()))
                 .collect(),
         }
-    }
-
-    pub(crate) fn config(&self) -> &SimulationConfig {
-        &self.config
     }
 
     pub fn people(&self) -> &RecordBatch {
@@ -223,16 +214,6 @@ impl State {
         self.time += self.time_step;
 
         Ok(())
-    }
-
-    /// Create a new session context with the current state of the simulation.
-    pub(crate) fn snapshot_session(&self) -> Result<SessionContext> {
-        let ctx = SessionContext::new();
-        ctx.register_batch("population", self.population.snapshot().clone())?;
-        ctx.register_batch("objects", self.objects.objects().clone())?;
-        ctx.register_batch("orders", self.orders.batch_orders().clone())?;
-        ctx.register_batch("order_lines", self.orders.batch_lines().clone())?;
-        Ok(ctx)
     }
 }
 

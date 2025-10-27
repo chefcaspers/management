@@ -15,20 +15,27 @@ use datafusion::datasource::listing::{
 };
 use datafusion::execution::SessionStateBuilder;
 use datafusion::logical_expr::dml::InsertOp;
-use datafusion::prelude::{DataFrame, SessionContext};
+use datafusion::prelude::{DataFrame, SessionContext, col, lit};
+use datafusion::scalar::ScalarValue;
+use datafusion::sql::TableReference;
 use url::Url;
 use uuid::Uuid;
 
 use crate::error::Result;
-use crate::simulation::context::snapshots::create_snapshot;
-use crate::simulation::context::system::{
-    SIMULATION_META_REF, SNAPSHOT_META_REF, SimulationMetaBuilder,
-};
 use crate::{
     Error, ObjectData, ObjectDataBuilder, OrderBuilder, OrderData, OrderLineBuilder,
     PopulationData, PopulationDataBuilder, State,
 };
 
+use self::results::RESULTS_SCHEMA_NAME;
+pub(crate) use self::results::{EVENTS_SCHEMA, METRICS_SCHEMA};
+use self::snapshots::{SNAPSHOTS_SCHEMA_NAME, create_snapshot};
+use self::system::{
+    SIMULATION_META_REF, SIMULATION_META_SCHEMA, SNAPSHOT_META_REF, SNAPSHOT_META_SCHEMA,
+    SYSTEM_SCHEMA_NAME, SimulationMetaBuilder,
+};
+
+mod results;
 mod snapshots;
 mod system;
 
@@ -96,32 +103,40 @@ impl SimulationContextBuilder {
 
     pub async fn load_snapshots(&self) -> Result<DataFrame> {
         let (ctx, _) = self.session();
-        let schema = {
-            let state = ctx.state_ref();
-            state.read().schema_for_ref(SNAPSHOT_META_REF.clone())?
+        let Some(working_directory) = &self.working_directory else {
+            return Err(Error::internal("System location not set"));
         };
-        let Some(table) = schema.table(SNAPSHOT_META_REF.table()).await? else {
-            return Err(Error::internal(format!(
-                "Table '{}' not registered",
-                *SNAPSHOT_META_REF
-            )));
-        };
-        Ok(ctx.read_table(table)?)
+        let system_location =
+            working_directory.join(&format!("{}/", SNAPSHOT_META_REF.schema().unwrap()))?;
+        let snapshots_location =
+            system_location.join(&format!("{}/", SNAPSHOT_META_REF.table()))?;
+        let snapshots = json_provider(&snapshots_location, SNAPSHOT_META_SCHEMA.clone())?;
+
+        let df = ctx.read_table(snapshots)?;
+        if let Some(simulation_id) = self.simulation_id {
+            return Ok(df
+                .filter(
+                    col("simulation_id")
+                        .eq(lit(ScalarValue::Utf8View(Some(simulation_id.to_string())))),
+                )?
+                .sort(vec![col("id").sort(false, false)])?);
+        }
+        Ok(df)
     }
 
     pub async fn load_simulations(&self) -> Result<DataFrame> {
         let (ctx, _) = self.session();
-        let schema = {
-            let state = ctx.state_ref();
-            state.read().schema_for_ref(SIMULATION_META_REF.clone())?
+
+        let Some(working_directory) = &self.working_directory else {
+            return Err(Error::internal("System location not set"));
         };
-        let Some(table) = schema.table(SIMULATION_META_REF.table()).await? else {
-            return Err(Error::internal(format!(
-                "Table '{}' not registered",
-                *SIMULATION_META_REF
-            )));
-        };
-        Ok(ctx.read_table(table)?)
+        let system_location =
+            working_directory.join(&format!("{}/", SIMULATION_META_REF.schema().unwrap()))?;
+        let simulations_location =
+            system_location.join(&format!("{}/", SIMULATION_META_REF.table()))?;
+        let simulations = json_provider(&simulations_location, SIMULATION_META_SCHEMA.clone())?;
+
+        Ok(ctx.read_table(simulations)?)
     }
 
     pub async fn build(self) -> Result<SimulationContext> {
@@ -129,10 +144,12 @@ impl SimulationContextBuilder {
 
         let system_schema = self.build_system(&ctx).await?;
         let snapshots_schema = self.build_snapshots(&ctx).await?;
+        let results_schema = self.build_results(&ctx).await?;
 
         let catalog = Arc::new(MemoryCatalogProvider::new());
-        catalog.register_schema("system", system_schema)?;
-        catalog.register_schema("snapshots", snapshots_schema)?;
+        catalog.register_schema(SYSTEM_SCHEMA_NAME, system_schema)?;
+        catalog.register_schema(SNAPSHOTS_SCHEMA_NAME, snapshots_schema)?;
+        catalog.register_schema(RESULTS_SCHEMA_NAME, results_schema)?;
         ctx.register_catalog("caspers", catalog);
 
         let snapshot_id = if let Some(snapshot_id) = self.snapshot_id {
@@ -147,13 +164,15 @@ impl SimulationContextBuilder {
             snapshot_id,
         };
 
+        // TODO: this is a but of a backdoor to allow for initializing a simulation
+        // with some data. Idelly this would move to somewhere more separated.
         match (self.population_data, self.object_data) {
             (None, None) => (),
             (Some(population_data), Some(object_data)) => {
                 let population = sim_ctx.ctx().read_batch(population_data)?;
                 let population_data = PopulationData::try_new_with_frame(population).await?;
                 let sim_state = State::new(
-                    None,
+                    &Default::default(),
                     object_data,
                     population_data,
                     OrderData::empty(),
@@ -186,10 +205,10 @@ impl SimulationContextBuilder {
     async fn build_system(&self, ctx: &SessionContext) -> Result<Arc<dyn SchemaProvider>> {
         let system_schema = Arc::new(MemorySchemaProvider::new());
         if let Some(routing_location) = &self.routing_location {
-            register_routing(ctx, system_schema.as_ref(), routing_location).await?;
+            register_system(ctx, system_schema.as_ref(), routing_location).await?;
         } else if let Some(working_directory) = &self.working_directory {
-            let routing_location = working_directory.join("system/")?;
-            register_routing(ctx, system_schema.as_ref(), &routing_location).await?;
+            let routing_location = working_directory.join(&format!("{}/", SYSTEM_SCHEMA_NAME))?;
+            register_system(ctx, system_schema.as_ref(), &routing_location).await?;
         } else {
             return Err(Error::internal("Routing location is not provided"));
         }
@@ -201,12 +220,24 @@ impl SimulationContextBuilder {
         if let Some(snapshots_location) = &self.snapshots_location {
             register_snapshots(snapshots_schema.as_ref(), snapshots_location).await?;
         } else if let Some(working_directory) = &self.working_directory {
-            let snapshots_location = working_directory.join("snapshots/")?;
+            let snapshots_location =
+                working_directory.join(&format!("{}/", SNAPSHOTS_SCHEMA_NAME))?;
             register_snapshots(snapshots_schema.as_ref(), &snapshots_location).await?;
         } else {
             return Err(Error::internal("Snapshots location is not provided"));
         }
         Ok(snapshots_schema)
+    }
+
+    async fn build_results(&self, _ctx: &SessionContext) -> Result<Arc<dyn SchemaProvider>> {
+        let results_schema = Arc::new(MemorySchemaProvider::new());
+        if let Some(working_directory) = &self.working_directory {
+            let results_location = working_directory.join(&format!("{}/", RESULTS_SCHEMA_NAME))?;
+            register_results(results_schema.as_ref(), &results_location).await?;
+        } else {
+            return Err(Error::internal("Results location is not provided"));
+        }
+        Ok(results_schema)
     }
 }
 
@@ -221,12 +252,16 @@ impl SimulationContext {
         SimulationContextBuilder::default()
     }
 
-    pub async fn load_state(&self) -> Result<State> {
-        todo!("Implement the load_state method")
+    pub fn ctx(&self) -> &SessionContext {
+        &self.ctx
     }
 
-    fn ctx(&self) -> &SessionContext {
-        &self.ctx
+    pub fn snapshot_id(&self) -> &Uuid {
+        &self.snapshot_id
+    }
+
+    pub fn simulation_id(&self) -> &Uuid {
+        &self.simulation_id
     }
 
     pub fn system(&self) -> system::SystemSchema<'_> {
@@ -237,14 +272,61 @@ impl SimulationContext {
         snapshots::SnapshotsSchema { ctx: self }
     }
 
+    pub fn results(&self) -> results::ResultsSchema<'_> {
+        results::ResultsSchema { ctx: self }
+    }
+
+    /// Write the current simulation state to a snapshot.
+    ///
+    /// This method creates a new snapshot with the current simulation state
+    /// and updates the simulation context to track the new snapshot ID.
     pub async fn write_snapshot(&mut self, state: &State) -> Result<()> {
         let snapshot_id = create_snapshot(state, self).await?;
         self.snapshot_id = snapshot_id;
         Ok(())
     }
+
+    async fn scan(&self, table_ref: &TableReference) -> Result<DataFrame> {
+        let schema = {
+            let state = self.ctx().state_ref();
+            state.read().schema_for_ref(table_ref.clone())?
+        };
+        let Some(table) = schema.table(table_ref.table()).await? else {
+            return Err(Error::internal(format!(
+                "Table '{}' not registered",
+                table_ref
+            )));
+        };
+        Ok(self.ctx().read_table(table)?)
+    }
+
+    /// Read a table filtered by the current simulation ID and snapshot ID.
+    async fn scan_scoped(&self, table_ref: &TableReference) -> Result<DataFrame> {
+        tracing::debug!(target: "caspers::simulation::context", "Scanning table '{}'", table_ref);
+
+        let table = self.scan(table_ref).await?;
+        let predicate = col("simulation_id")
+            .eq(lit(ScalarValue::Utf8View(Some(
+                self.simulation_id.to_string(),
+            ))))
+            .and(col("snapshot_id").eq(lit(ScalarValue::Utf8View(Some(
+                self.snapshot_id.to_string(),
+            )))));
+        Ok(table
+            .filter(predicate)?
+            .drop_columns(&["simulation_id", "snapshot_id"])?)
+    }
+
+    fn extend_df(&self, df: DataFrame) -> Result<DataFrame> {
+        let sim_id = ScalarValue::Utf8View(Some(self.simulation_id.to_string()));
+        let sn_id = ScalarValue::Utf8View(Some(self.snapshot_id.to_string()));
+        Ok(df
+            .with_column("simulation_id", lit(sim_id))?
+            .with_column("snapshot_id", lit(sn_id))?)
+    }
 }
 
-async fn register_routing(
+async fn register_system(
     ctx: &SessionContext,
     schema: &dyn SchemaProvider,
     system_location: &Url,
@@ -278,23 +360,43 @@ async fn register_routing(
 async fn register_snapshots(schema: &dyn SchemaProvider, snapshots_path: &Url) -> Result<()> {
     use self::snapshots::{OBJECTS_REF, ORDER_LINES_REF, ORDERS_REF, POPULATION_REF};
 
-    let population_path = snapshots_path.join("population/")?;
+    let population_path = snapshots_path.join(&format!("{}/", POPULATION_REF.table()))?;
+    tracing::debug!(target: "caspers::simulation::context", "registering '{}' @ {}", *POPULATION_REF, population_path);
     let population_snapshot =
         snapshot_provider(&population_path, PopulationDataBuilder::snapshot_schema())?;
     schema.register_table(POPULATION_REF.table().to_string(), population_snapshot)?;
 
-    let objects_path = snapshots_path.join("objects/")?;
+    let objects_path = snapshots_path.join(&format!("{}/", OBJECTS_REF.table()))?;
+    tracing::debug!(target: "caspers::simulation::context", "registering '{}' @ {}", *OBJECTS_REF, objects_path);
     let objects_snapshot = snapshot_provider(&objects_path, ObjectDataBuilder::snapshot_schema())?;
     schema.register_table(OBJECTS_REF.table().to_string(), objects_snapshot)?;
 
-    let orders_path = snapshots_path.join("orders/")?;
+    let orders_path = snapshots_path.join(&format!("{}/", ORDERS_REF.table()))?;
+    tracing::debug!(target: "caspers::simulation::context", "registering '{}' @ {}", *ORDERS_REF, orders_path);
     let orders_snapshot = snapshot_provider(&orders_path, OrderBuilder::snapshot_schema())?;
     schema.register_table(ORDERS_REF.table().to_string(), orders_snapshot)?;
 
-    let order_lines_path = snapshots_path.join("order_lines/")?;
+    let order_lines_path = snapshots_path.join(&format!("{}/", ORDER_LINES_REF.table()))?;
+    tracing::debug!(target: "caspers::simulation::context", "registering '{}' @ {}", *ORDER_LINES_REF, order_lines_path);
     let order_lines_snapshot =
         snapshot_provider(&order_lines_path, OrderLineBuilder::snapshot_schema())?;
     schema.register_table(ORDER_LINES_REF.table().to_string(), order_lines_snapshot)?;
+
+    Ok(())
+}
+
+async fn register_results(schema: &dyn SchemaProvider, results_path: &Url) -> Result<()> {
+    use self::results::{EVENTS_REF, METRICS_REF};
+
+    let metrics_path = results_path.join(&format!("{}/", METRICS_REF.table()))?;
+    tracing::debug!(target: "caspers::simulation::context", "registering '{}' @ {}", *METRICS_REF, metrics_path);
+    let metrics_snapshot = snapshot_provider(&metrics_path, METRICS_SCHEMA.clone())?;
+    schema.register_table(METRICS_REF.table().to_string(), metrics_snapshot)?;
+
+    let events_path = results_path.join(&format!("{}/", EVENTS_REF.table()))?;
+    tracing::debug!(target: "caspers::simulation::context", "registering '{}' @ {}", *EVENTS_REF, events_path);
+    let events_snapshot = snapshot_provider(&events_path, EVENTS_SCHEMA.clone())?;
+    schema.register_table(EVENTS_REF.table().to_string(), events_snapshot)?;
 
     Ok(())
 }

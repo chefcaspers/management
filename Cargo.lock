@@ -609,7 +609,9 @@ dependencies = [
 name = "caspers-universe-cli"
 version = "0.0.1"
 dependencies = [
+ "arrow",
  "caspers-universe",
+ "chrono",
  "clap",
  "dialoguer",
  "itertools 0.14.0",
@@ -624,6 +626,7 @@ dependencies = [
  "tracing-opentelemetry",
  "tracing-subscriber",
  "url",
+ "uuid",
 ]
 
 [[package]]
