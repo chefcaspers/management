@@ -61,7 +61,6 @@ pub(super) async fn handle(args: RunArgs) -> Result<()> {
         .map_err(UniverseError::from)?;
 
     let selections = (0..simulations.len())
-        .into_iter()
         .flat_map(|idx| simulations[idx].column(0).as_string_view().iter())
         .flatten()
         .collect::<Vec<_>>();
@@ -88,7 +87,6 @@ pub(super) async fn handle(args: RunArgs) -> Result<()> {
         .map_err(UniverseError::from)?;
 
     let selections = (0..snapshots.len())
-        .into_iter()
         .flat_map(|idx| snapshots[idx].column(0).as_string_view().iter())
         .flatten()
         .collect::<Vec<_>>();
