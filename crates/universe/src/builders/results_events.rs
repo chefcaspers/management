@@ -36,6 +36,12 @@ pub struct EventDataBuilder {
     context: ContextV7,
 }
 
+impl Default for EventDataBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EventDataBuilder {
     pub fn new() -> Self {
         Self {

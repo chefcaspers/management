@@ -1,12 +1,26 @@
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use arrow::array::builder::{Int64Builder, TimestampMillisecondBuilder};
 use arrow::array::{RecordBatch, StringViewBuilder};
+use arrow_schema::{DataType, Field, Schema, SchemaRef, TimeUnit};
 use chrono::{DateTime, Utc};
 
-use crate::{EventStats, METRICS_SCHEMA, Result};
+use crate::{EventStats, Result};
 
-pub(crate) struct EventStatsBuffer {
+pub(crate) static METRICS_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
+    Arc::new(Schema::new(vec![
+        Field::new(
+            "timestamp",
+            DataType::Timestamp(TimeUnit::Millisecond, Some("UTC".into())),
+            false,
+        ),
+        Field::new("source", DataType::Utf8View, false),
+        Field::new("label", DataType::Utf8View, false),
+        Field::new("value", DataType::Int64, false),
+    ]))
+});
+
+pub struct EventStatsBuffer {
     timestamp: TimestampMillisecondBuilder,
     source: StringViewBuilder,
     label: StringViewBuilder,

@@ -11,7 +11,7 @@ use crate::idents::{BrandId, KitchenId, MenuItemId, SiteId, StationId};
 use crate::models::{Brand, SiteSetup};
 use crate::state::ObjectLabel;
 
-pub(crate) static OBJECT_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
+pub(crate) static OBJECTS_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
     Arc::new(Schema::new(vec![
         Field::new("id", DataType::FixedSizeBinary(16), false).with_extension_type(UuidExtension),
         Field::new("parent_id", DataType::FixedSizeBinary(16), true)
@@ -50,10 +50,6 @@ impl ObjectDataBuilder {
             label: StringViewBuilder::new(),
             properties: LargeStringBuilder::new(),
         }
-    }
-
-    pub(crate) fn snapshot_schema() -> SchemaRef {
-        OBJECT_SCHEMA.clone()
     }
 
     pub fn append_brand(&mut self, brand_id: &BrandId, brand: &Brand) {
@@ -142,7 +138,7 @@ impl ObjectDataBuilder {
         let properties = Arc::new(self.properties.finish());
 
         Ok(RecordBatch::try_new(
-            OBJECT_SCHEMA.clone(),
+            OBJECTS_SCHEMA.clone(),
             vec![id, parent_id, label, name, properties],
         )?)
     }

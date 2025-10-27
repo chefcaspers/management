@@ -9,23 +9,27 @@ use url::Url;
 use uuid::Uuid;
 
 pub use self::agents::*;
+pub use self::builders::*;
 pub use self::error::*;
 pub use self::idents::*;
 pub use self::models::*;
 pub use self::simulation::*;
 pub use self::state::*;
+pub use crate::context::*;
 
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 
 mod agents;
+mod builders;
+mod context;
 mod error;
 mod idents;
 mod models;
 #[cfg(feature = "python")]
 mod python;
 mod simulation;
-pub mod state;
+mod state;
 
 #[cfg_attr(feature = "python", pyclass(get_all, set_all))]
 #[derive(Debug, Clone)]

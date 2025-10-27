@@ -8,10 +8,11 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::agents::{PopulationRunner, SiteRunner};
+use crate::context::SimulationContext;
 use crate::state::{EntityView, RoutingData, State};
 use crate::{Error, EventTracker, ObjectData, OrderData, PopulationData, Result};
 
-use super::{EventStatsBuffer, Simulation, SimulationContext};
+use super::{EventStatsBuffer, Simulation};
 
 /// Execution mode for the simulation.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]

@@ -8,27 +8,30 @@ use datafusion::sql::TableReference;
 use itertools::Itertools;
 use uuid::Uuid;
 
-use crate::simulation::context::SNAPSHOT_META_REF;
-use crate::simulation::context::system::SnapshotMetaBuilder;
+use crate::context::SimulationContext;
 use crate::{Result, State};
 
-use super::SimulationContext;
+use super::system::{SNAPSHOT_META_REF, SnapshotMetaBuilder};
 
 pub struct SnapshotsSchema<'a> {
-    pub(super) ctx: &'a SimulationContext,
+    ctx: &'a SimulationContext,
 }
 
-pub(super) static SNAPSHOTS_SCHEMA_NAME: &str = "snapshots";
-pub(super) static POPULATION_REF: LazyLock<TableReference> =
+pub(in crate::context) static SNAPSHOTS_SCHEMA_NAME: &str = "snapshots";
+pub(in crate::context) static POPULATION_REF: LazyLock<TableReference> =
     LazyLock::new(|| TableReference::full("caspers", SNAPSHOTS_SCHEMA_NAME, "population"));
-pub(super) static OBJECTS_REF: LazyLock<TableReference> =
+pub(in crate::context) static OBJECTS_REF: LazyLock<TableReference> =
     LazyLock::new(|| TableReference::full("caspers", SNAPSHOTS_SCHEMA_NAME, "objects"));
-pub(super) static ORDERS_REF: LazyLock<TableReference> =
+pub(in crate::context) static ORDERS_REF: LazyLock<TableReference> =
     LazyLock::new(|| TableReference::full("caspers", SNAPSHOTS_SCHEMA_NAME, "orders"));
-pub(super) static ORDER_LINES_REF: LazyLock<TableReference> =
+pub(in crate::context) static ORDER_LINES_REF: LazyLock<TableReference> =
     LazyLock::new(|| TableReference::full("caspers", SNAPSHOTS_SCHEMA_NAME, "order_lines"));
 
-impl SnapshotsSchema<'_> {
+impl<'a> SnapshotsSchema<'a> {
+    pub(in crate::context) fn new(ctx: &'a SimulationContext) -> Self {
+        Self { ctx }
+    }
+
     pub async fn objects(&self) -> Result<DataFrame> {
         static COLUMNS: &[&str; 5] = &["id", "parent_id", "label", "name", "properties"];
         Ok(self
@@ -75,7 +78,7 @@ impl SnapshotsSchema<'_> {
     }
 }
 
-pub(super) async fn create_snapshot(state: &State, ctx: &SimulationContext) -> Result<Uuid> {
+pub(crate) async fn create_snapshot(state: &State, ctx: &SimulationContext) -> Result<Uuid> {
     let snapshot_id = Uuid::now_v7();
     let id_val = ScalarValue::Utf8View(Some(snapshot_id.to_string()));
     let sim_id_val = ScalarValue::Utf8View(Some(ctx.simulation_id.to_string()));

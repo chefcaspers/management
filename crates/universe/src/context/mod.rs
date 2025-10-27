@@ -21,23 +21,15 @@ use datafusion::sql::TableReference;
 use url::Url;
 use uuid::Uuid;
 
-use crate::error::Result;
-use crate::{
-    Error, ObjectData, ObjectDataBuilder, OrderBuilder, OrderData, OrderLineBuilder,
-    PopulationData, PopulationDataBuilder, State,
+use crate::{Error, ObjectData, OrderData, PopulationData, Result, State};
+
+use self::schemas::{
+    RESULTS_SCHEMA_NAME, SIMULATION_META_REF, SIMULATION_META_SCHEMA, SNAPSHOT_META_REF,
+    SNAPSHOT_META_SCHEMA, SNAPSHOTS_SCHEMA_NAME, SYSTEM_SCHEMA_NAME, SimulationMetaBuilder,
+    create_snapshot,
 };
 
-use self::results::RESULTS_SCHEMA_NAME;
-pub(crate) use self::results::{EVENTS_SCHEMA, METRICS_SCHEMA};
-use self::snapshots::{SNAPSHOTS_SCHEMA_NAME, create_snapshot};
-use self::system::{
-    SIMULATION_META_REF, SIMULATION_META_SCHEMA, SNAPSHOT_META_REF, SNAPSHOT_META_SCHEMA,
-    SYSTEM_SCHEMA_NAME, SimulationMetaBuilder,
-};
-
-mod results;
-mod snapshots;
-mod system;
+mod schemas;
 
 #[derive(Default)]
 pub struct SimulationContextBuilder {
@@ -264,16 +256,16 @@ impl SimulationContext {
         &self.simulation_id
     }
 
-    pub fn system(&self) -> system::SystemSchema<'_> {
-        system::SystemSchema { ctx: self }
+    pub fn system(&self) -> schemas::SystemSchema<'_> {
+        schemas::SystemSchema::new(self)
     }
 
-    pub fn snapshots(&self) -> snapshots::SnapshotsSchema<'_> {
-        snapshots::SnapshotsSchema { ctx: self }
+    pub fn snapshots(&self) -> schemas::SnapshotsSchema<'_> {
+        schemas::SnapshotsSchema::new(self)
     }
 
-    pub fn results(&self) -> results::ResultsSchema<'_> {
-        results::ResultsSchema { ctx: self }
+    pub fn results(&self) -> schemas::ResultsSchema<'_> {
+        schemas::ResultsSchema::new(self)
     }
 
     /// Write the current simulation state to a snapshot.
@@ -331,7 +323,7 @@ async fn register_system(
     schema: &dyn SchemaProvider,
     system_location: &Url,
 ) -> Result<()> {
-    use self::system::{
+    use self::schemas::{
         ROUTING_EDGES_REF, ROUTING_NODES_REF, SIMULATION_META_REF, SIMULATION_META_SCHEMA,
         SNAPSHOT_META_REF, SNAPSHOT_META_SCHEMA,
     };
@@ -358,7 +350,8 @@ async fn register_system(
 }
 
 async fn register_snapshots(schema: &dyn SchemaProvider, snapshots_path: &Url) -> Result<()> {
-    use self::snapshots::{OBJECTS_REF, ORDER_LINES_REF, ORDERS_REF, POPULATION_REF};
+    use self::schemas::{OBJECTS_REF, ORDER_LINES_REF, ORDERS_REF, POPULATION_REF};
+    use crate::builders::{OBJECTS_SCHEMA, ORDER_LINE_SCHEMA, ORDER_SCHEMA, PopulationDataBuilder};
 
     let population_path = snapshots_path.join(&format!("{}/", POPULATION_REF.table()))?;
     tracing::debug!(target: "caspers::simulation::context", "registering '{}' @ {}", *POPULATION_REF, population_path);
@@ -368,25 +361,25 @@ async fn register_snapshots(schema: &dyn SchemaProvider, snapshots_path: &Url) -
 
     let objects_path = snapshots_path.join(&format!("{}/", OBJECTS_REF.table()))?;
     tracing::debug!(target: "caspers::simulation::context", "registering '{}' @ {}", *OBJECTS_REF, objects_path);
-    let objects_snapshot = snapshot_provider(&objects_path, ObjectDataBuilder::snapshot_schema())?;
+    let objects_snapshot = snapshot_provider(&objects_path, OBJECTS_SCHEMA.clone())?;
     schema.register_table(OBJECTS_REF.table().to_string(), objects_snapshot)?;
 
     let orders_path = snapshots_path.join(&format!("{}/", ORDERS_REF.table()))?;
     tracing::debug!(target: "caspers::simulation::context", "registering '{}' @ {}", *ORDERS_REF, orders_path);
-    let orders_snapshot = snapshot_provider(&orders_path, OrderBuilder::snapshot_schema())?;
+    let orders_snapshot = snapshot_provider(&orders_path, ORDER_SCHEMA.clone())?;
     schema.register_table(ORDERS_REF.table().to_string(), orders_snapshot)?;
 
     let order_lines_path = snapshots_path.join(&format!("{}/", ORDER_LINES_REF.table()))?;
     tracing::debug!(target: "caspers::simulation::context", "registering '{}' @ {}", *ORDER_LINES_REF, order_lines_path);
-    let order_lines_snapshot =
-        snapshot_provider(&order_lines_path, OrderLineBuilder::snapshot_schema())?;
+    let order_lines_snapshot = snapshot_provider(&order_lines_path, ORDER_LINE_SCHEMA.clone())?;
     schema.register_table(ORDER_LINES_REF.table().to_string(), order_lines_snapshot)?;
 
     Ok(())
 }
 
 async fn register_results(schema: &dyn SchemaProvider, results_path: &Url) -> Result<()> {
-    use self::results::{EVENTS_REF, METRICS_REF};
+    use self::schemas::{EVENTS_REF, METRICS_REF};
+    use crate::builders::{EVENTS_SCHEMA, METRICS_SCHEMA};
 
     let metrics_path = results_path.join(&format!("{}/", METRICS_REF.table()))?;
     tracing::debug!(target: "caspers::simulation::context", "registering '{}' @ {}", *METRICS_REF, metrics_path);

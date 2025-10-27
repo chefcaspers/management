@@ -10,13 +10,15 @@ use itertools::Itertools as _;
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, Display, EnumString};
 
-use crate::SimulationContext;
+use crate::builders::{ORDER_LINE_SCHEMA, ORDER_SCHEMA};
+use crate::context::SimulationContext;
 use crate::error::{Error, Result};
 use crate::idents::{OrderId, OrderLineId, SiteId};
 
-pub(crate) use self::builder::{OrderBuilder, OrderDataBuilder, OrderLineBuilder};
-
-mod builder;
+pub static ORDER_SITE_ID_IDX: usize = 1;
+pub static ORDER_CUSTOMER_ID_IDX: usize = 2;
+pub static ORDER_DESTINATION_IDX: usize = 3;
+pub static ORDER_STATUS_IDX: usize = 4;
 
 #[derive(
     Debug, Clone, PartialEq, Eq, Hash, EnumString, Display, AsRefStr, Serialize, Deserialize,
@@ -77,8 +79,8 @@ pub struct OrderData {
 impl OrderData {
     pub fn empty() -> Self {
         Self {
-            orders: RecordBatch::new_empty(builder::ORDER_SCHEMA.clone()),
-            lines: RecordBatch::new_empty(builder::ORDER_LINE_SCHEMA.clone()),
+            orders: RecordBatch::new_empty(ORDER_SCHEMA.clone()),
+            lines: RecordBatch::new_empty(ORDER_LINE_SCHEMA.clone()),
             index: IndexMap::new(),
             lines_index: IndexSet::new(),
         }
@@ -96,10 +98,10 @@ impl OrderData {
     }
 
     pub(crate) fn try_new_from_data(orders: RecordBatch, lines: RecordBatch) -> Result<Self> {
-        if orders.schema().as_ref() != builder::ORDER_SCHEMA.as_ref() {
+        if orders.schema().as_ref() != ORDER_SCHEMA.as_ref() {
             return Err(Error::invalid_data("expected orders to have schema"));
         }
-        if lines.schema().as_ref() != builder::ORDER_LINE_SCHEMA.as_ref() {
+        if lines.schema().as_ref() != ORDER_LINE_SCHEMA.as_ref() {
             return Err(Error::invalid_data("expected lines to have schema"));
         }
         if orders.num_rows() == 0 && lines.num_rows() > 0 {
@@ -198,11 +200,8 @@ impl OrderData {
     }
 
     pub(crate) fn merge(&self, other: Self) -> Result<Self> {
-        let orders = concat_batches(&builder::ORDER_SCHEMA, &[self.orders.clone(), other.orders])?;
-        let lines = concat_batches(
-            &builder::ORDER_LINE_SCHEMA,
-            &[self.lines.clone(), other.lines],
-        )?;
+        let orders = concat_batches(&ORDER_SCHEMA, &[self.orders.clone(), other.orders])?;
+        let lines = concat_batches(&ORDER_LINE_SCHEMA, &[self.lines.clone(), other.lines])?;
         Self::try_new_from_data(orders, lines)
     }
 
@@ -241,7 +240,7 @@ impl OrderData {
             .cloned()
             .collect_vec();
         arrays.push(new_array);
-        self.lines = RecordBatch::try_new(builder::ORDER_LINE_SCHEMA.clone(), arrays)?;
+        self.lines = RecordBatch::try_new(ORDER_LINE_SCHEMA.clone(), arrays)?;
 
         let statuses = self
             .all_orders()
@@ -255,7 +254,7 @@ impl OrderData {
             .cloned()
             .collect_vec();
         arrays.push(status_arr);
-        self.orders = RecordBatch::try_new(builder::ORDER_SCHEMA.clone(), arrays)?;
+        self.orders = RecordBatch::try_new(ORDER_SCHEMA.clone(), arrays)?;
 
         Ok(())
     }
@@ -283,7 +282,7 @@ impl OrderData {
             .cloned()
             .collect_vec();
         arrays.push(status_arr);
-        self.orders = RecordBatch::try_new(builder::ORDER_SCHEMA.clone(), arrays)?;
+        self.orders = RecordBatch::try_new(ORDER_SCHEMA.clone(), arrays)?;
         Ok(())
     }
 }
@@ -310,7 +309,7 @@ impl<'a> OrderView<'a> {
     pub(crate) fn site_id(&self) -> &[u8] {
         self.data
             .orders
-            .column(builder::ORDER_SITE_ID_IDX)
+            .column(ORDER_SITE_ID_IDX)
             .as_fixed_size_binary()
             .value(self.valid_index)
     }
@@ -318,7 +317,7 @@ impl<'a> OrderView<'a> {
     pub(crate) fn customer_person_id(&self) -> &[u8] {
         self.data
             .orders
-            .column(builder::ORDER_CUSTOMER_ID_IDX)
+            .column(ORDER_CUSTOMER_ID_IDX)
             .as_fixed_size_binary()
             .value(self.valid_index)
     }
@@ -326,7 +325,7 @@ impl<'a> OrderView<'a> {
     pub fn status(&self) -> &str {
         self.data
             .orders
-            .column(builder::ORDER_STATUS_IDX)
+            .column(ORDER_STATUS_IDX)
             .as_string::<i32>()
             .value(self.valid_index)
     }
@@ -380,7 +379,7 @@ impl<'a> OrderView<'a> {
         let pos = self
             .data
             .orders
-            .column(builder::ORDER_DESTINATION_IDX)
+            .column(ORDER_DESTINATION_IDX)
             .as_fixed_size_list()
             .value(*order_idx);
         let vals = pos.as_primitive::<Float64Type>();

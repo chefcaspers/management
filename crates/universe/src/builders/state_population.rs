@@ -13,15 +13,15 @@ use itertools::Itertools as _;
 use rand::distr::{Distribution, Uniform};
 use rand::rngs::ThreadRng;
 
-use super::PersonRole;
+use crate::PersonRole;
 use crate::idents::PersonId;
-use crate::state::population::PersonState;
+use crate::state::PersonState;
 use crate::{Error, Result};
 
 static DEFAULT_STATE: LazyLock<String> =
     LazyLock::new(|| serde_json::to_string(&PersonState::default()).unwrap());
 
-pub(super) static POPULATION_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
+pub(crate) static POPULATION_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
     SchemaRef::new(Schema::new(vec![
         Field::new("id", DataType::FixedSizeBinary(16), false),
         Field::new("first_name", DataType::Utf8, false),
