@@ -170,3 +170,55 @@ impl Simulation {
         self.ctx.write_snapshot(&self.state).await
     }
 }
+
+#[cfg(feature = "templates")]
+impl Simulation {
+    pub async fn try_new_with_template(
+        template: crate::templates::Template,
+        system_path: &url::Url,
+    ) -> Result<Self> {
+        use crate::{
+            EntityView, ObjectData, PopulationData, ROUTING_EDGES_REF, ROUTING_NODES_REF,
+            context::storage::register_system,
+        };
+        use datafusion::catalog::{MemorySchemaProvider, SchemaProvider};
+        use rand::Rng as _;
+
+        let setup = template.load()?;
+        let objects = setup.object_data()?;
+        let object_data = ObjectData::try_new(objects)?;
+
+        let mut builder = PopulationData::builder();
+        for site in object_data.sites()? {
+            let n_people = rand::rng().random_range(500..1500);
+            let info = site.properties()?;
+            builder.add_site(n_people, info.latitude, info.longitude)?;
+        }
+        let population_data = builder.finish()?;
+
+        let ctx = SimulationContext::builder()
+            .with_use_in_memory(true)
+            .with_population_data(population_data)
+            .with_object_data(object_data)
+            .build()
+            .await?;
+
+        let schema = MemorySchemaProvider::new();
+        register_system(&schema, system_path)?;
+
+        let nodes_table = schema.table(ROUTING_NODES_REF.table()).await?.unwrap();
+        let edges_table = schema.table(ROUTING_EDGES_REF.table()).await?.unwrap();
+
+        let df_nodes = ctx.ctx().read_table(nodes_table)?;
+        df_nodes
+            .write_table(ROUTING_NODES_REF.to_string().as_str(), Default::default())
+            .await?;
+
+        let df_edges = ctx.ctx().read_table(edges_table)?;
+        df_edges
+            .write_table(ROUTING_EDGES_REF.to_string().as_str(), Default::default())
+            .await?;
+
+        Simulation::builder().with_context(ctx).build().await
+    }
+}

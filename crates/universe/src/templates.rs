@@ -7,21 +7,6 @@ use rand::Rng as _;
 
 use crate::error::Result;
 
-pub fn resolve_url(path: Option<impl AsRef<str>>) -> Result<url::Url> {
-    match path {
-        Some(path) => match url::Url::parse(path.as_ref()) {
-            Ok(url) => Ok(url),
-            Err(_) => {
-                let path = std::fs::canonicalize(path.as_ref())?;
-                Ok(url::Url::from_directory_path(path).unwrap())
-            }
-        },
-        None => {
-            Ok(url::Url::from_directory_path(std::env::current_dir()?.join(".caspers/")).unwrap())
-        }
-    }
-}
-
 pub async fn initialize_template(caspers_directory: &url::Url, template: Template) -> Result<()> {
     let setup = template.load()?;
     let objects = setup.object_data()?;
@@ -48,6 +33,19 @@ pub async fn initialize_template(caspers_directory: &url::Url, template: Templat
 pub struct Template {
     sites: Vec<SiteTemplate>,
     brands: Vec<BrandTemplate>,
+}
+
+impl Default for Template {
+    fn default() -> Self {
+        Self {
+            sites: vec![SiteTemplate::Amsterdam, SiteTemplate::London],
+            brands: vec![
+                BrandTemplate::Asian,
+                BrandTemplate::FastFood,
+                BrandTemplate::Mexican,
+            ],
+        }
+    }
 }
 
 impl Template {

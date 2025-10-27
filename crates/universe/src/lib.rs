@@ -169,3 +169,18 @@ pub async fn run_simulation(
     simulation.run(duration).await?;
     Ok(())
 }
+
+pub fn resolve_url(path: Option<impl AsRef<str>>) -> Result<url::Url> {
+    match path {
+        Some(path) => match url::Url::parse(path.as_ref()) {
+            Ok(url) => Ok(url),
+            Err(_) => {
+                let path = std::fs::canonicalize(path.as_ref())?;
+                Ok(url::Url::from_directory_path(path).unwrap())
+            }
+        },
+        None => {
+            Ok(url::Url::from_directory_path(std::env::current_dir()?.join(".caspers/")).unwrap())
+        }
+    }
+}

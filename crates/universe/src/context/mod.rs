@@ -1,18 +1,10 @@
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use arrow::array::RecordBatch;
 use arrow::datatypes::SchemaRef;
-use arrow_schema::{DataType, Field, SchemaBuilder};
-use datafusion::catalog::{
-    CatalogProvider, MemoryCatalogProvider, MemorySchemaProvider, SchemaProvider, Session,
-    TableProvider,
-};
+use arrow_schema::{DataType, Field, FieldRef, Schema, SchemaBuilder};
+use datafusion::catalog::CatalogProvider;
 use datafusion::dataframe::DataFrameWriteOptions;
-use datafusion::datasource::file_format::json::JsonFormat;
-use datafusion::datasource::file_format::parquet::ParquetFormat;
-use datafusion::datasource::listing::{
-    ListingOptions, ListingTable, ListingTableConfig, ListingTableUrl,
-};
 use datafusion::execution::SessionStateBuilder;
 use datafusion::logical_expr::dml::InsertOp;
 use datafusion::prelude::{DataFrame, SessionContext, col, lit};
@@ -21,24 +13,25 @@ use datafusion::sql::TableReference;
 use url::Url;
 use uuid::Uuid;
 
-use crate::{Error, ObjectData, OrderData, PopulationData, Result, State};
+pub(crate) use self::schemas::system::{ROUTING_EDGES_REF, ROUTING_NODES_REF};
+pub(crate) use self::storage::storage_catalog;
+use crate::context::memory::in_memory_catalog;
+use crate::context::schemas::SystemSchema;
+use crate::{Error, ObjectData, OrderData, PopulationData, Result, State, resolve_url};
 
-use self::schemas::{
-    RESULTS_SCHEMA_NAME, SIMULATION_META_REF, SIMULATION_META_SCHEMA, SNAPSHOT_META_REF,
-    SNAPSHOT_META_SCHEMA, SNAPSHOTS_SCHEMA_NAME, SYSTEM_SCHEMA_NAME, SimulationMetaBuilder,
-    create_snapshot,
-};
+use self::schemas::{SIMULATION_META_REF, SimulationMetaBuilder, create_snapshot};
 
+mod memory;
 mod schemas;
+pub(crate) mod storage;
 
 #[derive(Default)]
 pub struct SimulationContextBuilder {
     simulation_id: Option<Uuid>,
     snapshot_id: Option<Uuid>,
 
-    routing_location: Option<Url>,
-    snapshots_location: Option<Url>,
     working_directory: Option<Url>,
+    use_in_memory: bool,
 
     object_data: Option<ObjectData>,
     population_data: Option<RecordBatch>,
@@ -59,18 +52,13 @@ impl SimulationContextBuilder {
         self
     }
 
-    pub fn with_routing_location(mut self, routing_location: impl Into<Option<Url>>) -> Self {
-        self.routing_location = routing_location.into();
-        self
-    }
-
-    pub fn with_snapshots_location(mut self, snapshots_location: impl Into<Option<Url>>) -> Self {
-        self.snapshots_location = snapshots_location.into();
-        self
-    }
-
     pub fn with_working_directory(mut self, working_directory: impl Into<Option<Url>>) -> Self {
         self.working_directory = working_directory.into();
+        self
+    }
+
+    pub fn with_use_in_memory(mut self, use_in_memory: bool) -> Self {
+        self.use_in_memory = use_in_memory;
         self
     }
 
@@ -98,13 +86,11 @@ impl SimulationContextBuilder {
         let Some(working_directory) = &self.working_directory else {
             return Err(Error::internal("System location not set"));
         };
-        let system_location =
-            working_directory.join(&format!("{}/", SNAPSHOT_META_REF.schema().unwrap()))?;
-        let snapshots_location =
-            system_location.join(&format!("{}/", SNAPSHOT_META_REF.table()))?;
-        let snapshots = json_provider(&snapshots_location, SNAPSHOT_META_SCHEMA.clone())?;
+        let catalog = storage_catalog(&working_directory)?;
+        ctx.register_catalog("caspers", catalog);
+        let system = SystemSchema::new(&ctx);
 
-        let df = ctx.read_table(snapshots)?;
+        let df = system.snapshots().await?;
         if let Some(simulation_id) = self.simulation_id {
             return Ok(df
                 .filter(
@@ -122,26 +108,16 @@ impl SimulationContextBuilder {
         let Some(working_directory) = &self.working_directory else {
             return Err(Error::internal("System location not set"));
         };
-        let system_location =
-            working_directory.join(&format!("{}/", SIMULATION_META_REF.schema().unwrap()))?;
-        let simulations_location =
-            system_location.join(&format!("{}/", SIMULATION_META_REF.table()))?;
-        let simulations = json_provider(&simulations_location, SIMULATION_META_SCHEMA.clone())?;
-
-        Ok(ctx.read_table(simulations)?)
+        let catalog = storage_catalog(&working_directory)?;
+        ctx.register_catalog("caspers", catalog);
+        let system = SystemSchema::new(&ctx);
+        system.simulations().await
     }
 
     pub async fn build(self) -> Result<SimulationContext> {
         let (ctx, simulation_id) = self.session();
 
-        let system_schema = self.build_system(&ctx).await?;
-        let snapshots_schema = self.build_snapshots(&ctx).await?;
-        let results_schema = self.build_results(&ctx).await?;
-
-        let catalog = Arc::new(MemoryCatalogProvider::new());
-        catalog.register_schema(SYSTEM_SCHEMA_NAME, system_schema)?;
-        catalog.register_schema(SNAPSHOTS_SCHEMA_NAME, snapshots_schema)?;
-        catalog.register_schema(RESULTS_SCHEMA_NAME, results_schema)?;
+        let catalog = self.build_catalog(&ctx).await?;
         ctx.register_catalog("caspers", catalog);
 
         let snapshot_id = if let Some(snapshot_id) = self.snapshot_id {
@@ -194,42 +170,15 @@ impl SimulationContextBuilder {
         Ok(sim_ctx)
     }
 
-    async fn build_system(&self, ctx: &SessionContext) -> Result<Arc<dyn SchemaProvider>> {
-        let system_schema = Arc::new(MemorySchemaProvider::new());
-        if let Some(routing_location) = &self.routing_location {
-            register_system(ctx, system_schema.as_ref(), routing_location).await?;
-        } else if let Some(working_directory) = &self.working_directory {
-            let routing_location = working_directory.join(&format!("{}/", SYSTEM_SCHEMA_NAME))?;
-            register_system(ctx, system_schema.as_ref(), &routing_location).await?;
-        } else {
-            return Err(Error::internal("Routing location is not provided"));
-        }
-        Ok(system_schema)
-    }
-
-    async fn build_snapshots(&self, _ctx: &SessionContext) -> Result<Arc<dyn SchemaProvider>> {
-        let snapshots_schema = Arc::new(MemorySchemaProvider::new());
-        if let Some(snapshots_location) = &self.snapshots_location {
-            register_snapshots(snapshots_schema.as_ref(), snapshots_location).await?;
-        } else if let Some(working_directory) = &self.working_directory {
-            let snapshots_location =
-                working_directory.join(&format!("{}/", SNAPSHOTS_SCHEMA_NAME))?;
-            register_snapshots(snapshots_schema.as_ref(), &snapshots_location).await?;
-        } else {
-            return Err(Error::internal("Snapshots location is not provided"));
-        }
-        Ok(snapshots_schema)
-    }
-
-    async fn build_results(&self, _ctx: &SessionContext) -> Result<Arc<dyn SchemaProvider>> {
-        let results_schema = Arc::new(MemorySchemaProvider::new());
+    async fn build_catalog(&self, _ctx: &SessionContext) -> Result<Arc<dyn CatalogProvider>> {
         if let Some(working_directory) = &self.working_directory {
-            let results_location = working_directory.join(&format!("{}/", RESULTS_SCHEMA_NAME))?;
-            register_results(results_schema.as_ref(), &results_location).await?;
+            let catalog_location = resolve_url(working_directory.into())?;
+            storage_catalog(&catalog_location)
+        } else if self.use_in_memory {
+            in_memory_catalog()
         } else {
-            return Err(Error::internal("Results location is not provided"));
+            Err(Error::internal("Results location is not provided"))
         }
-        Ok(results_schema)
     }
 }
 
@@ -257,7 +206,7 @@ impl SimulationContext {
     }
 
     pub fn system(&self) -> schemas::SystemSchema<'_> {
-        schemas::SystemSchema::new(self)
+        schemas::SystemSchema::new(&self.ctx)
     }
 
     pub fn snapshots(&self) -> schemas::SnapshotsSchema<'_> {
@@ -318,134 +267,16 @@ impl SimulationContext {
     }
 }
 
-async fn register_system(
-    ctx: &SessionContext,
-    schema: &dyn SchemaProvider,
-    system_location: &Url,
-) -> Result<()> {
-    use self::schemas::{
-        ROUTING_EDGES_REF, ROUTING_NODES_REF, SIMULATION_META_REF, SIMULATION_META_SCHEMA,
-        SNAPSHOT_META_REF, SNAPSHOT_META_SCHEMA,
-    };
-
-    let state = ctx.state();
-
-    let nodes_path = system_location.join(&format!("{}/", ROUTING_NODES_REF.table()))?;
-    let routing_nodes = read_parquet_table(&nodes_path, &state).await?;
-    schema.register_table(ROUTING_NODES_REF.table().into(), routing_nodes)?;
-
-    let edge_path = system_location.join(&format!("{}/", ROUTING_EDGES_REF.table()))?;
-    let routing_edges = read_parquet_table(&edge_path, &state).await?;
-    schema.register_table(ROUTING_EDGES_REF.table().into(), routing_edges)?;
-
-    let simulations_path = system_location.join(&format!("{}/", SIMULATION_META_REF.table()))?;
-    let simulations = json_provider(&simulations_path, SIMULATION_META_SCHEMA.clone())?;
-    schema.register_table(SIMULATION_META_REF.table().into(), simulations)?;
-
-    let snapshots_path = system_location.join(&format!("{}/", SNAPSHOT_META_REF.table()))?;
-    let snapshots = json_provider(&snapshots_path, SNAPSHOT_META_SCHEMA.clone())?;
-    schema.register_table(SNAPSHOT_META_REF.table().into(), snapshots)?;
-
-    Ok(())
-}
-
-async fn register_snapshots(schema: &dyn SchemaProvider, snapshots_path: &Url) -> Result<()> {
-    use self::schemas::{OBJECTS_REF, ORDER_LINES_REF, ORDERS_REF, POPULATION_REF};
-    use crate::builders::{OBJECTS_SCHEMA, ORDER_LINE_SCHEMA, ORDER_SCHEMA, PopulationDataBuilder};
-
-    let population_path = snapshots_path.join(&format!("{}/", POPULATION_REF.table()))?;
-    tracing::debug!(target: "caspers::simulation::context", "registering '{}' @ {}", *POPULATION_REF, population_path);
-    let population_snapshot =
-        snapshot_provider(&population_path, PopulationDataBuilder::snapshot_schema())?;
-    schema.register_table(POPULATION_REF.table().to_string(), population_snapshot)?;
-
-    let objects_path = snapshots_path.join(&format!("{}/", OBJECTS_REF.table()))?;
-    tracing::debug!(target: "caspers::simulation::context", "registering '{}' @ {}", *OBJECTS_REF, objects_path);
-    let objects_snapshot = snapshot_provider(&objects_path, OBJECTS_SCHEMA.clone())?;
-    schema.register_table(OBJECTS_REF.table().to_string(), objects_snapshot)?;
-
-    let orders_path = snapshots_path.join(&format!("{}/", ORDERS_REF.table()))?;
-    tracing::debug!(target: "caspers::simulation::context", "registering '{}' @ {}", *ORDERS_REF, orders_path);
-    let orders_snapshot = snapshot_provider(&orders_path, ORDER_SCHEMA.clone())?;
-    schema.register_table(ORDERS_REF.table().to_string(), orders_snapshot)?;
-
-    let order_lines_path = snapshots_path.join(&format!("{}/", ORDER_LINES_REF.table()))?;
-    tracing::debug!(target: "caspers::simulation::context", "registering '{}' @ {}", *ORDER_LINES_REF, order_lines_path);
-    let order_lines_snapshot = snapshot_provider(&order_lines_path, ORDER_LINE_SCHEMA.clone())?;
-    schema.register_table(ORDER_LINES_REF.table().to_string(), order_lines_snapshot)?;
-
-    Ok(())
-}
-
-async fn register_results(schema: &dyn SchemaProvider, results_path: &Url) -> Result<()> {
-    use self::schemas::{EVENTS_REF, METRICS_REF};
-    use crate::builders::{EVENTS_SCHEMA, METRICS_SCHEMA};
-
-    let metrics_path = results_path.join(&format!("{}/", METRICS_REF.table()))?;
-    tracing::debug!(target: "caspers::simulation::context", "registering '{}' @ {}", *METRICS_REF, metrics_path);
-    let metrics_snapshot = snapshot_provider(&metrics_path, METRICS_SCHEMA.clone())?;
-    schema.register_table(METRICS_REF.table().to_string(), metrics_snapshot)?;
-
-    let events_path = results_path.join(&format!("{}/", EVENTS_REF.table()))?;
-    tracing::debug!(target: "caspers::simulation::context", "registering '{}' @ {}", *EVENTS_REF, events_path);
-    let events_snapshot = snapshot_provider(&events_path, EVENTS_SCHEMA.clone())?;
-    schema.register_table(EVENTS_REF.table().to_string(), events_snapshot)?;
-
-    Ok(())
-}
-
-async fn read_parquet_table(
-    table_path: &Url,
-    session: &dyn Session,
-) -> Result<Arc<dyn TableProvider>> {
-    let table_path = ListingTableUrl::parse(table_path)?;
-
-    // Create default parquet options
-    let file_format = ParquetFormat::new();
-    let listing_options =
-        ListingOptions::new(Arc::new(file_format)).with_file_extension(".parquet");
-
-    // Resolve the schema
-    let resolved_schema = listing_options.infer_schema(session, &table_path).await?;
-
-    let config = ListingTableConfig::new(table_path)
-        .with_listing_options(listing_options)
-        .with_schema(resolved_schema.clone());
-
-    Ok(Arc::new(ListingTable::try_new(config)?))
-}
-
-fn snapshot_provider(table_path: &Url, schema: SchemaRef) -> Result<Arc<dyn TableProvider>> {
-    let table_path = ListingTableUrl::parse(table_path)?;
-
+fn wrap_schema(schema: &Schema) -> SchemaRef {
+    static SIMULATION_ID_FIELD: LazyLock<FieldRef> =
+        LazyLock::new(|| Field::new("simulation_id", DataType::Utf8View, false).into());
+    static SNAPSHOT_ID_FIELD: LazyLock<FieldRef> =
+        LazyLock::new(|| Field::new("snapshot_id", DataType::Utf8View, false).into());
     let mut builder = SchemaBuilder::new();
     for field in schema.fields() {
         builder.push(field.clone());
     }
-    builder.push(Field::new("simulation_id", DataType::Utf8View, false));
-    builder.push(Field::new("snapshot_id", DataType::Utf8View, false));
-    let schema = builder.finish();
-
-    let file_format = ParquetFormat::new();
-    let listing_options =
-        ListingOptions::new(Arc::new(file_format)).with_file_extension(".parquet");
-
-    let config = ListingTableConfig::new(table_path)
-        .with_listing_options(listing_options)
-        .with_schema(schema.into());
-
-    Ok(Arc::new(ListingTable::try_new(config)?))
-}
-
-fn json_provider(table_path: &Url, schema: SchemaRef) -> Result<Arc<dyn TableProvider>> {
-    let table_path = ListingTableUrl::parse(table_path)?;
-
-    let file_format = JsonFormat::default();
-    let listing_options = ListingOptions::new(Arc::new(file_format)).with_file_extension(".json");
-
-    let config = ListingTableConfig::new(table_path)
-        .with_listing_options(listing_options)
-        .with_schema(schema);
-
-    Ok(Arc::new(ListingTable::try_new(config)?))
+    builder.push(SIMULATION_ID_FIELD.clone());
+    builder.push(SNAPSHOT_ID_FIELD.clone());
+    builder.finish().into()
 }
