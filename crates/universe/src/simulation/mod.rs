@@ -6,10 +6,9 @@ use tracing::{Level, Span, field, instrument};
 
 use crate::agents::{PopulationRunner, SiteRunner};
 use crate::context::EventStatsBuffer;
-use crate::context::SimulationContext;
+use crate::context::{EventDataBuilder, SimulationContext};
 use crate::error::Result;
 use crate::idents::SiteId;
-use crate::simulation::execution::EventDataBuilder;
 use crate::state::State;
 
 pub use self::builder::*;
@@ -17,7 +16,6 @@ pub use self::events::*;
 
 mod builder;
 mod events;
-mod execution;
 
 /// Trait for entities that need to be updated each simulation step
 pub trait Simulatable {
