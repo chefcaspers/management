@@ -16,7 +16,7 @@ use crate::models::{MenuItem, Site, Station};
 
 use super::EntityView;
 
-use crate::context::ObjectDataBuilder;
+use crate::builders::ObjectDataBuilder;
 
 #[derive(Debug, thiserror::Error)]
 enum VendorDataError {

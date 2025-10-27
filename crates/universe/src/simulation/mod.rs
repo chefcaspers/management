@@ -5,8 +5,8 @@ use rand::distr::{Distribution, Uniform};
 use tracing::{Level, Span, field, instrument};
 
 use crate::agents::{PopulationRunner, SiteRunner};
-use crate::context::EventStatsBuffer;
-use crate::context::{EventDataBuilder, SimulationContext};
+use crate::builders::{EventDataBuilder, EventStatsBuffer};
+use crate::context::SimulationContext;
 use crate::error::Result;
 use crate::idents::SiteId;
 use crate::state::State;

@@ -10,7 +10,8 @@ use itertools::Itertools as _;
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, Display, EnumString};
 
-use crate::context::{ORDER_LINE_SCHEMA, ORDER_SCHEMA, SimulationContext};
+use crate::builders::{ORDER_LINE_SCHEMA, ORDER_SCHEMA};
+use crate::context::SimulationContext;
 use crate::error::{Error, Result};
 use crate::idents::{OrderId, OrderLineId, SiteId};
 

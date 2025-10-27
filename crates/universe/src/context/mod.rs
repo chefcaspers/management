@@ -23,15 +23,12 @@ use uuid::Uuid;
 
 use crate::{Error, ObjectData, OrderData, PopulationData, Result, State};
 
-pub use self::builders::*;
-pub(crate) use self::builders::{EVENTS_SCHEMA, METRICS_SCHEMA};
 use self::schemas::{
     RESULTS_SCHEMA_NAME, SIMULATION_META_REF, SIMULATION_META_SCHEMA, SNAPSHOT_META_REF,
     SNAPSHOT_META_SCHEMA, SNAPSHOTS_SCHEMA_NAME, SYSTEM_SCHEMA_NAME, SimulationMetaBuilder,
     create_snapshot,
 };
 
-mod builders;
 mod schemas;
 
 #[derive(Default)]
@@ -354,6 +351,7 @@ async fn register_system(
 
 async fn register_snapshots(schema: &dyn SchemaProvider, snapshots_path: &Url) -> Result<()> {
     use self::schemas::{OBJECTS_REF, ORDER_LINES_REF, ORDERS_REF, POPULATION_REF};
+    use crate::builders::{OBJECTS_SCHEMA, ORDER_LINE_SCHEMA, ORDER_SCHEMA, PopulationDataBuilder};
 
     let population_path = snapshots_path.join(&format!("{}/", POPULATION_REF.table()))?;
     tracing::debug!(target: "caspers::simulation::context", "registering '{}' @ {}", *POPULATION_REF, population_path);
@@ -381,6 +379,7 @@ async fn register_snapshots(schema: &dyn SchemaProvider, snapshots_path: &Url) -
 
 async fn register_results(schema: &dyn SchemaProvider, results_path: &Url) -> Result<()> {
     use self::schemas::{EVENTS_REF, METRICS_REF};
+    use crate::builders::{EVENTS_SCHEMA, METRICS_SCHEMA};
 
     let metrics_path = results_path.join(&format!("{}/", METRICS_REF.table()))?;
     tracing::debug!(target: "caspers::simulation::context", "registering '{}' @ {}", *METRICS_REF, metrics_path);

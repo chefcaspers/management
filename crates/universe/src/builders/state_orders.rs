@@ -17,6 +17,12 @@ pub struct OrderDataBuilder {
     lines: OrderLineBuilder,
 }
 
+impl Default for OrderDataBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OrderDataBuilder {
     pub fn new() -> Self {
         Self {

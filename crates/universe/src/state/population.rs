@@ -26,7 +26,7 @@ use crate::idents::{OrderId, PersonId};
 use crate::{EventPayload, OrderData, OrderStatus};
 
 use super::movement::{Journey, Transport};
-use crate::context::{POPULATION_SCHEMA, PopulationDataBuilder};
+use crate::builders::{POPULATION_SCHEMA, PopulationDataBuilder};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub enum PersonStatus {
