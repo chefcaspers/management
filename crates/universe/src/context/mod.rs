@@ -27,17 +27,16 @@ use crate::{
     PopulationData, PopulationDataBuilder, State,
 };
 
-use self::results::RESULTS_SCHEMA_NAME;
-pub(crate) use self::results::{EVENTS_SCHEMA, METRICS_SCHEMA};
-use self::snapshots::{SNAPSHOTS_SCHEMA_NAME, create_snapshot};
-use self::system::{
-    SIMULATION_META_REF, SIMULATION_META_SCHEMA, SNAPSHOT_META_REF, SNAPSHOT_META_SCHEMA,
-    SYSTEM_SCHEMA_NAME, SimulationMetaBuilder,
+pub use self::builders::*;
+pub(crate) use self::builders::{EVENTS_SCHEMA, METRICS_SCHEMA};
+use self::schemas::{
+    RESULTS_SCHEMA_NAME, SIMULATION_META_REF, SIMULATION_META_SCHEMA, SNAPSHOT_META_REF,
+    SNAPSHOT_META_SCHEMA, SNAPSHOTS_SCHEMA_NAME, SYSTEM_SCHEMA_NAME, SimulationMetaBuilder,
+    create_snapshot,
 };
 
-mod results;
-mod snapshots;
-mod system;
+mod builders;
+mod schemas;
 
 #[derive(Default)]
 pub struct SimulationContextBuilder {
@@ -264,16 +263,16 @@ impl SimulationContext {
         &self.simulation_id
     }
 
-    pub fn system(&self) -> system::SystemSchema<'_> {
-        system::SystemSchema { ctx: self }
+    pub fn system(&self) -> schemas::SystemSchema<'_> {
+        schemas::SystemSchema::new(self)
     }
 
-    pub fn snapshots(&self) -> snapshots::SnapshotsSchema<'_> {
-        snapshots::SnapshotsSchema { ctx: self }
+    pub fn snapshots(&self) -> schemas::SnapshotsSchema<'_> {
+        schemas::SnapshotsSchema::new(self)
     }
 
-    pub fn results(&self) -> results::ResultsSchema<'_> {
-        results::ResultsSchema { ctx: self }
+    pub fn results(&self) -> schemas::ResultsSchema<'_> {
+        schemas::ResultsSchema::new(self)
     }
 
     /// Write the current simulation state to a snapshot.
@@ -331,7 +330,7 @@ async fn register_system(
     schema: &dyn SchemaProvider,
     system_location: &Url,
 ) -> Result<()> {
-    use self::system::{
+    use self::schemas::{
         ROUTING_EDGES_REF, ROUTING_NODES_REF, SIMULATION_META_REF, SIMULATION_META_SCHEMA,
         SNAPSHOT_META_REF, SNAPSHOT_META_SCHEMA,
     };
@@ -358,7 +357,7 @@ async fn register_system(
 }
 
 async fn register_snapshots(schema: &dyn SchemaProvider, snapshots_path: &Url) -> Result<()> {
-    use self::snapshots::{OBJECTS_REF, ORDER_LINES_REF, ORDERS_REF, POPULATION_REF};
+    use self::schemas::{OBJECTS_REF, ORDER_LINES_REF, ORDERS_REF, POPULATION_REF};
 
     let population_path = snapshots_path.join(&format!("{}/", POPULATION_REF.table()))?;
     tracing::debug!(target: "caspers::simulation::context", "registering '{}' @ {}", *POPULATION_REF, population_path);
@@ -386,7 +385,7 @@ async fn register_snapshots(schema: &dyn SchemaProvider, snapshots_path: &Url) -
 }
 
 async fn register_results(schema: &dyn SchemaProvider, results_path: &Url) -> Result<()> {
-    use self::results::{EVENTS_REF, METRICS_REF};
+    use self::schemas::{EVENTS_REF, METRICS_REF};
 
     let metrics_path = results_path.join(&format!("{}/", METRICS_REF.table()))?;
     tracing::debug!(target: "caspers::simulation::context", "registering '{}' @ {}", *METRICS_REF, metrics_path);

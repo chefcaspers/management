@@ -5,21 +5,19 @@ use rand::distr::{Distribution, Uniform};
 use tracing::{Level, Span, field, instrument};
 
 use crate::agents::{PopulationRunner, SiteRunner};
+use crate::context::EventStatsBuffer;
+use crate::context::SimulationContext;
 use crate::error::Result;
 use crate::idents::SiteId;
 use crate::simulation::execution::EventDataBuilder;
-use crate::simulation::stats::EventStatsBuffer;
 use crate::state::State;
 
 pub use self::builder::*;
-pub use self::context::*;
 pub use self::events::*;
 
 mod builder;
-mod context;
 mod events;
 mod execution;
-mod stats;
 
 /// Trait for entities that need to be updated each simulation step
 pub trait Simulatable {

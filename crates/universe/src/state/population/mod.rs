@@ -20,9 +20,10 @@ use serde::{Deserialize, Serialize};
 use strum::AsRefStr;
 use uuid::Uuid;
 
+use crate::context::SimulationContext;
 use crate::error::{Error, Result};
 use crate::idents::{OrderId, PersonId};
-use crate::{EventPayload, OrderData, OrderStatus, SimulationContext};
+use crate::{EventPayload, OrderData, OrderStatus};
 
 use self::builder::POPULATION_SCHEMA;
 use super::movement::{Journey, Transport};

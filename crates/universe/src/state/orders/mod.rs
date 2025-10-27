@@ -10,7 +10,7 @@ use itertools::Itertools as _;
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, Display, EnumString};
 
-use crate::SimulationContext;
+use crate::context::SimulationContext;
 use crate::error::{Error, Result};
 use crate::idents::{OrderId, OrderLineId, SiteId};
 

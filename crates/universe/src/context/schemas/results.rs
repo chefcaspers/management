@@ -1,38 +1,27 @@
-use std::sync::{Arc, LazyLock};
+use std::sync::LazyLock;
 
-use arrow_schema::{DataType, Field, Schema, SchemaRef, TimeUnit};
 use datafusion::prelude::DataFrame;
 use datafusion::sql::TableReference;
 
 use crate::Result;
 
-use super::SimulationContext;
-pub(crate) use crate::simulation::execution::EVENTS_SCHEMA;
+use crate::context::SimulationContext;
 
-pub(super) static RESULTS_SCHEMA_NAME: &str = "results";
-pub(super) static METRICS_REF: LazyLock<TableReference> =
+pub(in crate::context) static RESULTS_SCHEMA_NAME: &str = "results";
+pub(in crate::context) static METRICS_REF: LazyLock<TableReference> =
     LazyLock::new(|| TableReference::full("caspers", RESULTS_SCHEMA_NAME, "metrics"));
-pub(super) static EVENTS_REF: LazyLock<TableReference> =
+pub(in crate::context) static EVENTS_REF: LazyLock<TableReference> =
     LazyLock::new(|| TableReference::full("caspers", RESULTS_SCHEMA_NAME, "events"));
 
-pub(crate) static METRICS_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
-    Arc::new(Schema::new(vec![
-        Field::new(
-            "timestamp",
-            DataType::Timestamp(TimeUnit::Millisecond, Some("UTC".into())),
-            false,
-        ),
-        Field::new("source", DataType::Utf8View, false),
-        Field::new("label", DataType::Utf8View, false),
-        Field::new("value", DataType::Int64, false),
-    ]))
-});
-
 pub struct ResultsSchema<'a> {
-    pub(super) ctx: &'a SimulationContext,
+    ctx: &'a SimulationContext,
 }
 
-impl ResultsSchema<'_> {
+impl<'a> ResultsSchema<'a> {
+    pub(in crate::context) fn new(ctx: &'a SimulationContext) -> Self {
+        Self { ctx }
+    }
+
     pub async fn metrics(&self) -> Result<DataFrame> {
         static COLUMNS: &[&str; 4] = &["timestamp", "source", "label", "value"];
         Ok(self

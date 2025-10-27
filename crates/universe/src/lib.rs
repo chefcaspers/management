@@ -14,11 +14,13 @@ pub use self::idents::*;
 pub use self::models::*;
 pub use self::simulation::*;
 pub use self::state::*;
+pub use crate::context::*;
 
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 
 mod agents;
+mod context;
 mod error;
 mod idents;
 mod models;
