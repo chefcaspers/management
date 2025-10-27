@@ -21,11 +21,7 @@ use datafusion::sql::TableReference;
 use url::Url;
 use uuid::Uuid;
 
-use crate::error::Result;
-use crate::{
-    Error, ObjectData, ObjectDataBuilder, OrderBuilder, OrderData, OrderLineBuilder,
-    PopulationData, PopulationDataBuilder, State,
-};
+use crate::{Error, ObjectData, OrderData, PopulationData, Result, State};
 
 pub use self::builders::*;
 pub(crate) use self::builders::{EVENTS_SCHEMA, METRICS_SCHEMA};
@@ -367,18 +363,17 @@ async fn register_snapshots(schema: &dyn SchemaProvider, snapshots_path: &Url) -
 
     let objects_path = snapshots_path.join(&format!("{}/", OBJECTS_REF.table()))?;
     tracing::debug!(target: "caspers::simulation::context", "registering '{}' @ {}", *OBJECTS_REF, objects_path);
-    let objects_snapshot = snapshot_provider(&objects_path, ObjectDataBuilder::snapshot_schema())?;
+    let objects_snapshot = snapshot_provider(&objects_path, OBJECTS_SCHEMA.clone())?;
     schema.register_table(OBJECTS_REF.table().to_string(), objects_snapshot)?;
 
     let orders_path = snapshots_path.join(&format!("{}/", ORDERS_REF.table()))?;
     tracing::debug!(target: "caspers::simulation::context", "registering '{}' @ {}", *ORDERS_REF, orders_path);
-    let orders_snapshot = snapshot_provider(&orders_path, OrderBuilder::snapshot_schema())?;
+    let orders_snapshot = snapshot_provider(&orders_path, ORDER_SCHEMA.clone())?;
     schema.register_table(ORDERS_REF.table().to_string(), orders_snapshot)?;
 
     let order_lines_path = snapshots_path.join(&format!("{}/", ORDER_LINES_REF.table()))?;
     tracing::debug!(target: "caspers::simulation::context", "registering '{}' @ {}", *ORDER_LINES_REF, order_lines_path);
-    let order_lines_snapshot =
-        snapshot_provider(&order_lines_path, OrderLineBuilder::snapshot_schema())?;
+    let order_lines_snapshot = snapshot_provider(&order_lines_path, ORDER_LINE_SCHEMA.clone())?;
     schema.register_table(ORDER_LINES_REF.table().to_string(), order_lines_snapshot)?;
 
     Ok(())

@@ -16,11 +16,7 @@ use crate::models::{MenuItem, Site, Station};
 
 use super::EntityView;
 
-pub(crate) use builder::ObjectDataBuilder;
-
-mod builder;
-
-// TODO: object indices for frequently accessed objects
+use crate::context::ObjectDataBuilder;
 
 #[derive(Debug, thiserror::Error)]
 enum VendorDataError {
@@ -64,6 +60,10 @@ pub struct ObjectData {
 }
 
 impl ObjectData {
+    pub fn builder() -> ObjectDataBuilder {
+        ObjectDataBuilder::new()
+    }
+
     /// Record batch MUST be sorted by parent_id.
     pub fn try_new(objects: RecordBatch) -> Result<Self> {
         let data = Self {

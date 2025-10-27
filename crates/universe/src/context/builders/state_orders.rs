@@ -8,9 +8,9 @@ use arrow_schema::extension::Uuid as UuidExtension;
 use arrow_schema::{ArrowError, DataType, Field, Schema, SchemaRef};
 use h3o::LatLng;
 
-use super::{OrderData, OrderLineStatus, OrderStatus};
 use crate::error::Result;
 use crate::idents::{BrandId, MenuItemId, OrderId, OrderLineId, PersonId, SiteId};
+use crate::{OrderData, OrderLineStatus, OrderStatus};
 
 pub struct OrderDataBuilder {
     orders: OrderBuilder,
@@ -81,10 +81,6 @@ impl OrderLineBuilder {
         }
     }
 
-    pub(crate) fn snapshot_schema() -> SchemaRef {
-        ORDER_LINE_SCHEMA.clone()
-    }
-
     pub fn add_line(
         &mut self,
         order_id: impl AsRef<[u8]>,
@@ -114,10 +110,6 @@ impl OrderLineBuilder {
     }
 }
 
-pub(super) static ORDER_SITE_ID_IDX: usize = 1;
-pub(super) static ORDER_CUSTOMER_ID_IDX: usize = 2;
-pub(super) static ORDER_DESTINATION_IDX: usize = 3;
-pub(super) static ORDER_STATUS_IDX: usize = 4;
 pub(crate) static ORDER_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
     let fields = vec![
         Field::new("id", DataType::FixedSizeBinary(16), false).with_extension_type(UuidExtension),
@@ -156,10 +148,6 @@ impl OrderBuilder {
         }
     }
 
-    pub(crate) fn snapshot_schema() -> SchemaRef {
-        ORDER_SCHEMA.clone()
-    }
-
     pub fn add_order(
         &mut self,
         site_id: impl AsRef<[u8]>,
@@ -188,23 +176,5 @@ impl OrderBuilder {
                 Arc::new(self.statuses.finish()),
             ],
         )
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_order_schema() {
-        let schema = ORDER_SCHEMA.clone();
-
-        let destination = schema.field(ORDER_DESTINATION_IDX);
-        assert_eq!(destination.name(), "destination");
-
-        let status = schema.field(ORDER_STATUS_IDX);
-        assert_eq!(status.name(), "status");
-        assert_eq!(status.data_type(), &DataType::Utf8);
-        assert!(schema.fields().len() == ORDER_STATUS_IDX + 1);
     }
 }
