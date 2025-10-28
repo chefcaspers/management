@@ -141,7 +141,7 @@ impl<'a> SystemSchema<'a> {
     }
 
     fn ctx(&self) -> &SessionContext {
-        &self.ctx
+        self.ctx
     }
 
     pub(crate) async fn routing_nodes(&self) -> Result<DataFrame> {

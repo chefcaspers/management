@@ -113,7 +113,7 @@ impl SimulationBuilder {
         if !working_location.path().ends_with('/') {
             working_location.set_path(&format!("{}/", working_location.path()));
         }
-        self.working_directory = Some(working_location.into());
+        self.working_directory = Some(working_location);
         self
     }
 

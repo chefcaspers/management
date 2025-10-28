@@ -86,7 +86,7 @@ impl SimulationContextBuilder {
         let Some(working_directory) = &self.working_directory else {
             return Err(Error::internal("System location not set"));
         };
-        let catalog = storage_catalog(&working_directory)?;
+        let catalog = storage_catalog(working_directory)?;
         ctx.register_catalog("caspers", catalog);
         let system = SystemSchema::new(&ctx);
 
@@ -108,7 +108,7 @@ impl SimulationContextBuilder {
         let Some(working_directory) = &self.working_directory else {
             return Err(Error::internal("System location not set"));
         };
-        let catalog = storage_catalog(&working_directory)?;
+        let catalog = storage_catalog(working_directory)?;
         ctx.register_catalog("caspers", catalog);
         let system = SystemSchema::new(&ctx);
         system.simulations().await

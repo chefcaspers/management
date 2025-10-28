@@ -134,7 +134,7 @@ fn load_brand(brand: &BrandTemplate) -> Result<Brand> {
 fn load_site(site: &SiteTemplate) -> Result<SiteSetup> {
     let mut site_setup: SiteSetup = serde_json::from_slice(site.data()).map_err(Error::from)?;
     let Some(ref mut site) = site_setup.info else {
-        return Err(Error::invalid_data("missing site information").into());
+        return Err(Error::invalid_data("missing site information"));
     };
     site.id = SiteId::from_uri_ref(format!("sites/{}", site.name)).to_string();
     site_setup.kitchens = site_setup

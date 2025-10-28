@@ -114,7 +114,7 @@ fn parquet_provider(table_path: &Url, schema: SchemaRef) -> Result<Arc<dyn Table
 
     let config = ListingTableConfig::new(table_path)
         .with_listing_options(listing_options)
-        .with_schema(schema.into());
+        .with_schema(schema);
 
     Ok(Arc::new(ListingTable::try_new(config)?))
 }

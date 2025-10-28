@@ -16,11 +16,11 @@ pub fn find_git_root() -> Result<PathBuf> {
         .map_err(Error::from)?;
 
     if !command.status.success() {
-        return Err(Error::invalid_data("no git root found").into());
+        return Err(Error::invalid_data("no git root found"));
     }
 
     let output = String::from_utf8(command.stdout).unwrap();
-    Ok(std::fs::canonicalize(output.trim().to_string())?)
+    Ok(std::fs::canonicalize(output.trim())?)
 }
 
 #[cfg(test)]
