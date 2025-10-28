@@ -138,6 +138,7 @@ impl EventTracker {
     fn handle_order_updated(&mut self, payload: &OrderUpdatedPayload, _ctx: &State) {
         if payload.status == OrderStatus::Submitted {
             let span = info_span!(
+                target: "caspers::universe::orders",
                 parent: None,
                 "order_processing",
                 caspers.order_id = payload.order_id.to_string(),
@@ -155,6 +156,7 @@ impl EventTracker {
 
             if payload.status == OrderStatus::PickedUp {
                 let span = info_span!(
+                    target: "caspers::universe::orders",
                     parent: span,
                     "delivering_order",
                     caspers.courier_id = payload.actor_id.map(|id| id.to_string()).unwrap_or_else(|| "missing".to_string()),
@@ -196,6 +198,7 @@ impl EventTracker {
             let order_id: OrderId = line.order_id().try_into().unwrap();
             if let Some(order_span) = self.order_spans.get(&order_id) {
                 let line_span = info_span!(
+                    target: "caspers::universe::orders",
                     parent: order_span,
                     "order_line_processing",
                     caspers.order_line_id = payload.order_line_id.to_string()
