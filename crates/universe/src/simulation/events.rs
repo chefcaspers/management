@@ -246,6 +246,7 @@ impl EventTracker {
     }
 }
 
+#[derive(Debug)]
 pub struct EventStats {
     pub num_orders_created: u32,
     pub num_orders_updated: u32,

@@ -10,12 +10,10 @@ use uuid::Uuid;
 
 use crate::{Error, Result};
 
-use crate::context::SimulationContext;
-
 pub(in crate::context) static SYSTEM_SCHEMA_NAME: &str = "system";
-pub(in crate::context) static ROUTING_NODES_REF: LazyLock<TableReference> =
+pub(crate) static ROUTING_NODES_REF: LazyLock<TableReference> =
     LazyLock::new(|| TableReference::full("caspers", SYSTEM_SCHEMA_NAME, "routing_nodes"));
-pub(in crate::context) static ROUTING_EDGES_REF: LazyLock<TableReference> =
+pub(crate) static ROUTING_EDGES_REF: LazyLock<TableReference> =
     LazyLock::new(|| TableReference::full("caspers", SYSTEM_SCHEMA_NAME, "routing_edges"));
 pub(in crate::context) static SNAPSHOT_META_REF: LazyLock<TableReference> =
     LazyLock::new(|| TableReference::full("caspers", SYSTEM_SCHEMA_NAME, "snapshots"));
@@ -134,16 +132,16 @@ impl SimulationMetaBuilder {
 }
 
 pub struct SystemSchema<'a> {
-    pub(super) ctx: &'a SimulationContext,
+    pub(super) ctx: &'a SessionContext,
 }
 
 impl<'a> SystemSchema<'a> {
-    pub(in crate::context) fn new(ctx: &'a SimulationContext) -> Self {
+    pub(in crate::context) fn new(ctx: &'a SessionContext) -> Self {
         Self { ctx }
     }
 
     fn ctx(&self) -> &SessionContext {
-        &self.ctx.ctx
+        self.ctx
     }
 
     pub(crate) async fn routing_nodes(&self) -> Result<DataFrame> {

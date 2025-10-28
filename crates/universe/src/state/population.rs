@@ -1,7 +1,7 @@
 use std::convert::AsRef;
 use std::sync::Arc;
 
-use arrow::array::{Array, LargeStringArray};
+use arrow::array::{Array, StringViewArray};
 use arrow::array::{RecordBatch, cast::AsArray as _};
 use arrow::compute::concat_batches;
 use arrow::datatypes::{Field, Schema};
@@ -133,7 +133,7 @@ impl PopulationData {
     pub fn snapshot(&self) -> RecordBatch {
         let people = self.people.clone();
         let positions = self.positions.clone().into_arrow();
-        let states: Arc<dyn Array> = Arc::new(LargeStringArray::from(
+        let states: Arc<dyn Array> = Arc::new(StringViewArray::from(
             self.lookup_index
                 .values()
                 .map(|v| serde_json::to_string(v).unwrap())
@@ -146,7 +146,7 @@ impl PopulationData {
             .cloned()
             .chain(vec![
                 Arc::new(Field::new("position", positions.data_type().clone(), false)),
-                Arc::new(Field::new("state", DataType::LargeUtf8, false)),
+                Arc::new(Field::new("state", DataType::Utf8View, false)),
             ])
             .collect_vec();
         let mut columns = people.columns().iter().cloned().collect_vec();

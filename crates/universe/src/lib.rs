@@ -15,6 +15,8 @@ pub use self::idents::*;
 pub use self::models::*;
 pub use self::simulation::*;
 pub use self::state::*;
+#[cfg(feature = "templates")]
+pub use self::templates::*;
 pub use crate::context::*;
 
 #[cfg(feature = "python")]
@@ -30,6 +32,10 @@ mod models;
 mod python;
 mod simulation;
 mod state;
+#[cfg(feature = "templates")]
+mod templates;
+#[cfg(feature = "templates")]
+pub mod test_utils;
 
 #[cfg_attr(feature = "python", pyclass(get_all, set_all))]
 #[derive(Debug, Clone)]
@@ -164,4 +170,19 @@ pub async fn run_simulation(
         .await?;
     simulation.run(duration).await?;
     Ok(())
+}
+
+pub fn resolve_url(path: Option<impl AsRef<str>>) -> Result<url::Url> {
+    match path {
+        Some(path) => match url::Url::parse(path.as_ref()) {
+            Ok(url) => Ok(url),
+            Err(_) => {
+                let path = std::fs::canonicalize(path.as_ref())?;
+                Ok(url::Url::from_directory_path(path).unwrap())
+            }
+        },
+        None => {
+            Ok(url::Url::from_directory_path(std::env::current_dir()?.join(".caspers/")).unwrap())
+        }
+    }
 }

@@ -1,12 +1,12 @@
 use arrow::array::AsArray;
 use arrow::datatypes::TimestampMillisecondType;
-use caspers_universe::{Error as UniverseError, Simulation};
-use caspers_universe::{SimulationContext, SimulationMode};
+use caspers_universe::Error as UniverseError;
+use caspers_universe::{Simulation, SimulationContext, SimulationMode, resolve_url};
 use chrono::{DateTime, Utc};
 use clap::ValueEnum;
 use dialoguer::Select;
 
-use crate::{error::Result, init::resolve_url};
+use crate::error::Result;
 
 /// Execution mode for the simulation.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]

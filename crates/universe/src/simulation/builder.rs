@@ -54,9 +54,6 @@ impl Default for SimulationConfig {
 pub struct SimulationBuilder {
     ctx: Option<SimulationContext>,
 
-    /// Snapshot location for the simulation
-    snapshot_location: Option<Url>,
-
     /// Time resolution for simulation steps
     time_increment: Duration,
 
@@ -65,9 +62,6 @@ pub struct SimulationBuilder {
 
     /// location to store simulation results
     working_directory: Option<Url>,
-
-    /// Path where routing data is stored
-    routing_path: Option<Url>,
 
     /// Whether to run the simulation in dry run mode
     dry_run: bool,
@@ -80,11 +74,9 @@ impl Default for SimulationBuilder {
     fn default() -> Self {
         Self {
             ctx: None,
-            snapshot_location: None,
             time_increment: Duration::minutes(1),
             start_time: Utc::now(),
             working_directory: None,
-            routing_path: None,
             dry_run: false,
             write_events: false,
         }
@@ -103,15 +95,6 @@ impl SimulationBuilder {
         self
     }
 
-    pub fn with_snapshot_location(mut self, snapshot_location: impl Into<Url>) -> Self {
-        let mut snapshot_location = snapshot_location.into();
-        if !snapshot_location.path().ends_with('/') {
-            snapshot_location.set_path(&format!("{}/", snapshot_location.path()));
-        }
-        self.snapshot_location = Some(snapshot_location);
-        self
-    }
-
     /// Set the start time for the simulation
     pub fn with_start_time(mut self, start_time: DateTime<Utc>) -> Self {
         self.start_time = start_time;
@@ -125,16 +108,12 @@ impl SimulationBuilder {
     }
 
     /// Set the result storage location for the simulation
-    pub fn with_working_directory(mut self, result_storage_location: impl Into<Url>) -> Self {
-        self.working_directory = Some(result_storage_location.into());
-        self
-    }
-
-    pub fn with_routing_data_path(mut self, mut routing_path: Url) -> Self {
-        if !routing_path.path().ends_with('/') {
-            routing_path.set_path(&format!("{}/", routing_path.path()));
+    pub fn with_working_directory(mut self, working_location: impl Into<Url>) -> Self {
+        let mut working_location = working_location.into();
+        if !working_location.path().ends_with('/') {
+            working_location.set_path(&format!("{}/", working_location.path()));
         }
-        self.routing_path = Some(routing_path);
+        self.working_directory = Some(working_location);
         self
     }
 
@@ -148,13 +127,15 @@ impl SimulationBuilder {
         self
     }
 
-    async fn build_context(&self) -> Result<SimulationContext> {
-        SimulationContext::builder()
-            .with_routing_location(self.routing_path.clone())
-            .with_snapshots_location(self.snapshot_location.clone())
-            .with_working_directory(self.working_directory.clone())
-            .build()
-            .await
+    async fn build_context(&mut self) -> Result<SimulationContext> {
+        if let Some(ctx) = self.ctx.take() {
+            Ok(ctx)
+        } else {
+            SimulationContext::builder()
+                .with_working_directory(self.working_directory.clone())
+                .build()
+                .await
+        }
     }
 
     /// Load the prepared street network data into routing data objects.
@@ -210,7 +191,7 @@ impl SimulationBuilder {
             write_events: self.write_events,
         };
 
-        let ctx = if let Some(ctx) = std::mem::take(&mut self.ctx) {
+        let ctx = if let Some(ctx) = self.ctx.take() {
             ctx
         } else {
             self.build_context().await?

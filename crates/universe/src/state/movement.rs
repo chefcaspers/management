@@ -345,7 +345,7 @@ impl RoutingData {
         })
     }
 
-    fn nodes_schema() -> SchemaRef {
+    pub(crate) fn nodes_schema() -> SchemaRef {
         static NODE_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
             SchemaRef::new(Schema::new(vec![
                 Field::new("location", DataType::Utf8, false),
@@ -383,7 +383,7 @@ impl RoutingData {
         NODE_SCHEMA.clone()
     }
 
-    fn edges_schema() -> SchemaRef {
+    pub(crate) fn edges_schema() -> SchemaRef {
         static EDGE_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
             SchemaRef::new(Schema::new(vec![
                 Field::new("location", DataType::Utf8, false),
