@@ -26,6 +26,7 @@ mod agents;
 mod builders;
 mod context;
 mod error;
+mod functions;
 mod idents;
 mod models;
 #[cfg(feature = "python")]

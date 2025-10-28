@@ -1,3 +1,4 @@
+mod functions;
 mod kitchen;
 mod population;
 mod site;

@@ -7,7 +7,8 @@ use arrow::compute::concat_batches;
 use arrow::datatypes::{Field, Schema};
 use arrow_schema::DataType;
 use chrono::{DateTime, Utc};
-use datafusion::prelude::DataFrame;
+use datafusion::functions::core::expr_ext::FieldAccessor;
+use datafusion::prelude::{DataFrame, col, lit};
 use geo_traits::PointTrait as _;
 use geo_traits::to_geo::ToGeoCoord;
 use geoarrow::array::{PointArray, PointBuilder};
@@ -20,13 +21,27 @@ use serde::{Deserialize, Serialize};
 use strum::AsRefStr;
 use uuid::Uuid;
 
+use crate::builders::{POPULATION_SCHEMA, PopulationDataBuilder};
 use crate::context::SimulationContext;
 use crate::error::{Error, Result};
+use crate::functions as f;
 use crate::idents::{OrderId, PersonId};
-use crate::{EventPayload, OrderData, OrderStatus};
+use crate::{EventPayload, OrderData, OrderStatus, PopulationDataBuilderNext};
 
 use super::movement::{Journey, Transport};
-use crate::builders::{POPULATION_SCHEMA, PopulationDataBuilder};
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, AsRefStr)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum PersonStatusFlag {
+    #[default]
+    Idle,
+    AwaitingOrder,
+    Eating,
+    Moving,
+    Delivering,
+    WaitingForCustomer,
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub enum PersonStatus {
@@ -126,10 +141,6 @@ impl PopulationData {
         Self::try_new_with_frame(population).await
     }
 
-    pub fn people(&self) -> &RecordBatch {
-        &self.people
-    }
-
     pub fn snapshot(&self) -> RecordBatch {
         let people = self.people.clone();
         let positions = self.positions.clone().into_arrow();
@@ -153,12 +164,6 @@ impl PopulationData {
         columns.push(positions);
         columns.push(states);
         RecordBatch::try_new(Arc::new(Schema::new(full_schema)), columns).unwrap()
-    }
-
-    pub fn person(&self, id: &PersonId) -> Option<PersonView<'_>> {
-        self.lookup_index
-            .get_full(id)
-            .map(|(idx, person_id, _)| PersonView::new(person_id, self, idx))
     }
 
     pub(crate) fn idle_people_in_cell(

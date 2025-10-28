@@ -13,4 +13,4 @@ pub use self::state_objects::ObjectDataBuilder;
 pub use self::state_orders::OrderDataBuilder;
 pub(crate) use self::state_orders::{ORDER_LINE_SCHEMA, ORDER_SCHEMA};
 pub(crate) use self::state_population::POPULATION_SCHEMA;
-pub use self::state_population::PopulationDataBuilder;
+pub use self::state_population::{PopulationDataBuilder, PopulationDataBuilderNext};

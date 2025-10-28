@@ -78,7 +78,10 @@ impl SimulationContextBuilder {
             .with_default_features()
             .with_session_id(simulation_id.to_string())
             .build();
-        (SessionContext::new_with_state(state), simulation_id)
+
+        let ctx = SessionContext::new_with_state(state);
+
+        (ctx, simulation_id)
     }
 
     pub async fn load_snapshots(&self) -> Result<DataFrame> {

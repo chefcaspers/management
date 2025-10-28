@@ -1,27 +1,37 @@
-use std::f64;
+use std::{f64, sync::Arc};
 
+use arrow::compute::concat_batches;
 use chrono::Timelike;
+use datafusion::{
+    logical_expr::ScalarUDF,
+    prelude::{col, lit},
+};
 use geo_traits::to_geo::ToGeoPoint;
 use h3o::{LatLng, Resolution};
 use rand::Rng as _;
 use tracing::{Level, instrument};
 
 use crate::{
-    BrandId, EntityView as _, EventPayload, MenuItemId, OrderCreatedPayload, PersonRole, Result,
-    SiteId, State,
+    BrandId, EntityView as _, EventPayload, MenuItemId, ObjectLabel, OrderCreatedPayload,
+    PersonRole, Result, SimulationContext, SiteId, State,
 };
 
-pub struct PopulationRunner {}
-
-impl Default for PopulationRunner {
-    fn default() -> Self {
-        Self::new()
-    }
+pub struct PopulationRunner {
+    create_orders: Arc<ScalarUDF>,
 }
 
 impl PopulationRunner {
-    pub fn new() -> Self {
-        PopulationRunner {}
+    pub async fn try_new(state: &State, ctx: &SimulationContext) -> Result<Self> {
+        let batches = ctx
+            .ctx()
+            .read_batch(state.objects().objects().clone())?
+            .filter(col("label").eq(lit(ObjectLabel::MenuItem.as_ref())))?
+            .select_columns(&["parent_id", "id"])?
+            .collect()
+            .await?;
+        let order_choices = concat_batches(batches[0].schema_ref(), &batches)?;
+        let create_orders = super::functions::create_order(order_choices);
+        Ok(PopulationRunner { create_orders })
     }
 
     #[instrument(

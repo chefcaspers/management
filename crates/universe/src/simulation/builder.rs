@@ -206,11 +206,11 @@ impl SimulationBuilder {
             .try_collect()?;
 
         Ok(Simulation {
+            population: PopulationRunner::try_new(&state, &ctx).await?,
             ctx,
             config,
             state,
             sites,
-            population: PopulationRunner::new(),
             event_tracker: EventTracker::new(),
             stats_buffer: EventStatsBuffer::new(),
         })

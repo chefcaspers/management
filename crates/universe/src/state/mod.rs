@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use arrow::array::{RecordBatch, cast::AsArray as _};
+use arrow::array::cast::AsArray as _;
 use chrono::{DateTime, Utc};
 use geo_traits::PointTrait;
 use itertools::Itertools as _;
@@ -24,7 +24,9 @@ pub(crate) use self::movement::RoutingData;
 pub use self::objects::{ObjectData, ObjectLabel};
 pub use self::orders::OrderData;
 pub(crate) use self::orders::{OrderLineStatus, OrderStatus};
-pub use self::population::{PersonRole, PersonState, PersonStatus, PopulationData};
+pub use self::population::{
+    PersonRole, PersonState, PersonStatus, PersonStatusFlag, PopulationData,
+};
 
 mod movement;
 mod objects;
@@ -83,10 +85,6 @@ impl State {
                 .map(|(id, data)| (id, data.into_trip_planner()))
                 .collect(),
         }
-    }
-
-    pub fn people(&self) -> &RecordBatch {
-        self.population.people()
     }
 
     pub fn objects(&self) -> &ObjectData {
