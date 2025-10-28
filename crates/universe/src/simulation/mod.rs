@@ -55,6 +55,14 @@ impl Simulation {
         &self.config
     }
 
+    pub fn ctx(&self) -> &SimulationContext {
+        &self.ctx
+    }
+
+    pub fn event_stats(&self) -> &EventStats {
+        &self.event_tracker.total_stats
+    }
+
     /// Run the simulation for a specified number of steps
     #[instrument(skip(self))]
     pub async fn run(&mut self, steps: usize) -> Result<()> {
@@ -181,6 +189,7 @@ impl Simulation {
             EntityView, ObjectData, PopulationData, ROUTING_EDGES_REF, ROUTING_NODES_REF,
             context::storage::register_system,
         };
+        use chrono::{Timelike, Utc};
         use datafusion::catalog::{MemorySchemaProvider, SchemaProvider};
         use rand::Rng as _;
 
@@ -219,6 +228,13 @@ impl Simulation {
             .write_table(ROUTING_EDGES_REF.to_string().as_str(), Default::default())
             .await?;
 
-        Simulation::builder().with_context(ctx).build().await
+        let start_time = Utc::now();
+        let start_time = start_time.with_hour(12).unwrap();
+
+        Simulation::builder()
+            .with_context(ctx)
+            .with_start_time(start_time)
+            .build()
+            .await
     }
 }

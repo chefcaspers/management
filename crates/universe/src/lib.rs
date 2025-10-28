@@ -34,6 +34,8 @@ mod simulation;
 mod state;
 #[cfg(feature = "templates")]
 mod templates;
+#[cfg(feature = "templates")]
+pub mod test_utils;
 
 #[cfg_attr(feature = "python", pyclass(get_all, set_all))]
 #[derive(Debug, Clone)]
