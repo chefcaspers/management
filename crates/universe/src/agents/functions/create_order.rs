@@ -137,7 +137,6 @@ impl ScalarUDFImpl for CreateOrder {
 
                 Ok(ColumnarValue::Array(Arc::new(lb.finish())))
             }
-
             _ => exec_err!("Only scalar timestamps are currently supported (create_orders)"),
         }
     }

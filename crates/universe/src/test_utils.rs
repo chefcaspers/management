@@ -3,8 +3,9 @@ use std::{path::PathBuf, process::Command};
 use crate::{Error, Result, Simulation, Template};
 
 pub async fn setup_test_simulation(template: impl Into<Option<Template>>) -> Result<Simulation> {
-    let caspers_root = find_git_root().unwrap().join(".caspers/system/");
-    let system_path = url::Url::from_directory_path(caspers_root).unwrap();
+    let caspers_root = find_git_root()?.join(".caspers/system/");
+    let system_path = url::Url::from_directory_path(caspers_root)
+        .map_err(|_| Error::internal("invalid directory"))?;
     Simulation::try_new_with_template(template.into().unwrap_or_default(), &system_path).await
 }
 
