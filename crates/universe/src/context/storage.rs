@@ -13,7 +13,7 @@ use url::Url;
 
 use crate::builders::{
     EVENTS_SCHEMA, METRICS_SCHEMA, OBJECTS_SCHEMA, ORDER_LINE_SCHEMA, ORDER_SCHEMA,
-    PopulationDataBuilder,
+    POPULATION_SCHEMA,
 };
 use crate::context::wrap_schema;
 use crate::{Result, RoutingData};
@@ -69,8 +69,7 @@ pub(crate) fn register_system(schema: &dyn SchemaProvider, system_location: &Url
 fn register_snapshots(schema: &dyn SchemaProvider, snapshots_path: &Url) -> Result<()> {
     let population_path = snapshots_path.join(&format!("{}/", POPULATION_REF.table()))?;
     tracing::debug!(target: "caspers::simulation::context", "registering '{}' @ {}", *POPULATION_REF, population_path);
-    let population_snapshot =
-        parquet_provider(&population_path, PopulationDataBuilder::snapshot_schema())?;
+    let population_snapshot = parquet_provider(&population_path, wrap_schema(&POPULATION_SCHEMA))?;
     schema.register_table(POPULATION_REF.table().to_string(), population_snapshot)?;
 
     let objects_path = snapshots_path.join(&format!("{}/", OBJECTS_REF.table()))?;

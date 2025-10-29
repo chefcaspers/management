@@ -56,7 +56,7 @@ test-log = "0.2.17"
 tokio = { version = "1", features = ["full"] }
 
 [features]
-default = []
+default = ["templates"]
 python = ["pyo3"]
 templates = []
 

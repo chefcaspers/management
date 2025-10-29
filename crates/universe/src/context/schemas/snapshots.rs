@@ -42,16 +42,7 @@ impl<'a> SnapshotsSchema<'a> {
     }
 
     pub async fn population(&self) -> Result<DataFrame> {
-        static COLUMNS: &[&str; 8] = &[
-            "id",
-            "first_name",
-            "last_name",
-            "email",
-            "cc_number",
-            "role",
-            "position",
-            "state",
-        ];
+        static COLUMNS: &[&str; 6] = &["id", "role", "status", "properties", "position", "state"];
         Ok(self
             .ctx
             .scan_scoped(&POPULATION_REF)
@@ -99,7 +90,7 @@ pub(crate) async fn create_snapshot(state: &State, ctx: &SimulationContext) -> R
 
     let batch_population = state.population().snapshot();
     if batch_population.num_rows() > 0 {
-        let df_population = ctx.ctx().read_batch(batch_population)?;
+        let df_population = ctx.ctx().read_batch(batch_population.clone())?;
         tasks_defs.push((POPULATION_REF.to_string(), append_cols(df_population)?))
     }
 

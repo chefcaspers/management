@@ -15,6 +15,7 @@ use uuid::Uuid;
 
 use crate::{
     Error, EventPayload, OrderLineUpdatedPayload, OrderUpdatedPayload, Result, SimulationConfig,
+    SimulationContext,
 };
 use crate::{OrderDataBuilder, idents::*};
 
@@ -190,22 +191,28 @@ impl State {
     }
 
     /// Advance people's journeys and update their statuses on arrival at their destination.
-    pub(super) fn move_people(&mut self) -> Result<Vec<EventPayload>> {
+    pub(super) async fn move_people(
+        &mut self,
+        ctx: &SimulationContext,
+    ) -> Result<Vec<EventPayload>> {
         self.population
-            .update_journeys(&self.time, self.time_step, &self.orders)
+            .update_journeys(ctx, &self.time, self.time_step, &self.orders)
+            .await
     }
 
-    pub(super) fn step<'a>(
+    pub(super) async fn step<'a>(
         &mut self,
+        ctx: &SimulationContext,
         events: impl IntoIterator<Item = &'a EventPayload>,
     ) -> Result<()> {
-        for event in events.into_iter() {
-            if let EventPayload::PersonUpdated(payload) = event {
-                self.population
-                    .update_person_status(&payload.person_id, &payload.status)?;
+        let updates = events.into_iter().filter_map(|e| {
+            if let EventPayload::PersonUpdated(payload) = e {
+                Some((&payload.person_id, &payload.status))
+            } else {
+                None
             }
-        }
-
+        });
+        self.population.update_person_status(ctx, updates).await?;
         self.time += self.time_step;
 
         Ok(())

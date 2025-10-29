@@ -1,22 +1,20 @@
 use std::convert::AsRef;
 use std::sync::Arc;
 
-use arrow::array::{Array, StringViewArray};
+use arrow::array::{DictionaryArray, FixedSizeBinaryBuilder, StringBuilder, StringViewBuilder};
 use arrow::array::{RecordBatch, cast::AsArray as _};
 use arrow::compute::concat_batches;
-use arrow::datatypes::{Field, Schema};
-use arrow_schema::DataType;
+use arrow::datatypes::{Int8Type, Schema};
 use chrono::{DateTime, Utc};
+use datafusion::common::JoinType;
 use datafusion::functions::core::expr_ext::FieldAccessor;
-use datafusion::prelude::{DataFrame, col, lit};
-use geo_traits::PointTrait as _;
-use geo_traits::to_geo::ToGeoCoord;
+use datafusion::prelude::{DataFrame, coalesce, col, lit};
+use geo::Point;
 use geoarrow::array::{PointArray, PointBuilder};
-use geoarrow_array::{GeoArrowArrayAccessor as _, IntoArrow};
+use geoarrow_array::IntoArrow;
 use geoarrow_schema::{Dimension, PointType};
-use h3o::{CellIndex, LatLng, Resolution};
+use h3o::{CellIndex, Resolution};
 use indexmap::IndexMap;
-use itertools::Itertools as _;
 use serde::{Deserialize, Serialize};
 use strum::AsRefStr;
 use uuid::Uuid;
@@ -26,11 +24,11 @@ use crate::context::SimulationContext;
 use crate::error::{Error, Result};
 use crate::functions as f;
 use crate::idents::{OrderId, PersonId};
-use crate::{EventPayload, OrderData, OrderStatus, PopulationDataBuilderNext};
+use crate::{EventPayload, OrderData, OrderStatus};
 
-use super::movement::{Journey, Transport};
+use super::movement::Journey;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, AsRefStr)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default, AsRefStr)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum PersonStatusFlag {
@@ -54,6 +52,19 @@ pub enum PersonStatus {
     WaitingForCustomer(OrderId, Journey),
 }
 
+impl PersonStatus {
+    pub fn flag(&self) -> PersonStatusFlag {
+        match self {
+            PersonStatus::Idle => PersonStatusFlag::Idle,
+            PersonStatus::AwaitingOrder(_) => PersonStatusFlag::AwaitingOrder,
+            PersonStatus::Eating(_) => PersonStatusFlag::Eating,
+            PersonStatus::Moving(_) => PersonStatusFlag::Moving,
+            PersonStatus::Delivering(_, _) => PersonStatusFlag::Delivering,
+            PersonStatus::WaitingForCustomer(_, _) => PersonStatusFlag::WaitingForCustomer,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct PersonState {
     status: PersonStatus,
@@ -67,13 +78,9 @@ pub enum PersonRole {
     Courier,
 }
 
-/// Population data.
-///
-/// Holds information for all people in the simulation as well as
-/// tracking their current locations and roles.
 pub struct PopulationData {
     /// Metadata for individuals tracked in the simulation
-    people: RecordBatch,
+    population: RecordBatch,
 
     /// Current geo locations of people
     positions: PointArray,
@@ -89,36 +96,30 @@ pub struct PopulationData {
 
 impl PopulationData {
     pub fn builder() -> PopulationDataBuilder {
-        PopulationDataBuilder::default()
+        PopulationDataBuilder::new()
     }
 
-    pub async fn try_new_with_frame(population: DataFrame) -> Result<Self> {
-        let people_columns = POPULATION_SCHEMA
-            .fields()
-            .iter()
-            .map(|f| f.name().as_str())
-            .collect_vec();
-        let people = population
-            .clone()
-            .select_columns(&people_columns)?
-            .collect()
-            .await?;
-        let people = concat_batches(people[0].schema_ref(), &people)?;
+    pub(crate) async fn try_new(population: DataFrame) -> Result<Self> {
+        let batches = population.collect().await?;
+        let population = concat_batches(batches[0].schema_ref(), &batches)?;
 
         let positions = population
-            .clone()
-            .select_columns(&["position"])?
-            .collect()
-            .await?;
-        let positions = concat_batches(positions[0].schema_ref(), &positions)?;
+            .column_by_name("position")
+            .ok_or_else(|| Error::invalid_data("Missing 'position' column"))?
+            .as_struct();
         let point_type = PointType::new(Dimension::XY, Default::default());
-        let positions: PointArray = (positions.column(0).as_struct(), point_type).try_into()?;
+        let positions: PointArray = (positions, point_type).try_into()?;
 
-        let state = population.select_columns(&["state"])?.collect().await?;
-        let state = concat_batches(state[0].schema_ref(), &state)?;
-
-        let id_iter = people.column(0).as_fixed_size_binary().iter();
-        let state_iter = state.column(0).as_string_view().iter();
+        let id_iter = population
+            .column_by_name("id")
+            .ok_or_else(|| Error::invalid_data("Missing 'id' column"))?
+            .as_fixed_size_binary()
+            .iter();
+        let state_iter = population
+            .column_by_name("state")
+            .ok_or_else(|| Error::invalid_data("Missing 'state' column"))?
+            .as_string_view()
+            .iter();
 
         let lookup_index = id_iter
             .zip(state_iter)
@@ -129,87 +130,90 @@ impl PopulationData {
             })
             .collect();
 
-        Ok(PopulationData {
-            people,
+        Ok(Self {
+            population,
             positions,
             lookup_index,
         })
     }
 
-    pub(crate) async fn try_new(ctx: &SimulationContext) -> Result<Self> {
+    pub(crate) async fn try_new_from_ctx(ctx: &SimulationContext) -> Result<Self> {
         let population = ctx.snapshots().population().await?.cache().await?;
-        Self::try_new_with_frame(population).await
+        Self::try_new(population).await
     }
 
-    pub fn snapshot(&self) -> RecordBatch {
-        let people = self.people.clone();
-        let positions = self.positions.clone().into_arrow();
-        let states: Arc<dyn Array> = Arc::new(StringViewArray::from(
-            self.lookup_index
-                .values()
-                .map(|v| serde_json::to_string(v).unwrap())
-                .collect_vec(),
-        ));
-        let full_schema = people
-            .schema()
-            .fields()
-            .iter()
-            .cloned()
-            .chain(vec![
-                Arc::new(Field::new("position", positions.data_type().clone(), false)),
-                Arc::new(Field::new("state", DataType::Utf8View, false)),
-            ])
-            .collect_vec();
-        let mut columns = people.columns().iter().cloned().collect_vec();
-        columns.push(positions);
-        columns.push(states);
-        RecordBatch::try_new(Arc::new(Schema::new(full_schema)), columns).unwrap()
+    pub(crate) fn snapshot(&self) -> &RecordBatch {
+        &self.population
     }
 
-    pub(crate) fn idle_people_in_cell(
+    pub(crate) async fn idle_people_in_cell(
         &self,
+        ctx: &SimulationContext,
         cell_index: CellIndex,
         role: &PersonRole,
-    ) -> impl Iterator<Item = PersonView<'_>> {
-        self.iter().filter_map(move |person| {
-            (person.is_idle()
-                && person.has_role(role)
-                && person.cell(cell_index.resolution()).ok()? == cell_index)
-                .then_some(person)
-        })
+    ) -> Result<DataFrame> {
+        let df = ctx.ctx().read_batch(self.population.clone())?.filter(
+            col("status")
+                .eq(lit(PersonStatusFlag::Idle.as_ref()))
+                .and(col("role").eq(lit(role.as_ref()))),
+        )?;
+        filter_by_cell(df, cell_index)
     }
 
-    pub(crate) fn iter(&self) -> impl Iterator<Item = PersonView<'_>> {
-        self.lookup_index
-            .iter()
-            .enumerate()
-            .map(|(valid_index, (id, _))| PersonView::new(id, self, valid_index))
-    }
+    pub(crate) async fn update_person_status(
+        &mut self,
+        ctx: &SimulationContext,
+        updates: impl IntoIterator<Item = (&PersonId, &PersonStatus)>,
+    ) -> Result<()> {
+        let mut update_data = StatusUpdateBuilder::new();
+        for (id, status) in updates {
+            self.lookup_index.get_mut(id).ok_or(Error::NotFound)?.status = status.clone();
+            update_data.add_update(id.as_ref(), status)?;
+        }
+        let df_updates = ctx.ctx().read_batch(update_data.finish()?)?.select(vec![
+            col("id").alias("id_new"),
+            col("status").alias("status_new"),
+            col("state").alias("state_new"),
+        ])?;
+        let df_current = ctx.ctx().read_batch(self.population.clone())?;
 
-    pub fn update_person_status(&mut self, id: &PersonId, status: &PersonStatus) -> Result<()> {
-        self.lookup_index.get_mut(id).ok_or(Error::NotFound)?.status = status.clone();
+        let joined = df_current
+            .join(df_updates, JoinType::Left, &["id"], &["id_new"], None)?
+            .select(vec![
+                col("id"),
+                col("role"),
+                coalesce(vec![col("status_new"), col("status")]).alias("status"),
+                col("properties"),
+                col("position"),
+                coalesce(vec![col("state_new"), col("state")]).alias("state"),
+            ])?
+            .collect()
+            .await?;
+
+        self.population = concat_batches(joined[0].schema_ref(), &joined)?;
+
         Ok(())
     }
 
-    pub(super) fn update_journeys(
+    pub(super) async fn update_journeys(
         &mut self,
+        ctx: &SimulationContext,
         current_time: &DateTime<Utc>,
         time_step: std::time::Duration,
         order_data: &OrderData,
     ) -> Result<Vec<EventPayload>> {
-        let mut new_positions =
-            PointBuilder::new(PointType::new(Dimension::XY, Default::default()));
+        let mut updates = PositionUpdateBuilder::new();
         let mut events = Vec::new();
 
-        for (idx, (person_id, state)) in self.lookup_index.iter_mut().enumerate() {
+        for (person_id, state) in self.lookup_index.iter_mut() {
             let (progress, next_status) = match &mut state.status {
                 PersonStatus::Moving(journey) => {
-                    let progress = journey.advance(&Transport::Bicycle, time_step);
+                    let progress = journey.advance(time_step);
                     let next_status = journey.is_done().then_some(PersonStatus::Idle);
                     (Some(progress), next_status)
                 }
                 PersonStatus::Delivering(order_id, journey) => {
-                    let progress = journey.advance(&Transport::Bicycle, time_step);
+                    let progress = journey.advance(time_step);
                     let next_status = journey.is_done().then_some({
                         // couriers need to reverse their journey when they're done delivering
                         let mut journey = journey.clone();
@@ -240,119 +244,143 @@ impl PopulationData {
             if let Some(next_status) = next_status {
                 events.push(EventPayload::person_updated(*person_id, next_status))
             }
-
-            match progress {
-                Some(slice) => {
-                    if let Some(last_pos) = slice.last() {
-                        new_positions.push_point(Some(last_pos));
-                    } else {
-                        new_positions.push_point(Some(&self.positions.value(idx)?));
-                    }
-                }
-                None => new_positions.push_point(Some(&self.positions.value(idx)?)),
+            if let Some(next_pos) = progress.as_ref().and_then(|p| p.last()) {
+                updates.add_update(person_id, next_pos)?;
             }
         }
 
-        self.positions = new_positions.finish();
+        let df_updates = ctx.ctx().read_batch(updates.finish()?)?.select(vec![
+            col("id").alias("id_new"),
+            col("position").alias("position_new"),
+        ])?;
+
+        let df_current = ctx.ctx().read_batch(self.population.clone())?;
+        let joined = df_current
+            .join(df_updates, JoinType::Left, &["id"], &["id_new"], None)?
+            .select(vec![
+                col("id"),
+                col("role"),
+                col("status"),
+                col("properties"),
+                coalesce(vec![col("position_new"), col("position")]).alias("position"),
+                col("state"),
+            ])?
+            .collect()
+            .await?;
+
+        let population = concat_batches(joined[0].schema_ref(), &joined)?;
+        let positions = population
+            .column_by_name("position")
+            .ok_or_else(|| Error::invalid_data("Missing 'position' column"))?
+            .as_struct();
+        let point_type = PointType::new(Dimension::XY, Default::default());
+        let positions: PointArray = (positions, point_type).try_into()?;
+
+        self.population = population;
+        self.positions = positions;
 
         Ok(events)
     }
 }
 
-pub struct PersonView<'a> {
-    id: &'a PersonId,
-    data: &'a PopulationData,
-    valid_index: usize,
+fn filter_by_cell(df: DataFrame, cell: CellIndex) -> Result<DataFrame> {
+    let resolution = match cell.resolution() {
+        Resolution::Zero => lit(0_i8),
+        Resolution::One => lit(1_i8),
+        Resolution::Two => lit(2_i8),
+        Resolution::Three => lit(3_i8),
+        Resolution::Four => lit(4_i8),
+        Resolution::Five => lit(5_i8),
+        Resolution::Six => lit(6_i8),
+        Resolution::Seven => lit(7_i8),
+        Resolution::Eight => lit(8_i8),
+        Resolution::Nine => lit(9_i8),
+        Resolution::Ten => lit(10_i8),
+        Resolution::Eleven => lit(11_i8),
+        Resolution::Twelve => lit(12_i8),
+        Resolution::Thirteen => lit(13_i8),
+        Resolution::Fourteen => lit(14_i8),
+        Resolution::Fifteen => lit(15_i8),
+    };
+    Ok(df.filter(
+        f::h3_longlatash3()
+            .call(vec![
+                col("position").field("x"),
+                col("position").field("y"),
+                resolution,
+            ])
+            .eq(lit(u64::from(cell) as i64)),
+    )?)
 }
 
-impl<'a> PersonView<'a> {
-    fn new(id: &'a PersonId, data: &'a PopulationData, valid_index: usize) -> Self {
-        PersonView {
-            id,
-            data,
-            valid_index,
+struct PositionUpdateBuilder {
+    id: FixedSizeBinaryBuilder,
+    position: PointBuilder,
+}
+
+impl PositionUpdateBuilder {
+    fn new() -> Self {
+        Self {
+            id: FixedSizeBinaryBuilder::new(16),
+            position: PointBuilder::new(PointType::new(Dimension::XY, Default::default())),
         }
     }
 
-    pub fn id(&self) -> &PersonId {
-        self.id
+    fn add_update(&mut self, id: &PersonId, position: &Point) -> Result<()> {
+        self.id.append_value(id)?;
+        self.position.push_point(Some(position));
+        Ok(())
     }
 
-    pub fn position(&self) -> Result<geoarrow_array::scalar::Point<'a>> {
-        Ok(self.data.positions.value(self.valid_index)?)
-    }
-
-    pub fn has_role(&self, role: &PersonRole) -> bool {
-        self.data
-            .people
-            .column(5)
-            .as_string_view()
-            .value(self.valid_index)
-            == role.as_ref()
-    }
-
-    pub fn cell(&self, resolution: Resolution) -> Result<CellIndex> {
-        let coords = self.position()?.coord().unwrap();
-        let lat_lng: LatLng = coords.to_coord().try_into()?;
-        Ok(lat_lng.to_cell(resolution))
-    }
-
-    pub fn first_name(&self) -> &str {
-        self.data
-            .people
-            .column(1)
-            .as_string::<i32>()
-            .value(self.valid_index)
-    }
-
-    pub fn last_name(&self) -> &str {
-        self.data
-            .people
-            .column(2)
-            .as_string::<i32>()
-            .value(self.valid_index)
-    }
-
-    pub fn full_name(&self) -> String {
-        format!("{} {}", self.first_name(), self.last_name())
-    }
-
-    pub fn email(&self) -> &str {
-        self.data
-            .people
-            .column(3)
-            .as_string::<i32>()
-            .value(self.valid_index)
-    }
-
-    pub fn cc_number(&self) -> &str {
-        self.data
-            .people
-            .column(4)
-            .as_string::<i32>()
-            .value(self.valid_index)
-    }
-
-    pub fn state(&self) -> &PersonState {
-        self.data
-            .lookup_index
-            .get(self.id())
-            .expect("Person state should be initialized for all people")
-    }
-
-    pub fn is_idle(&self) -> bool {
-        matches!(self.state().status, PersonStatus::Idle)
+    fn finish(mut self) -> Result<RecordBatch> {
+        Ok(RecordBatch::try_new(
+            Arc::new(Schema::new(vec![
+                POPULATION_SCHEMA.field_with_name("id")?.clone(),
+                POPULATION_SCHEMA.field_with_name("position")?.clone(),
+            ])),
+            vec![
+                Arc::new(self.id.finish()),
+                self.position.finish().into_arrow(),
+            ],
+        )?)
     }
 }
 
-impl std::fmt::Debug for PersonView<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Person")
-            .field("position", &self.position())
-            .field("first_name", &self.first_name())
-            .field("last_name", &self.last_name())
-            .field("email", &self.email())
-            .field("cc_number", &self.cc_number())
-            .finish()
+struct StatusUpdateBuilder {
+    id: FixedSizeBinaryBuilder,
+    status: StringBuilder,
+    state: StringViewBuilder,
+}
+
+impl StatusUpdateBuilder {
+    fn new() -> Self {
+        Self {
+            id: FixedSizeBinaryBuilder::new(16),
+            status: StringBuilder::new(),
+            state: StringViewBuilder::new(),
+        }
+    }
+
+    fn add_update(&mut self, id: &[u8], status: &PersonStatus) -> Result<()> {
+        self.id.append_value(id)?;
+        self.status.append_value(status.flag().as_ref());
+        self.state.append_value(serde_json::to_string(status)?);
+        Ok(())
+    }
+
+    fn finish(mut self) -> Result<RecordBatch> {
+        let status: DictionaryArray<Int8Type> = self.status.finish().into_iter().collect();
+        Ok(RecordBatch::try_new(
+            Arc::new(Schema::new(vec![
+                POPULATION_SCHEMA.field_with_name("id")?.clone(),
+                POPULATION_SCHEMA.field_with_name("status")?.clone(),
+                POPULATION_SCHEMA.field_with_name("state")?.clone(),
+            ])),
+            vec![
+                Arc::new(self.id.finish()),
+                Arc::new(status),
+                Arc::new(self.state.finish()),
+            ],
+        )?)
     }
 }

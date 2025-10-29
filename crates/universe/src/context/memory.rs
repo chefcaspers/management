@@ -9,7 +9,7 @@ use datafusion::catalog::{
 
 use crate::builders::{
     EVENTS_SCHEMA, METRICS_SCHEMA, OBJECTS_SCHEMA, ORDER_LINE_SCHEMA, ORDER_SCHEMA,
-    PopulationDataBuilder,
+    POPULATION_SCHEMA,
 };
 use crate::context::wrap_schema;
 use crate::{Result, RoutingData};
@@ -63,9 +63,7 @@ fn register_system(schema: &dyn SchemaProvider) -> Result<()> {
 fn register_snapshots(schema: &dyn SchemaProvider) -> Result<()> {
     schema.register_table(
         POPULATION_REF.table().to_string(),
-        mem_table(wrap_schema(
-            PopulationDataBuilder::snapshot_schema().as_ref(),
-        ))?,
+        mem_table(wrap_schema(&POPULATION_SCHEMA))?,
     )?;
     schema.register_table(
         OBJECTS_REF.table().to_string(),

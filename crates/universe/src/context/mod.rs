@@ -141,7 +141,7 @@ impl SimulationContextBuilder {
             (None, None) => (),
             (Some(population_data), Some(object_data)) => {
                 let population = sim_ctx.ctx().read_batch(population_data)?;
-                let population_data = PopulationData::try_new_with_frame(population).await?;
+                let population_data = PopulationData::try_new(population).await?;
                 let sim_state = State::new(
                     &Default::default(),
                     object_data,

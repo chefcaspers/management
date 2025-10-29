@@ -63,7 +63,6 @@ fn get_doc() -> &'static Documentation {
     &DOCUMENTATION
 }
 
-/// Implement the ScalarUDFImpl trait for AddOne
 impl ScalarUDFImpl for CreateOrder {
     fn as_any(&self) -> &dyn Any {
         self
@@ -172,7 +171,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_order() -> Result<(), Box<dyn std::error::Error>> {
-        let mut builder = crate::PopulationData::builder_next();
+        let mut builder = crate::PopulationData::builder();
         builder.add_site(10, 51.518898098201326, -0.13381370382489707)?;
         let population_data = builder.finish()?;
 

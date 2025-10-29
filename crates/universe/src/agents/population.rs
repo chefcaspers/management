@@ -1,15 +1,18 @@
-use std::{f64, sync::Arc};
+use std::sync::Arc;
 
-use arrow::compute::concat_batches;
-use chrono::Timelike;
+use arrow::{array::AsArray as _, compute::concat_batches};
 use datafusion::{
     logical_expr::ScalarUDF,
     prelude::{col, lit},
+    scalar::ScalarValue,
 };
 use geo_traits::to_geo::ToGeoPoint;
+use geoarrow::array::PointArray;
+use geoarrow_array::GeoArrowArrayAccessor;
+use geoarrow_schema::{Dimension, PointType};
 use h3o::{LatLng, Resolution};
-use rand::Rng as _;
 use tracing::{Level, instrument};
+use uuid::Uuid;
 
 use crate::{
     BrandId, EntityView as _, EventPayload, MenuItemId, ObjectLabel, OrderCreatedPayload,
@@ -37,60 +40,95 @@ impl PopulationRunner {
     #[instrument(
         name = "step_population",
         level = Level::TRACE,
-        skip(self, ctx),
+        skip(self, ctx, state),
         fields(
             caspers.site_id = site_id.to_string()
         )
     )]
-    pub(crate) fn step(
+    pub(crate) async fn step(
         &self,
+        ctx: &SimulationContext,
         site_id: &SiteId,
-        ctx: &State,
+        state: &State,
     ) -> Result<impl Iterator<Item = EventPayload>> {
-        let site = ctx.objects().site(site_id)?;
+        let site = state.objects().site(site_id)?;
         let props = site.properties()?;
         let lat_lng = LatLng::new(props.latitude, props.longitude)?;
+        let ts = state.current_time().timestamp_millis();
 
-        Ok(ctx
+        let idle_people = state
             .population()
-            // NB: resolution 6 corresponds to a cell size of approximately 36 km2
-            .idle_people_in_cell(lat_lng.to_cell(Resolution::Six), &PersonRole::Customer)
-            .filter_map(|person| create_order(ctx).map(|items| (person, items)))
-            .flat_map(|(person, items)| {
-                Some(EventPayload::OrderCreated(OrderCreatedPayload {
-                    site_id: *site_id,
-                    person_id: *person.id(),
-                    items,
-                    destination: person.position().ok()?.to_point(),
-                }))
-            }))
-    }
-}
-
-fn create_order(state: &State) -> Option<Vec<(BrandId, MenuItemId)>> {
-    use std::f64::consts::{E, PI};
-
-    let mut rng = rand::rng();
-
-    let current_time = state.current_time();
-    let current_minutes = (current_time.hour() * 60 + current_time.minute()) as f64 / 60.0;
-
-    let sigma_sq = 0.4_f64;
-
-    let bell = |x: f64, mu: f64| {
-        let exponent = -(x - mu).powi(2) / (2.0 * sigma_sq);
-        1.0 / (2.0 * PI * sigma_sq).powf(2.0) * E.powf(exponent)
-    };
-
-    let prob = 0.01 * (bell(current_minutes, 12.0) + bell(current_minutes, 18.0));
-
-    // TODO: compute probability from person state
-    rng.random_bool(prob).then(|| {
-        state
-            .objects()
-            .sample_menu_items(None, &mut rng)
-            .into_iter()
-            .map(|menu_item| (menu_item.brand_id().try_into().unwrap(), menu_item.id()))
+            .idle_people_in_cell(ctx, lat_lng.to_cell(Resolution::Six), &PersonRole::Customer)
+            .await?
             .collect()
-    })
+            .await?;
+
+        let idle_people = ctx.ctx().read_batches(idle_people)?;
+
+        let orders = idle_people
+            .select(vec![
+                col("id"),
+                self.create_orders
+                    .call(vec![
+                        lit(ScalarValue::TimestampMillisecond(
+                            Some(ts),
+                            Some("UTC".into()),
+                        )),
+                        col("state"),
+                    ])
+                    .alias("order"),
+                col("position"),
+            ])?
+            .filter(col("order").is_not_null())?
+            .select_columns(&["id", "order", "position"])?
+            .collect()
+            .await?;
+
+        let orders = orders.into_iter().flat_map(|o| {
+            let positions: PointArray = (
+                o.column(2).as_struct(),
+                PointType::new(Dimension::XY, Default::default()),
+            )
+                .try_into()
+                .unwrap();
+            let orders_iter = o
+                .column(0)
+                .as_fixed_size_binary()
+                .iter()
+                .zip(o.column(1).as_list::<i32>().iter())
+                .zip(positions.iter());
+            let mut orders = Vec::new();
+
+            for ((person_id, order), pos) in orders_iter {
+                match (person_id, order, pos) {
+                    (Some(person_id), Some(order), Some(Ok(pos))) => {
+                        let items = order
+                            .as_fixed_size_list()
+                            .iter()
+                            .flat_map(|it| {
+                                it.map(|it2| {
+                                    let arr = it2.as_fixed_size_binary();
+                                    (
+                                        BrandId::from(Uuid::from_slice(arr.value(0)).unwrap()),
+                                        MenuItemId::from(Uuid::from_slice(arr.value(1)).unwrap()),
+                                    )
+                                })
+                            })
+                            .collect();
+                        orders.push(EventPayload::OrderCreated(OrderCreatedPayload {
+                            site_id: *site_id,
+                            person_id: Uuid::from_slice(person_id).unwrap().into(),
+                            items,
+                            destination: pos.to_point(),
+                        }));
+                    }
+                    _ => {}
+                }
+            }
+
+            orders
+        });
+
+        Ok(orders)
+    }
 }
