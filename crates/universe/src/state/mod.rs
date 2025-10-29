@@ -140,17 +140,20 @@ impl State {
             _ => None,
         });
 
-        let order_data = new_orders
-            .into_iter()
-            .fold(OrderDataBuilder::new(), |builder, order| {
-                builder.add_order(
-                    order.site_id,
-                    order.person_id,
-                    order.destination.coord().unwrap().try_into().unwrap(),
-                    &order.items,
-                )
-            })
-            .finish()?;
+        let mut builder = OrderDataBuilder::new();
+        for order in new_orders {
+            builder.add_order(
+                order.site_id,
+                order.person_id,
+                order
+                    .destination
+                    .coord()
+                    .ok_or_else(|| Error::invalid_data("no destination coordinates"))?
+                    .try_into()?,
+                &order.items,
+            )?;
+        }
+        let order_data = builder.finish()?;
 
         let order_ids = order_data
             .all_orders()

@@ -32,22 +32,17 @@ impl OrderDataBuilder {
     }
 
     pub fn add_order(
-        mut self,
+        &mut self,
         site_id: SiteId,
         person_id: PersonId,
         destination: LatLng,
         order: &[(BrandId, MenuItemId)],
-    ) -> Self {
-        let order_id = self
-            .orders
-            .add_order(site_id, person_id, destination)
-            .unwrap();
+    ) -> Result<()> {
+        let order_id = self.orders.add_order(site_id, person_id, destination)?;
         for (brand_id, menu_item_id) in order {
-            self.lines
-                .add_line(order_id, brand_id, menu_item_id)
-                .unwrap();
+            self.lines.add_line(order_id, brand_id, menu_item_id)?;
         }
-        self
+        Ok(())
     }
 
     pub fn finish(self) -> Result<OrderData> {
