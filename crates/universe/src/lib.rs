@@ -15,7 +15,7 @@ pub use self::idents::*;
 pub use self::models::*;
 pub use self::simulation::*;
 pub use self::state::*;
-#[cfg(feature = "templates")]
+#[cfg(any(test, feature = "templates"))]
 pub use self::templates::*;
 pub use crate::context::*;
 
@@ -33,9 +33,9 @@ mod models;
 mod python;
 mod simulation;
 mod state;
-#[cfg(feature = "templates")]
+#[cfg(any(test, feature = "templates"))]
 mod templates;
-#[cfg(feature = "templates")]
+#[cfg(any(test, feature = "templates"))]
 pub mod test_utils;
 
 #[cfg_attr(feature = "python", pyclass(get_all, set_all))]

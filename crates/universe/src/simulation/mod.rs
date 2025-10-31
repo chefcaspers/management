@@ -59,6 +59,10 @@ impl Simulation {
         &self.ctx
     }
 
+    pub fn state(&self) -> &State {
+        &self.state
+    }
+
     pub fn event_stats(&self) -> &EventStats {
         &self.event_tracker.total_stats
     }
@@ -186,7 +190,7 @@ impl Simulation {
     }
 }
 
-#[cfg(feature = "templates")]
+#[cfg(any(test, feature = "templates"))]
 impl Simulation {
     pub async fn try_new_with_template(
         template: crate::templates::Template,

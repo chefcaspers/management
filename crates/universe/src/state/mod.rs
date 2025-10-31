@@ -11,7 +11,7 @@ use arrow::array::cast::AsArray as _;
 use chrono::{DateTime, Utc};
 use geo_traits::PointTrait;
 use itertools::Itertools as _;
-use uuid::Uuid;
+use uuid::{ContextV7, Timestamp, Uuid};
 
 use crate::{
     Error, EventPayload, OrderLineUpdatedPayload, OrderUpdatedPayload, Result, SimulationConfig,
@@ -25,6 +25,7 @@ pub(crate) use self::movement::RoutingData;
 pub use self::objects::{ObjectData, ObjectLabel};
 pub use self::orders::OrderData;
 pub(crate) use self::orders::{OrderLineStatus, OrderStatus};
+pub(crate) use self::parse_json::parse_json;
 pub use self::population::{
     PersonRole, PersonState, PersonStatus, PersonStatusFlag, PopulationData,
 };
@@ -32,6 +33,7 @@ pub use self::population::{
 mod movement;
 mod objects;
 mod orders;
+mod parse_json;
 mod population;
 
 #[derive(Debug, thiserror::Error)]
@@ -65,6 +67,8 @@ pub struct State {
 
     /// Order data
     orders: OrderData,
+
+    ts_context: ContextV7,
 }
 
 impl State {
@@ -81,6 +85,7 @@ impl State {
             population,
             objects,
             orders,
+            ts_context: ContextV7::new(),
             routing: routing
                 .into_iter()
                 .map(|(id, data)| (id, data.into_trip_planner()))
@@ -106,6 +111,15 @@ impl State {
 
     pub fn current_time(&self) -> DateTime<Utc> {
         self.time
+    }
+
+    /// Timestamp used to generate v7 uuids
+    pub fn current_timestamp(&self) -> Timestamp {
+        Timestamp::from_unix(
+            &self.ts_context,
+            self.time.timestamp() as u64,
+            self.time.timestamp_subsec_nanos(),
+        )
     }
 
     pub fn time_step(&self) -> Duration {

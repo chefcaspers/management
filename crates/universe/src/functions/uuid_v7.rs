@@ -55,7 +55,7 @@ impl ScalarUDFImpl for UuidV7 {
     }
 
     fn name(&self) -> &str {
-        "h3_longlatash3"
+        "uuidv7"
     }
 
     fn signature(&self) -> &Signature {
@@ -68,9 +68,7 @@ impl ScalarUDFImpl for UuidV7 {
 
     fn invoke_with_args(&self, args: ScalarFunctionArgs) -> Result<ColumnarValue> {
         let ScalarFunctionArgs {
-            mut args,
-            number_rows,
-            ..
+            args, number_rows, ..
         } = args;
         let context = ContextV7::new();
 
