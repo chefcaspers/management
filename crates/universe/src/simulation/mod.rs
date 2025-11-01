@@ -7,9 +7,9 @@ use tracing::{Level, Span, field, instrument};
 use crate::agents::{PopulationRunner, SiteRunner};
 use crate::builders::{EventDataBuilder, EventStatsBuffer};
 use crate::context::SimulationContext;
-use crate::error::Result;
 use crate::idents::SiteId;
 use crate::state::State;
+use crate::{Error, Result};
 
 pub use self::builder::*;
 pub use self::events::*;

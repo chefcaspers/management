@@ -5,10 +5,13 @@
 //! external data storages that might be used to store the state.
 
 use std::collections::HashMap;
+use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
 use arrow::array::cast::AsArray as _;
 use chrono::{DateTime, Utc};
+use datafusion::prelude::{Expr, lit};
+use datafusion::scalar::ScalarValue;
 use geo_traits::PointTrait;
 use itertools::Itertools as _;
 use uuid::{ContextV7, Timestamp, Uuid};
@@ -111,6 +114,14 @@ impl State {
 
     pub fn current_time(&self) -> DateTime<Utc> {
         self.time
+    }
+
+    pub fn current_time_expr(&self) -> Expr {
+        static TZ: LazyLock<Arc<str>> = LazyLock::new(|| "UTC".into());
+        lit(ScalarValue::TimestampMillisecond(
+            Some(self.current_time().timestamp_millis()),
+            Some(TZ.clone()),
+        ))
     }
 
     /// Timestamp used to generate v7 uuids
