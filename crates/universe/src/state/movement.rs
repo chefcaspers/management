@@ -36,7 +36,7 @@ pub enum Transport {
 
 impl Transport {
     /// Returns the default velocity of the transport in km/h.
-    fn default_velocity_km_h(&self) -> f64 {
+    pub fn default_velocity_km_h(&self) -> f64 {
         match self {
             Transport::Foot => 5.0,
             Transport::Bicycle => 15.0,
@@ -48,15 +48,15 @@ impl Transport {
         }
     }
 
-    fn default_velocity_m_s(&self) -> f64 {
+    pub fn default_velocity_m_s(&self) -> f64 {
         self.default_velocity_km_h() / 3.6
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct JourneyLeg {
-    destination: Point,
-    distance_m: usize,
+    pub destination: Point,
+    pub distance_m: usize,
 }
 
 impl<T: Into<Point>> From<(T, usize)> for JourneyLeg {

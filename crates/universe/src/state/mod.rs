@@ -24,7 +24,7 @@ use crate::{OrderDataBuilder, idents::*};
 
 use self::movement::JourneyPlanner;
 
-pub(crate) use self::movement::RoutingData;
+pub(crate) use self::movement::{Journey, RoutingData, Transport};
 pub use self::objects::{ObjectData, ObjectLabel};
 pub use self::orders::OrderData;
 pub(crate) use self::orders::{OrderLineStatus, OrderStatus};
@@ -241,9 +241,14 @@ impl State {
             }
         });
         self.population.update_person_status(ctx, updates).await?;
-        self.time += self.time_step;
+
+        self.step_time();
 
         Ok(())
+    }
+
+    pub(super) fn step_time(&mut self) {
+        self.time += self.time_step;
     }
 }
 

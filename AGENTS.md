@@ -41,7 +41,7 @@ management/
 - **Agent-Based**: Individual entities (customers, kitchen staff, drivers) act autonomously
 - **Time-Based**: Discrete time steps (typically 1-minute increments)
 - **Geospatial**: Uses H3 indexing for location-based routing and movement
-- **Data-Driven**: Heavy use of Apache Arrow for efficient data operations
+- **Data-Driven**: Heavy use of Datafusion and Apache Arrow for efficient data operations
 
 ## Working with This Codebase
 

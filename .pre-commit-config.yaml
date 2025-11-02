@@ -24,6 +24,12 @@ repos:
         entry: cargo fmt --all -- --check --color always
         language: system
         pass_filenames: false
+      - id: cargo-check
+        name: cargo check
+        entry: cargo check --workspace
+        language: system
+        types: [rust]
+        pass_filenames: false
 
   - repo: https://github.com/bufbuild/buf
     rev: v1.59.0

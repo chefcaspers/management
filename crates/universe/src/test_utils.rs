@@ -1,5 +1,12 @@
 use std::{path::PathBuf, process::Command};
 
+use arrow::util::pretty::print_batches;
+use datafusion::prelude::{DataFrame, SessionContext};
+#[cfg(test)]
+use rstest::*;
+
+#[cfg(test)]
+use crate::SimulationContext;
 use crate::{Error, Result, Simulation, Template};
 
 pub async fn setup_test_simulation(template: impl Into<Option<Template>>) -> Result<Simulation> {
@@ -22,6 +29,69 @@ pub fn find_git_root() -> Result<PathBuf> {
 
     let output = String::from_utf8(command.stdout).unwrap();
     Ok(std::fs::canonicalize(output.trim())?)
+}
+
+pub async fn print_frame(frame: &DataFrame) -> Result<()> {
+    let frame = frame.clone().collect().await?;
+    print_batches(&frame)?;
+    Ok(())
+}
+
+#[cfg(test)]
+#[fixture]
+pub async fn simulation_context() -> Result<SimulationContext> {
+    use crate::{
+        EntityView, ObjectData, PopulationData, ROUTING_EDGES_REF, ROUTING_NODES_REF,
+        context::storage::register_system,
+    };
+    use chrono::{Timelike as _, Utc};
+    use datafusion::catalog::{MemorySchemaProvider, SchemaProvider};
+    use rand::Rng as _;
+
+    let caspers_root = find_git_root()?.join(".caspers/system/");
+    let system_path = url::Url::from_directory_path(caspers_root)
+        .map_err(|_| Error::internal("invalid directory"))?;
+
+    let setup = crate::templates::Template::default().load()?;
+    let objects = setup.object_data()?;
+    let object_data = ObjectData::try_new(objects)?;
+
+    let mut builder = PopulationData::builder();
+    for site in object_data.sites()? {
+        let n_people = rand::rng().random_range(500..1500);
+        let info = site.properties()?;
+        builder.add_site(n_people, info.latitude, info.longitude)?;
+    }
+    let population_data = builder.finish()?;
+
+    let start_time = Utc::now();
+    let start_time = start_time.with_hour(12).unwrap();
+
+    let ctx = SimulationContext::builder()
+        .with_use_in_memory(true)
+        .with_population_data(population_data)
+        .with_object_data(object_data)
+        .with_simulation_start_time(start_time)
+        .build()
+        .await?;
+
+    let schema = MemorySchemaProvider::new();
+    register_system(&schema, &system_path)?;
+
+    let nodes_table = schema.table(ROUTING_NODES_REF.table()).await?.unwrap();
+    let edges_table = schema.table(ROUTING_EDGES_REF.table()).await?.unwrap();
+
+    let df_nodes = ctx.ctx().read_table(nodes_table)?;
+    df_nodes
+        .write_table(ROUTING_NODES_REF.to_string().as_str(), Default::default())
+        .await?;
+
+    let df_edges = ctx.ctx().read_table(edges_table)?;
+    df_edges
+        .write_table(ROUTING_EDGES_REF.to_string().as_str(), Default::default())
+        .await?;
+
+    Ok(ctx)
 }
 
 #[cfg(test)]

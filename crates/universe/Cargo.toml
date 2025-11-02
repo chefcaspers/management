@@ -52,8 +52,10 @@ pyo3 = { version = "0.26", optional = true }
 
 [dev-dependencies]
 approx = "0.5.1"
+rstest = "0.26.0"
 test-log = "0.2.17"
 tokio = { version = "1", features = ["full"] }
+# pretty_assertions = "1.4.1"
 
 [features]
 default = []

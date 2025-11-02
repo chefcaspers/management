@@ -206,7 +206,7 @@ impl SimulationBuilder {
             .try_collect()?;
 
         Ok(Simulation {
-            population: PopulationRunner::try_new(&state, &ctx).await?,
+            population: PopulationRunner::try_new(&ctx).await?,
             ctx,
             config,
             state,

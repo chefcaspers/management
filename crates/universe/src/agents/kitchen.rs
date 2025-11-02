@@ -11,6 +11,12 @@ use crate::idents::*;
 use crate::models::{KitchenStation, Station};
 use crate::state::{OrderLineStatus, State};
 
+pub use next::*;
+
+#[path = "kitchen_next.rs"]
+#[allow(unused)]
+pub(crate) mod next;
+
 #[derive(Clone)]
 enum StationStatus {
     // Station is available for use
@@ -284,29 +290,6 @@ fn release_station(assets: &mut Vec<StationRunner>, asset_type: &i32, recipe_id:
         {
             asset.status = StationStatus::Available;
             break;
-        }
-    }
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct KitchenStats {
-    pub queued: usize,
-    pub in_progress: usize,
-    pub completed: usize,
-    pub idle_stations: usize,
-    pub total_stations: usize,
-}
-
-impl std::ops::Add for KitchenStats {
-    type Output = KitchenStats;
-
-    fn add(self, other: KitchenStats) -> KitchenStats {
-        KitchenStats {
-            queued: self.queued + other.queued,
-            in_progress: self.in_progress + other.in_progress,
-            completed: self.completed + other.completed,
-            idle_stations: self.idle_stations + other.idle_stations,
-            total_stations: self.total_stations + other.total_stations,
         }
     }
 }

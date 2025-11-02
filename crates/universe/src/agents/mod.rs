@@ -1,5 +1,5 @@
 mod functions;
-mod kitchen;
+pub(crate) mod kitchen;
 mod population;
 mod site;
 
