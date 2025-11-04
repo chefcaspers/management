@@ -1,0 +1,11 @@
+[files]
+# Exclude assets folder from spell checking
+extend-exclude = [
+    "crates/server/assets/",
+    "ui/node_modules/",
+    "node_modules/",
+    "target/",
+    "*.min.js",
+    "*.min.css",
+]
+
