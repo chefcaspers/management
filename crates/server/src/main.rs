@@ -22,13 +22,12 @@ async fn main() {
     // Get the assets directory path relative to the crate root
     let assets_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
     let index_path = assets_dir.join("index.html");
-    
+
     tracing::info!("Serving static files from: {:?}", assets_dir);
     tracing::info!("Index file path: {:?}", index_path);
 
     // Create the static file service
-    let serve_dir = ServeDir::new(&assets_dir)
-        .not_found_service(ServeFile::new(&index_path));
+    let serve_dir = ServeDir::new(&assets_dir).not_found_service(ServeFile::new(&index_path));
 
     // Build application routes
     let app = Router::new()
