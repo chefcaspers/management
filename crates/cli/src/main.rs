@@ -7,6 +7,7 @@ use crate::{init::InitArgs, run::RunArgs};
 mod error;
 mod init;
 mod run;
+mod server;
 mod telemetry;
 
 #[derive(clap::Parser)]
@@ -38,8 +39,21 @@ enum Commands {
     Run(RunArgs),
     /// Initialize a simulation setup
     Init(InitArgs),
+    /// Run the servers
+    Server(ServerArgs),
 }
 
+#[derive(Debug, Args)]
+struct ServerArgs {
+    /// Server URL
+    #[clap(
+        long,
+        global = true,
+        env = "CASPERS_SERVER_URL",
+        default_value = "0.0.0.0:8000"
+    )]
+    server: String,
+}
 /// Execution mode for the simulation.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 #[value(rename_all = "kebab-case")]
@@ -72,6 +86,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match cli.command {
         Commands::Run(args) => run::handle(args).await?,
         Commands::Init(args) => init::handle(args).await?,
+        Commands::Server(args) => server::handle(args).await?,
     }
 
     Ok(())

@@ -20,6 +20,7 @@ dependencies = [
     "h3>=4.2.2",
     "marimo[recommended]>=0.15.2",
     "matplotlib>=3.10.1",
+    "maturin>=1.9.6",
     "networkx>=3.4.2",
     "osmnx>=2.0.2",
     "pint>=0.24.4",

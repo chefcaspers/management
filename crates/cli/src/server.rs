@@ -1,4 +1,5 @@
 use axum::{Router, response::Json, routing::get};
+use caspers_universe::Result;
 use serde_json::{Value, json};
 use std::{net::SocketAddr, path::PathBuf};
 use tower_http::{
@@ -6,25 +7,15 @@ use tower_http::{
     services::{ServeDir, ServeFile},
     trace::TraceLayer,
 };
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-#[tokio::main]
-async fn main() {
-    // Initialize tracing
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "capers_universe_server=debug,tower_http=debug".into()),
-        )
-        .with(tracing_subscriber::fmt::layer())
-        .init();
+use crate::ServerArgs;
 
+pub(super) async fn handle(args: ServerArgs) -> Result<()> {
     // Get the assets directory path relative to the crate root
     let assets_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
     let index_path = assets_dir.join("index.html");
 
-    tracing::info!("Serving static files from: {:?}", assets_dir);
-    tracing::info!("Index file path: {:?}", index_path);
+    tracing::info!(target: "caspers::server", "Serving static files from: {:?}", assets_dir);
 
     // Create the static file service
     let serve_dir = ServeDir::new(&assets_dir).not_found_service(ServeFile::new(&index_path));
@@ -37,12 +28,14 @@ async fn main() {
         .layer(CorsLayer::permissive())
         .fallback_service(serve_dir);
 
-    // Run server
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-    tracing::info!("Starting server on {}", addr);
-
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    let addr: SocketAddr = args
+        .server
+        .parse()
+        .map_err(|e| caspers_universe::Error::Generic(Box::new(e)))?;
+    tracing::info!(target: "caspers::server", "Starting server on {}", addr);
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    axum::serve(listener, app).await?;
+    Ok(())
 }
 
 async fn health_check() -> Json<Value> {
