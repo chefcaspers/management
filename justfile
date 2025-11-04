@@ -18,6 +18,11 @@ generate:
 build-py:
     uvx --from 'maturin[zig]' maturin develop -m python/Cargo.toml
 
+# build python server bindings
+[group('build')]
+build-py-cli:
+    uv run maturin develop --uv --manifest-path crates/cli/Cargo.toml
+
 # Initialize a simulation
 [group('caspers')]
 init:
@@ -64,7 +69,7 @@ docs:
 # run the server with UI
 [group('server')]
 server:
-    cargo run --bin capers-universe-server
+    cargo run --bin caspers -- server
 
 # build the UI for production
 [group('server')]
@@ -81,7 +86,3 @@ dev-ui:
 install-ui:
     npm -w ui install
 
-# build python server bindings
-[group('build')]
-build-py-cli:
-    uv run maturin develop --uv --manifest-path crates/cli/Cargo.toml
