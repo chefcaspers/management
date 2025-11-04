@@ -1,7 +1,11 @@
 use axum::{Router, response::Json, routing::get};
 use serde_json::{Value, json};
 use std::net::SocketAddr;
-use tower_http::{cors::CorsLayer, services::ServeDir, trace::TraceLayer};
+use tower_http::{
+    cors::CorsLayer,
+    services::{ServeDir, ServeFile},
+    trace::TraceLayer,
+};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -15,14 +19,16 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
+    let serve_dir = ServeDir::new("assets").not_found_service(ServeFile::new("assets/index.html"));
+
     // Build application routes
     let app = Router::new()
         .route("/api/health", get(health_check))
         .route("/api/simulation", get(simulation_status))
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive())
-        // Serve static files from the UI build directory
-        .nest_service("/", ServeDir::new("ui/dist"));
+        .fallback_service(serve_dir);
+    // Serve static files from the UI build directory
 
     // Run server
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
