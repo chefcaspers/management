@@ -12,6 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 caspers-universe = { path = "../universe", features = ["templates"] }
+caspers-universe-server = { path = "../server" }
 
 arrow = { workspace = true }
 chrono = { workspace = true }

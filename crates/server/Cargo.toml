@@ -1,5 +1,5 @@
 [package]
-name = "capers-universe-server"
+name = "caspers-universe-server"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

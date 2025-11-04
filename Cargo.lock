@@ -615,18 +615,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "capers-universe-server"
-version = "0.0.1"
-dependencies = [
- "axum",
- "serde_json",
- "tokio",
- "tower-http",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "caspers-universe"
 version = "0.0.1"
 dependencies = [
@@ -675,6 +663,7 @@ version = "0.0.1"
 dependencies = [
  "arrow",
  "caspers-universe",
+ "caspers-universe-server",
  "chrono",
  "clap",
  "dialoguer",
@@ -702,6 +691,18 @@ dependencies = [
  "thiserror 2.0.16",
  "tokio",
  "url",
+]
+
+[[package]]
+name = "caspers-universe-server"
+version = "0.0.1"
+dependencies = [
+ "axum",
+ "serde_json",
+ "tokio",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

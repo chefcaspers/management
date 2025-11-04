@@ -80,3 +80,8 @@ dev-ui:
 [group('server')]
 install-ui:
     npm -w ui install
+
+# build python server bindings
+[group('build')]
+build-py-cli:
+    uv run maturin develop --uv --manifest-path crates/cli/Cargo.toml
