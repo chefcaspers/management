@@ -1,5 +1,5 @@
 {
-  "name": "caspers-universe-ui",
+  "name": "ui",
   "private": true,
   "version": "0.0.1",
   "type": "module",
@@ -37,4 +37,3 @@
     "vite": "^6.0.1"
   }
 }
-

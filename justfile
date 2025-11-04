@@ -60,3 +60,23 @@ fmt:
 [group('dev')]
 docs:
     npm -w docs run dev
+
+# run the server with UI
+[group('server')]
+server:
+    cargo run --bin capers-universe-server
+
+# build the UI for production
+[group('server')]
+build-ui:
+    npm -w ui run build
+
+# run UI dev server (with API proxy)
+[group('server')]
+dev-ui:
+    npm -w ui run dev
+
+# install UI dependencies
+[group('server')]
+install-ui:
+    npm -w ui install

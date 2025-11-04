@@ -1,15 +1,7 @@
-use axum::{
-    routing::get,
-    Router,
-    response::Json,
-};
-use serde_json::{json, Value};
+use axum::{Router, response::Json, routing::get};
+use serde_json::{Value, json};
 use std::net::SocketAddr;
-use tower_http::{
-    cors::CorsLayer,
-    services::ServeDir,
-    trace::TraceLayer,
-};
+use tower_http::{cors::CorsLayer, services::ServeDir, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
