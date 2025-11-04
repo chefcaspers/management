@@ -28,13 +28,13 @@ pub(super) async fn handle(args: ServerArgs) -> Result<()> {
         .layer(CorsLayer::permissive())
         .fallback_service(serve_dir);
 
-    // Run server
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr: SocketAddr = args
+        .server
+        .parse()
+        .map_err(|e| caspers_universe::Error::Generic(Box::new(e)))?;
     tracing::info!(target: "caspers::server", "Starting server on {}", addr);
-
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
-
     Ok(())
 }
 

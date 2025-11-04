@@ -49,8 +49,8 @@ struct ServerArgs {
     #[clap(
         long,
         global = true,
-        env = "UC_SERVER_URL",
-        default_value = "http://localhost:3000"
+        env = "CASPERS_SERVER_URL",
+        default_value = "0.0.0.0:8000"
     )]
     server: String,
 }
