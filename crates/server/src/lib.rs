@@ -8,16 +8,15 @@ use tower_http::{
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-#[tokio::main]
-async fn main() {
+pub async fn main() {
     // Initialize tracing
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "capers_universe_server=debug,tower_http=debug".into()),
-        )
-        .with(tracing_subscriber::fmt::layer())
-        .init();
+    // tracing_subscriber::registry()
+    //     .with(
+    //         tracing_subscriber::EnvFilter::try_from_default_env()
+    //             .unwrap_or_else(|_| "capers_universe_server=debug,tower_http=debug".into()),
+    //     )
+    //     .with(tracing_subscriber::fmt::layer())
+    //     .init();
 
     // Get the assets directory path relative to the crate root
     let assets_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
