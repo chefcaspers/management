@@ -22,9 +22,11 @@ use datafusion::scalar::ScalarValue;
 use futures::StreamExt as _;
 use itertools::Itertools as _;
 use tracing::{Level, instrument};
+use uuid::{ContextV7, Timestamp};
 
 use super::OrderLine;
 use crate::error::Result;
+use crate::functions::h3_longlatash3;
 use crate::models::{KitchenStation, Station};
 use crate::state::{OrderLineStatus, State};
 use crate::{Brand, Error, EventPayload, ObjectLabel, parse_json};
@@ -109,6 +111,14 @@ static STATION_PROPERTIES_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
     ]))
 });
 
+static SITE_PROPERTIES_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
+    SchemaRef::new(Schema::new(vec![
+        Field::new("name", DataType::Utf8View, false),
+        Field::new("longitude", DataType::Float64, false),
+        Field::new("latitude", DataType::Float64, false),
+    ]))
+});
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct KitchenStats {
     pub queued: usize,
@@ -132,7 +142,9 @@ impl std::ops::Add for KitchenStats {
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct KitchenHandler {
+    sites: Vec<RecordBatch>,
     kitchens: Vec<RecordBatch>,
     stations: Vec<RecordBatch>,
     menu_items: Vec<RecordBatch>,
@@ -141,9 +153,27 @@ pub(crate) struct KitchenHandler {
 
 impl KitchenHandler {
     pub(crate) async fn try_new(ctx: &SimulationContext) -> Result<Self> {
-        let (brand_ids, menu_items) = extract_menu_items(ctx).await?;
-        let (stations, kitchens) = extract_kitchen_station(ctx, brand_ids).await?;
+        let objects = ctx
+            .snapshots()
+            .objects()
+            .await?
+            .filter(col("label").in_list(
+                vec![
+                    lit(ObjectLabel::Site.as_ref()),
+                    lit(ObjectLabel::Kitchen.as_ref()),
+                    lit(ObjectLabel::Station.as_ref()),
+                    lit(ObjectLabel::Brand.as_ref()),
+                    lit(ObjectLabel::MenuItem.as_ref()),
+                ],
+                false,
+            ))?
+            .cache()
+            .await?;
+        let sites = extract_sites(objects.clone()).await?;
+        let (brand_ids, menu_items) = extract_menu_items(objects.clone()).await?;
+        let (stations, kitchens) = extract_kitchen_station(ctx, objects, brand_ids).await?;
         Ok(KitchenHandler {
+            sites,
             kitchens,
             stations,
             menu_items,
@@ -152,20 +182,36 @@ impl KitchenHandler {
         })
     }
 
-    fn kitchens(&self, ctx: &SimulationContext) -> Result<DataFrame> {
+    pub(crate) fn sites(&self, ctx: &SimulationContext) -> Result<DataFrame> {
+        Ok(ctx.ctx().read_batches(self.sites.iter().cloned())?)
+    }
+
+    pub(crate) fn kitchens(&self, ctx: &SimulationContext) -> Result<DataFrame> {
         Ok(ctx.ctx().read_batches(self.kitchens.iter().cloned())?)
     }
 
-    fn stations(&self, ctx: &SimulationContext) -> Result<DataFrame> {
+    pub(crate) fn stations(&self, ctx: &SimulationContext) -> Result<DataFrame> {
         Ok(ctx.ctx().read_batches(self.stations.iter().cloned())?)
     }
 
-    fn menu_items(&self, ctx: &SimulationContext) -> Result<DataFrame> {
+    pub(crate) fn menu_items(&self, ctx: &SimulationContext) -> Result<DataFrame> {
         Ok(ctx.ctx().read_batches(self.menu_items.iter().cloned())?)
     }
 
-    fn order_lines(&self, ctx: &SimulationContext) -> Result<DataFrame> {
+    pub(crate) fn order_lines(&self, ctx: &SimulationContext) -> Result<DataFrame> {
         Ok(ctx.ctx().read_batches(self.order_lines.iter().cloned())?)
+    }
+
+    pub(crate) async fn step(
+        &mut self,
+        ctx: &SimulationContext,
+        incoming_orders: Option<DataFrame>,
+    ) -> Result<()> {
+        if let Some(orders) = incoming_orders {
+            self.prepare_order_lines(ctx, orders).await?;
+        }
+        self.process_order_lines(ctx).await?;
+        Ok(())
     }
 
     /// Prepare new orders and order lines for processing.
@@ -179,13 +225,57 @@ impl KitchenHandler {
     /// ## Returns
     ///
     /// A DataFrame containing the prepared order lines.
-    pub(crate) async fn prepare_order_lines(
+    async fn prepare_order_lines(
         &mut self,
         ctx: &SimulationContext,
         orders: DataFrame,
-        lines: DataFrame,
     ) -> Result<()> {
-        // Check if lines is empty first
+        let resolution = lit(6_i8);
+
+        // assign order to sites
+        let orders = orders
+            .select([
+                col("person_id"),
+                col("order_id"),
+                col("submitted_at"),
+                col("destination"),
+                col("items"),
+                h3_longlatash3()
+                    .call(vec![
+                        col("destination").field("x"),
+                        col("destination").field("y"),
+                        resolution.clone(),
+                    ])
+                    .alias("destination_cell"),
+            ])?
+            .join_on(
+                self.sites(ctx)?.select([
+                    col("site_id"),
+                    h3_longlatash3()
+                        .call(vec![col("longitude"), col("latitude"), resolution.clone()])
+                        .alias("site_cell"),
+                ])?,
+                JoinType::Left,
+                [col("destination_cell").eq(col("site_cell"))],
+            )?
+            .select([
+                col("site_id"),
+                col("person_id"),
+                col("order_id"),
+                col("submitted_at"),
+                col("destination"),
+                col("items"),
+            ])?
+            .cache()
+            .await?;
+
+        let orders_count = orders.clone().count().await?;
+        if orders_count == 0 {
+            return Ok(());
+        }
+
+        // flatten orders into lines
+        let lines = unnest_orders(ctx, orders.clone(), *ctx.current_time()).await?;
         let lines_count = lines.clone().count().await?;
         if lines_count == 0 {
             return Ok(());
@@ -238,7 +328,7 @@ impl KitchenHandler {
     ///
     /// * `ctx`: The simulation context.
     /// * `state`: The simulation state.
-    pub(crate) async fn process_order_lines(&mut self, ctx: &SimulationContext) -> Result<()> {
+    async fn process_order_lines(&mut self, ctx: &SimulationContext) -> Result<()> {
         // Early return if no order lines to process
         if self.order_lines.is_empty() || self.order_lines.iter().all(|b| b.num_rows() == 0) {
             return Ok(());
@@ -767,12 +857,11 @@ impl KitchenHandler {
 
 async fn extract_kitchen_station(
     ctx: &SimulationContext,
+    objects: DataFrame,
     brand_ids: Vec<Expr>,
 ) -> Result<(Vec<RecordBatch>, Vec<RecordBatch>)> {
-    let kitchens = ctx
-        .snapshots()
-        .objects()
-        .await?
+    let kitchens = objects
+        .clone()
         .filter(col("label").eq(lit(ObjectLabel::Kitchen.as_ref())))?
         .select([
             col("parent_id").alias("site_id"),
@@ -781,10 +870,7 @@ async fn extract_kitchen_station(
         ])?
         .cache()
         .await?;
-    let stations: Vec<_> = ctx
-        .snapshots()
-        .objects()
-        .await?
+    let stations: Vec<_> = objects
         .filter(col("label").eq(lit(ObjectLabel::Station.as_ref())))?
         .select([
             col("parent_id").alias("kitchen_id2"),
@@ -812,11 +898,22 @@ async fn extract_kitchen_station(
     Ok((stations, kitchens))
 }
 
-async fn extract_menu_items(ctx: &SimulationContext) -> Result<(Vec<Expr>, Vec<RecordBatch>)> {
-    let menu_items = ctx
-        .snapshots()
-        .objects()
+async fn extract_sites(objects: DataFrame) -> Result<Vec<RecordBatch>> {
+    let sites = objects
+        .filter(col("label").eq(lit(ObjectLabel::Site.as_ref())))?
+        .select([col("id").alias("site_id"), col("properties")])?;
+    let sites = sites
+        .select([col("site_id"), col("properties")])?
+        .collect()
         .await?
+        .into_iter()
+        .map(|batch| parse_properties(batch, SITE_PROPERTIES_SCHEMA.clone()))
+        .try_collect()?;
+    Ok(sites)
+}
+
+async fn extract_menu_items(objects: DataFrame) -> Result<(Vec<Expr>, Vec<RecordBatch>)> {
+    let menu_items = objects
         .filter(col("label").eq(lit(ObjectLabel::MenuItem.as_ref())))?
         .select([
             col("parent_id").alias("brand_id"),
@@ -903,4 +1000,94 @@ fn do_assign(candidates: &dyn Array, stats: &mut HashMap<Vec<u8>, usize>) -> Res
     }
 
     Ok(Arc::new(builder.finish()))
+}
+
+//TODO: we should really be using the unnests operator for this.
+// but there are some not-impl errors when building the logical plan.
+// So for now we do the unnesting manually.
+async fn unnest_orders(
+    ctx: &SimulationContext,
+    orders: DataFrame,
+    current_time: DateTime<Utc>,
+) -> Result<DataFrame> {
+    let orders = orders
+        .select_columns(&["order_id", "items"])?
+        .collect()
+        .await?;
+
+    let context = ContextV7::new();
+    let ts = Timestamp::from_unix(
+        &context,
+        current_time.timestamp() as u64,
+        current_time.timestamp_subsec_nanos(),
+    );
+
+    Ok(ctx.ctx().read_batch(unnest_orders_inner(orders, ts)?)?)
+}
+
+pub(crate) fn unnest_orders_inner(orders: Vec<RecordBatch>, ts: Timestamp) -> Result<RecordBatch> {
+    let mut builder = OrderLineBuilder::new();
+    for ord in orders.into_iter() {
+        let order_ids = ord.column(0).as_fixed_size_binary().iter();
+        let menu_items = ord.column(1).as_list::<i32>().iter();
+        for (order_id, menu_items) in order_ids.zip(menu_items) {
+            if let (Some(order_id), Some(menu_items)) = (order_id, menu_items) {
+                for menu_item in menu_items.as_fixed_size_list().iter() {
+                    if let Some(ids) = menu_item {
+                        let ids = ids.as_fixed_size_binary();
+                        let order_line_id = uuid::Uuid::new_v7(ts);
+                        builder.add_value(order_id, order_line_id, ids.value(1))?;
+                    }
+                }
+            }
+        }
+    }
+    Ok(builder.finish()?)
+}
+
+struct OrderLineBuilder {
+    order_id: FixedSizeBinaryBuilder,
+    order_line_id: FixedSizeBinaryBuilder,
+    menu_item_id: FixedSizeBinaryBuilder,
+}
+
+static ORDER_LINE_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
+    SchemaRef::new(Schema::new(vec![
+        Field::new("order_id", DataType::FixedSizeBinary(16), false),
+        Field::new("order_line_id", DataType::FixedSizeBinary(16), false),
+        Field::new("menu_item_id", DataType::FixedSizeBinary(16), false),
+    ]))
+});
+
+impl OrderLineBuilder {
+    fn new() -> Self {
+        Self {
+            order_id: FixedSizeBinaryBuilder::new(16),
+            order_line_id: FixedSizeBinaryBuilder::new(16),
+            menu_item_id: FixedSizeBinaryBuilder::new(16),
+        }
+    }
+
+    fn add_value(
+        &mut self,
+        order_id: impl AsRef<[u8]>,
+        order_line_id: impl AsRef<[u8]>,
+        menu_item_id: impl AsRef<[u8]>,
+    ) -> Result<()> {
+        self.order_id.append_value(order_id)?;
+        self.order_line_id.append_value(order_line_id)?;
+        self.menu_item_id.append_value(menu_item_id)?;
+        Ok(())
+    }
+
+    fn finish(mut self) -> Result<RecordBatch> {
+        Ok(RecordBatch::try_new(
+            ORDER_LINE_SCHEMA.clone(),
+            vec![
+                Arc::new(self.order_id.finish()),
+                Arc::new(self.order_line_id.finish()),
+                Arc::new(self.menu_item_id.finish()),
+            ],
+        )?)
+    }
 }

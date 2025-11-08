@@ -8,7 +8,6 @@ use tracing::instrument;
 use url::Url;
 use uuid::Uuid;
 
-pub use self::agents::*;
 pub use self::builders::*;
 pub use self::error::*;
 pub use self::idents::*;

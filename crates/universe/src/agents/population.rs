@@ -22,11 +22,11 @@ use geoarrow_array::GeoArrowArrayAccessor;
 use geoarrow_schema::{Dimension, PointType};
 use h3o::{LatLng, Resolution};
 use tracing::{Level, instrument};
-use uuid::{ContextV7, Timestamp, Uuid};
+use uuid::Uuid;
 
 use crate::{
     BrandId, EntityView as _, EventPayload, MenuItemId, ObjectLabel, OrderCreatedPayload, PersonId,
-    PersonRole, Result, SimulationContext, SiteId, State,
+    PersonRole, PersonStatusFlag, Result, SimulationContext, SiteId, State,
     agents::functions::create_order,
     functions::uuidv7,
     state::{Journey, Transport},
@@ -52,78 +52,6 @@ impl PopulationRunner {
         let order_choices = concat_batches(batches[0].schema_ref(), &batches)?;
         let create_orders = create_order(order_choices);
         Ok(PopulationRunner { create_orders })
-    }
-
-    pub(crate) async fn step_next(
-        &self,
-        ctx: &SimulationContext,
-        site_id: &SiteId,
-        state: &State,
-    ) -> Result<(DataFrame, DataFrame)> {
-        let site = state.objects().site(site_id)?;
-        let props = site.properties()?;
-        let lat_lng = LatLng::new(props.latitude, props.longitude)?;
-        let ts = state.current_time().timestamp_millis();
-
-        let idle_people = state
-            .population()
-            .idle_people_in_cell(ctx, lat_lng.to_cell(Resolution::Six), &PersonRole::Customer)
-            .await?
-            .collect()
-            .await?;
-
-        let idle_people = ctx.ctx().read_batches(idle_people)?;
-
-        // TODO: adjust timestamp passed to create order function to local time. Internally
-        // we always process against UTC so we just need adjust the current time to local time
-        // and "pretend" its this time in UTC. The the timestamp passed to the uuidv7 function
-        // should NOT be adjusted however, as we just need it to be globally ordered...
-        let current_time = lit(ScalarValue::TimestampMillisecond(
-            Some(ts),
-            Some("UTC".into()),
-        ));
-
-        let step_duration = lit(ScalarValue::Float64(Some(
-            state.time_step().as_millis() as f64
-        )));
-
-        let submitted_at_expression = current_time.clone()
-            + cast(
-                round(vec![step_duration * random()]),
-                DataType::Duration(TimeUnit::Millisecond),
-            );
-
-        let new_orders = idle_people
-            .select(vec![
-                lit(ScalarValue::FixedSizeBinary(
-                    16,
-                    Some(AsRef::<[u8]>::as_ref(&site_id).to_vec()),
-                ))
-                .alias("site_id"),
-                col("id").alias("person_id"),
-                submitted_at_expression.alias("submitted_at"),
-                // uuidv7().call(vec![current_time.clone()]).alias("order_id"),
-                col("position").alias("destination"),
-                self.create_orders
-                    .call(vec![current_time.clone(), col("state")])
-                    .alias("items"),
-            ])?
-            .filter(col("items").is_not_null())?
-            .select([
-                col("site_id"),
-                col("person_id"),
-                uuidv7().call(vec![col("submitted_at")]).alias("order_id"),
-                col("submitted_at"),
-                col("destination"),
-                col("items"),
-            ])?;
-
-        // we need to materialize here, to have consistent order ids after cloning the frame.
-        let new_orders = new_orders.cache().await?;
-
-        let order_lines = unnest_orders(ctx, new_orders.clone(), state.current_time()).await?;
-
-        Ok((new_orders.drop_columns(&["items"])?, order_lines))
     }
 
     #[instrument(
@@ -219,96 +147,6 @@ impl PopulationRunner {
         });
 
         Ok(orders)
-    }
-}
-
-//TODO: we should really be using the unnests operator for this.
-// but there are some not-impl errors when building the logical plan.
-// So for now we do the unnesting manually.
-async fn unnest_orders(
-    ctx: &SimulationContext,
-    orders: DataFrame,
-    current_time: DateTime<Utc>,
-) -> Result<DataFrame> {
-    let orders = orders
-        .select_columns(&["order_id", "items"])?
-        .collect()
-        .await?;
-
-    let context = ContextV7::new();
-    let ts = Timestamp::from_unix(
-        &context,
-        current_time.timestamp() as u64,
-        current_time.timestamp_subsec_nanos(),
-    );
-
-    Ok(ctx.ctx().read_batch(unnest_orders_inner(orders, ts)?)?)
-}
-
-pub(crate) fn unnest_orders_inner(orders: Vec<RecordBatch>, ts: Timestamp) -> Result<RecordBatch> {
-    let mut builder = OrderLineBuilder::new();
-    for ord in orders.into_iter() {
-        let order_ids = ord.column(0).as_fixed_size_binary().iter();
-        let menu_items = ord.column(1).as_list::<i32>().iter();
-        for (order_id, menu_items) in order_ids.zip(menu_items) {
-            if let (Some(order_id), Some(menu_items)) = (order_id, menu_items) {
-                for menu_item in menu_items.as_fixed_size_list().iter() {
-                    if let Some(ids) = menu_item {
-                        let ids = ids.as_fixed_size_binary();
-                        let order_line_id = Uuid::new_v7(ts);
-                        builder.add_value(order_id, order_line_id, ids.value(1))?;
-                    }
-                }
-            }
-        }
-    }
-    Ok(builder.finish()?)
-}
-
-static ORDER_LINE_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
-    SchemaRef::new(Schema::new(vec![
-        Field::new("order_id", DataType::FixedSizeBinary(16), false),
-        Field::new("order_line_id", DataType::FixedSizeBinary(16), false),
-        Field::new("menu_item_id", DataType::FixedSizeBinary(16), false),
-    ]))
-});
-
-struct OrderLineBuilder {
-    order_id: FixedSizeBinaryBuilder,
-    order_line_id: FixedSizeBinaryBuilder,
-    menu_item_id: FixedSizeBinaryBuilder,
-}
-
-impl OrderLineBuilder {
-    fn new() -> Self {
-        Self {
-            order_id: FixedSizeBinaryBuilder::new(16),
-            order_line_id: FixedSizeBinaryBuilder::new(16),
-            menu_item_id: FixedSizeBinaryBuilder::new(16),
-        }
-    }
-
-    fn add_value(
-        &mut self,
-        order_id: impl AsRef<[u8]>,
-        order_line_id: impl AsRef<[u8]>,
-        menu_item_id: impl AsRef<[u8]>,
-    ) -> Result<()> {
-        self.order_id.append_value(order_id)?;
-        self.order_line_id.append_value(order_line_id)?;
-        self.menu_item_id.append_value(menu_item_id)?;
-        Ok(())
-    }
-
-    fn finish(mut self) -> Result<RecordBatch> {
-        Ok(RecordBatch::try_new(
-            ORDER_LINE_SCHEMA.clone(),
-            vec![
-                Arc::new(self.order_id.finish()),
-                Arc::new(self.order_line_id.finish()),
-                Arc::new(self.menu_item_id.finish()),
-            ],
-        )?)
     }
 }
 
@@ -631,20 +469,85 @@ impl std::ops::Add for PopulationStats {
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct PopulationHandler {
+    create_orders: Arc<ScalarUDF>,
+
+    population: Vec<RecordBatch>,
     journeys: Vec<RecordBatch>,
 }
 
 impl PopulationHandler {
-    pub(crate) async fn try_new(_ctx: &SimulationContext) -> Result<Self> {
-        // TODO: load from snapshot when available
+    pub(crate) async fn try_new(
+        ctx: &SimulationContext,
+        create_orders: Arc<ScalarUDF>,
+    ) -> Result<Self> {
+        let population = ctx.snapshots().population().await?.collect().await?;
         Ok(PopulationHandler {
+            create_orders,
+            population,
             journeys: vec![RecordBatch::new_empty(JOURNEY_STATE.clone())],
         })
     }
 
-    fn journeys(&self, ctx: &SimulationContext) -> Result<DataFrame> {
+    pub(crate) fn population(&self, ctx: &SimulationContext) -> Result<DataFrame> {
+        Ok(ctx.ctx().read_batches(self.population.iter().cloned())?)
+    }
+
+    pub(crate) fn journeys(&self, ctx: &SimulationContext) -> Result<DataFrame> {
         Ok(ctx.ctx().read_batches(self.journeys.iter().cloned())?)
+    }
+
+    pub(crate) async fn create_orders(&self, ctx: &SimulationContext) -> Result<DataFrame> {
+        // TODO: adjust timestamp passed to create order function to local time. Internally
+        // we always process against UTC so we just need adjust the current time to local time
+        // and "pretend" its this time in UTC. The the timestamp passed to the uuidv7 function
+        // should NOT be adjusted however, as we just need it to be globally ordered...
+        let current_time = lit(ScalarValue::TimestampMillisecond(
+            Some(ctx.current_time().timestamp_millis()),
+            Some("UTC".into()),
+        ));
+
+        let step_duration = lit(ScalarValue::Float64(Some(
+            ctx.time_step().as_millis() as f64
+        )));
+
+        let submitted_at_expression = current_time.clone()
+            + cast(
+                round(vec![step_duration * random()]),
+                DataType::Duration(TimeUnit::Millisecond),
+            );
+
+        let new_orders = self
+            .population(ctx)?
+            .filter(
+                col("status")
+                    .eq(lit(PersonStatusFlag::Idle.as_ref()))
+                    .and(col("role").eq(lit(PersonRole::Customer.as_ref()))),
+            )?
+            .select(vec![
+                col("id").alias("person_id"),
+                submitted_at_expression.alias("submitted_at"),
+                // uuidv7().call(vec![current_time.clone()]).alias("order_id"),
+                col("position").alias("destination"),
+                self.create_orders
+                    .call(vec![current_time.clone(), col("state")])
+                    .alias("items"),
+            ])?
+            .filter(col("items").is_not_null())?
+            .select([
+                col("person_id"),
+                uuidv7().call(vec![col("submitted_at")]).alias("order_id"),
+                col("submitted_at"),
+                col("destination"),
+                col("items"),
+            ])?
+            // NOTE: we need to materialize here, to have
+            // consistent order ids after cloning the frame.
+            .cache()
+            .await?;
+
+        Ok(new_orders)
     }
 
     pub(crate) async fn start_journeys(
@@ -929,34 +832,16 @@ impl PopulationHandler {
 
 #[cfg(test)]
 mod population_tests {
+    use rstest::*;
+
     use super::*;
-    use crate::test_utils::setup_test_simulation;
+    use crate::{SimulationRunner, test_utils::runner};
 
+    #[rstest]
     #[tokio::test]
-    async fn test_journey_encoding() -> Result<()> {
-        let simulation = setup_test_simulation(None).await?;
-        let handler = PopulationHandler::try_new(simulation.ctx()).await?;
-
-        // Create a simple journey
-        let person_id = PersonId::new();
-        let start_position = Point::new(-0.1553777, 51.5453468);
-        let journey: Journey = vec![
-            (Point::new(-0.1556396, 51.5455222), 100_usize),
-            (Point::new(-0.1556897, 51.5455559), 200_usize),
-        ]
-        .into_iter()
-        .collect();
-
-        let stats_before = handler.get_stats(simulation.ctx()).await?;
-        assert_eq!(stats_before.active_journeys, 0);
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_start_journeys() -> Result<()> {
-        let simulation = setup_test_simulation(None).await?;
-        let mut handler = PopulationHandler::try_new(simulation.ctx()).await?;
+    async fn test_start_journeys(#[future] runner: Result<SimulationRunner>) -> Result<()> {
+        let runner = runner.await?;
+        let mut handler = runner.population().clone();
 
         let person_id = PersonId::new();
         let start_position = Point::new(-0.1553777, 51.5453468);
@@ -968,37 +853,39 @@ mod population_tests {
         .collect();
 
         handler
-            .start_journeys(simulation.ctx(), vec![(person_id, start_position, journey)])
+            .start_journeys(runner.ctx(), vec![(person_id, start_position, journey)])
             .await?;
 
-        let stats = handler.get_stats(simulation.ctx()).await?;
+        let stats = handler.get_stats(runner.ctx()).await?;
         assert_eq!(stats.active_journeys, 1);
         assert_eq!(stats.completed_journeys, 0);
 
         Ok(())
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_empty_journeys() -> Result<()> {
-        let simulation = setup_test_simulation(None).await?;
-        let mut handler = PopulationHandler::try_new(simulation.ctx()).await?;
+    async fn test_empty_journeys(#[future] runner: Result<SimulationRunner>) -> Result<()> {
+        let runner = runner.await?;
+        let mut handler = runner.population().clone();
 
         // Process without any journeys
         for _ in 0..5 {
-            handler.advance_journeys(simulation.ctx()).await?;
+            handler.advance_journeys(runner.ctx()).await?;
         }
 
-        let stats = handler.get_stats(simulation.ctx()).await?;
+        let stats = handler.get_stats(runner.ctx()).await?;
         assert_eq!(stats.active_journeys, 0);
         assert_eq!(stats.completed_journeys, 0);
 
         Ok(())
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_journey_advancement() -> Result<()> {
-        let simulation = setup_test_simulation(None).await?;
-        let mut handler = PopulationHandler::try_new(simulation.ctx()).await?;
+    async fn test_journey_advancement(#[future] runner: Result<SimulationRunner>) -> Result<()> {
+        let runner = runner.await?;
+        let mut handler = runner.population().clone();
 
         let person_id = PersonId::new();
         let start_position = Point::new(-0.1553777, 51.5453468);
@@ -1012,26 +899,27 @@ mod population_tests {
         .collect();
 
         handler
-            .start_journeys(simulation.ctx(), vec![(person_id, start_position, journey)])
+            .start_journeys(runner.ctx(), vec![(person_id, start_position, journey)])
             .await?;
 
-        let stats_before = handler.get_stats(simulation.ctx()).await?;
+        let stats_before = handler.get_stats(runner.ctx()).await?;
         assert_eq!(stats_before.active_journeys, 1);
 
         // Advance the journey
-        handler.advance_journeys(simulation.ctx()).await?;
+        handler.advance_journeys(runner.ctx()).await?;
 
-        let stats_after = handler.get_stats(simulation.ctx()).await?;
+        let stats_after = handler.get_stats(runner.ctx()).await?;
         // Journey should still be active (not completed yet)
         assert_eq!(stats_after.active_journeys, 1);
 
         Ok(())
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_journey_completion() -> Result<()> {
-        let mut simulation = setup_test_simulation(None).await?;
-        let mut handler = PopulationHandler::try_new(simulation.ctx()).await?;
+    async fn test_journey_completion(#[future] runner: Result<SimulationRunner>) -> Result<()> {
+        let mut runner = runner.await?;
+        let mut handler = runner.population().clone();
 
         let person_id = PersonId::new();
         let start_position = Point::new(-0.1553777, 51.5453468);
@@ -1042,16 +930,16 @@ mod population_tests {
             .collect();
 
         handler
-            .start_journeys(simulation.ctx(), vec![(person_id, start_position, journey)])
+            .start_journeys(runner.ctx(), vec![(person_id, start_position, journey)])
             .await?;
 
         // Advance many times to ensure completion
         for _ in 0..100 {
-            handler.advance_journeys(simulation.ctx()).await?;
-            simulation.advance_time();
+            handler.advance_journeys(runner.ctx()).await?;
+            runner.advance_time();
         }
 
-        let stats = handler.get_stats(simulation.ctx()).await?;
+        let stats = handler.get_stats(runner.ctx()).await?;
 
         // Should have completed the journey
         assert!(
@@ -1062,10 +950,11 @@ mod population_tests {
         Ok(())
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_get_current_positions() -> Result<()> {
-        let simulation = setup_test_simulation(None).await?;
-        let mut handler = PopulationHandler::try_new(simulation.ctx()).await?;
+    async fn test_get_current_positions(#[future] runner: Result<SimulationRunner>) -> Result<()> {
+        let runner = runner.await?;
+        let mut handler = runner.population().clone();
 
         let person_id = PersonId::new();
         let start_position = Point::new(0.0, 0.0);
@@ -1074,10 +963,10 @@ mod population_tests {
             .collect();
 
         handler
-            .start_journeys(simulation.ctx(), vec![(person_id, start_position, journey)])
+            .start_journeys(runner.ctx(), vec![(person_id, start_position, journey)])
             .await?;
 
-        let positions = handler.get_current_positions(simulation.ctx()).await?;
+        let positions = handler.get_current_positions(runner.ctx()).await?;
         let collected = positions.collect().await?;
 
         assert_eq!(collected.iter().map(|b| b.num_rows()).sum::<usize>(), 1);
@@ -1085,10 +974,11 @@ mod population_tests {
         Ok(())
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_get_completed_journeys() -> Result<()> {
-        let mut simulation = setup_test_simulation(None).await?;
-        let mut handler = PopulationHandler::try_new(simulation.ctx()).await?;
+    async fn test_get_completed_journeys(#[future] runner: Result<SimulationRunner>) -> Result<()> {
+        let mut runner = runner.await?;
+        let mut handler = runner.population().clone();
 
         let person_id = PersonId::new();
         let start_position = Point::new(-0.1553777, 51.5453468);
@@ -1097,21 +987,21 @@ mod population_tests {
             .collect();
 
         handler
-            .start_journeys(simulation.ctx(), vec![(person_id, start_position, journey)])
+            .start_journeys(runner.ctx(), vec![(person_id, start_position, journey)])
             .await?;
 
         // Advance until completion
         for _ in 0..100 {
-            handler.advance_journeys(simulation.ctx()).await?;
-            simulation.advance_time();
+            handler.advance_journeys(runner.ctx()).await?;
+            runner.advance_time();
         }
 
         // Get completed journeys
-        let completed = handler.get_completed_journeys(simulation.ctx()).await?;
+        let completed = handler.get_completed_journeys(runner.ctx()).await?;
         assert!(completed.is_some(), "Should have completed journeys");
 
         // Verify they're removed from active
-        let stats = handler.get_stats(simulation.ctx()).await?;
+        let stats = handler.get_stats(runner.ctx()).await?;
         assert_eq!(stats.active_journeys, 0);
 
         Ok(())

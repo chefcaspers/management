@@ -251,6 +251,10 @@ impl SimulationContext {
         &self.time_step
     }
 
+    pub(crate) fn step_time(&mut self) {
+        self.current_time += self.time_step;
+    }
+
     pub fn system(&self) -> schemas::SystemSchema<'_> {
         schemas::SystemSchema::new(&self.ctx)
     }

@@ -1,24 +1,23 @@
 use std::collections::HashMap;
 
-#[cfg(test)]
-use arrow::array::RecordBatch;
-use datafusion::prelude::DataFrame;
 use itertools::Itertools as _;
 use rand::distr::{Distribution, Uniform};
 use tracing::{Level, Span, field, instrument};
 
+use crate::Result;
 use crate::agents::{PopulationRunner, SiteRunner};
 use crate::builders::{EventDataBuilder, EventStatsBuffer};
 use crate::context::SimulationContext;
 use crate::idents::SiteId;
 use crate::state::State;
-use crate::{Error, KitchenHandler, Result};
 
 pub use self::builder::*;
 pub use self::events::*;
+pub use self::next::*;
 
 mod builder;
 mod events;
+mod next;
 
 /// The main simulation engine
 ///
@@ -95,71 +94,6 @@ impl Simulation {
             self.snapshot().await?;
         }
         Ok(())
-    }
-
-    pub(crate) async fn step_next(&mut self, handler: &mut KitchenHandler) -> Result<DataFrame> {
-        let (orders, lines) = self.create_orders().await?;
-        let orders = orders.collect().await?;
-        let n_orders = orders.iter().map(|o| o.num_rows()).sum::<usize>();
-        let orders = self.ctx().ctx().read_batches(orders)?;
-
-        // prepare lines for processing and assign lines to kitchen
-        if n_orders > 0 {
-            handler
-                .prepare_order_lines(self.ctx(), orders.clone(), lines)
-                .await?;
-        }
-
-        handler.process_order_lines(self.ctx()).await?;
-
-        self.state.step_time();
-
-        Ok(orders)
-    }
-
-    #[cfg(test)]
-    pub fn generate_test_orders(
-        &self,
-        menu_items: RecordBatch,
-        orders: impl IntoIterator<Item = usize>,
-    ) -> Result<(DataFrame, DataFrame)> {
-        use geo::Point;
-
-        use crate::PersonId;
-        use crate::agents::kitchen::next::tests::generate_orders;
-
-        let site_id = self.sites.keys().next().expect("No sites registered.");
-
-        let orders = orders
-            .into_iter()
-            .map(|n| (PersonId::new(), Point::new(0.0, 0.0), n));
-
-        let (orders, lines) =
-            generate_orders(menu_items, site_id, self.state.current_time(), orders)?;
-
-        Ok((
-            self.ctx().ctx().read_batch(orders)?,
-            self.ctx().ctx().read_batch(lines)?,
-        ))
-    }
-
-    async fn create_orders(&mut self) -> Result<(DataFrame, DataFrame)> {
-        let futures = self.sites.iter().map(|(site_id, _)| async {
-            self.population
-                .step_next(&self.ctx, site_id, &self.state)
-                .await
-        });
-        let mut frames: Vec<_> = futures::future::join_all(futures)
-            .await
-            .into_iter()
-            .try_collect()?;
-        if let Some((orders, lines)) = frames.pop() {
-            Ok(frames.into_iter().try_fold((orders, lines), |acc, frame| {
-                Ok::<_, Error>((acc.0.union(frame.0)?, acc.1.union(frame.1)?))
-            })?)
-        } else {
-            Err(Error::internal("No data frame found"))
-        }
     }
 
     /// Advance the simulation by one time step

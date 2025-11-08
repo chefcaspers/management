@@ -1,13 +1,13 @@
 use std::{path::PathBuf, process::Command};
 
 use arrow::util::pretty::print_batches;
-use datafusion::prelude::{DataFrame, SessionContext};
+use datafusion::prelude::DataFrame;
 #[cfg(test)]
 use rstest::*;
 
-#[cfg(test)]
-use crate::SimulationContext;
 use crate::{Error, Result, Simulation, Template};
+#[cfg(test)]
+use crate::{SimulationContext, SimulationRunner, SimulationRunnerBuilder};
 
 pub async fn setup_test_simulation(template: impl Into<Option<Template>>) -> Result<Simulation> {
     let caspers_root = find_git_root()?.join(".caspers/system/");
@@ -92,6 +92,24 @@ pub async fn simulation_context() -> Result<SimulationContext> {
         .await?;
 
     Ok(ctx)
+}
+
+#[cfg(test)]
+#[fixture]
+pub(crate) async fn builder() -> Result<SimulationRunnerBuilder> {
+    use crate::agents::functions::create_order;
+
+    let mut builder: SimulationRunnerBuilder = simulation_context().await?.into();
+    builder = builder.with_create_orders(Box::new(create_order));
+    Ok(builder)
+}
+
+#[cfg(test)]
+#[fixture]
+pub(crate) async fn runner(
+    #[future] builder: Result<SimulationRunnerBuilder>,
+) -> Result<SimulationRunner> {
+    builder.await?.build().await
 }
 
 #[cfg(test)]
