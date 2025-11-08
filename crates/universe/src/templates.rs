@@ -110,6 +110,10 @@ impl BrandTemplate {
             BrandTemplate::Mexican => include_bytes!("../templates/base/brands/mexican.json"),
         }
     }
+
+    pub fn brand(&self) -> Result<Brand> {
+        load_brand(self)
+    }
 }
 
 fn load_template(template: &Template) -> Result<SimulationSetup> {

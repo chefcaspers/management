@@ -5,30 +5,38 @@
 //! external data storages that might be used to store the state.
 
 use std::collections::HashMap;
+use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
-use arrow::array::{RecordBatch, cast::AsArray as _};
+use arrow::array::cast::AsArray as _;
 use chrono::{DateTime, Utc};
+use datafusion::prelude::{Expr, lit};
+use datafusion::scalar::ScalarValue;
 use geo_traits::PointTrait;
 use itertools::Itertools as _;
-use uuid::Uuid;
+use uuid::{ContextV7, Timestamp, Uuid};
 
 use crate::{
     Error, EventPayload, OrderLineUpdatedPayload, OrderUpdatedPayload, Result, SimulationConfig,
+    SimulationContext,
 };
 use crate::{OrderDataBuilder, idents::*};
 
 use self::movement::JourneyPlanner;
 
-pub(crate) use self::movement::RoutingData;
+pub(crate) use self::movement::{Journey, RoutingData, Transport};
 pub use self::objects::{ObjectData, ObjectLabel};
 pub use self::orders::OrderData;
 pub(crate) use self::orders::{OrderLineStatus, OrderStatus};
-pub use self::population::{PersonRole, PersonState, PersonStatus, PopulationData};
+pub(crate) use self::parse_json::parse_json;
+pub use self::population::{
+    PersonRole, PersonState, PersonStatus, PersonStatusFlag, PopulationData,
+};
 
 mod movement;
 mod objects;
 mod orders;
+mod parse_json;
 mod population;
 
 #[derive(Debug, thiserror::Error)]
@@ -62,6 +70,8 @@ pub struct State {
 
     /// Order data
     orders: OrderData,
+
+    ts_context: ContextV7,
 }
 
 impl State {
@@ -78,15 +88,12 @@ impl State {
             population,
             objects,
             orders,
+            ts_context: ContextV7::new(),
             routing: routing
                 .into_iter()
                 .map(|(id, data)| (id, data.into_trip_planner()))
                 .collect(),
         }
-    }
-
-    pub fn people(&self) -> &RecordBatch {
-        self.population.people()
     }
 
     pub fn objects(&self) -> &ObjectData {
@@ -107,6 +114,23 @@ impl State {
 
     pub fn current_time(&self) -> DateTime<Utc> {
         self.time
+    }
+
+    pub fn current_time_expr(&self) -> Expr {
+        static TZ: LazyLock<Arc<str>> = LazyLock::new(|| "UTC".into());
+        lit(ScalarValue::TimestampMillisecond(
+            Some(self.current_time().timestamp_millis()),
+            Some(TZ.clone()),
+        ))
+    }
+
+    /// Timestamp used to generate v7 uuids
+    pub fn current_timestamp(&self) -> Timestamp {
+        Timestamp::from_unix(
+            &self.ts_context,
+            self.time.timestamp() as u64,
+            self.time.timestamp_subsec_nanos(),
+        )
     }
 
     pub fn time_step(&self) -> Duration {
@@ -141,17 +165,20 @@ impl State {
             _ => None,
         });
 
-        let order_data = new_orders
-            .into_iter()
-            .fold(OrderDataBuilder::new(), |builder, order| {
-                builder.add_order(
-                    order.site_id,
-                    order.person_id,
-                    order.destination.coord().unwrap().try_into().unwrap(),
-                    &order.items,
-                )
-            })
-            .finish()?;
+        let mut builder = OrderDataBuilder::new();
+        for order in new_orders {
+            builder.add_order(
+                order.site_id,
+                order.person_id,
+                order
+                    .destination
+                    .coord()
+                    .ok_or_else(|| Error::invalid_data("no destination coordinates"))?
+                    .try_into()?,
+                &order.items,
+            )?;
+        }
+        let order_data = builder.finish()?;
 
         let order_ids = order_data
             .all_orders()
@@ -192,25 +219,36 @@ impl State {
     }
 
     /// Advance people's journeys and update their statuses on arrival at their destination.
-    pub(super) fn move_people(&mut self) -> Result<Vec<EventPayload>> {
+    pub(super) async fn move_people(
+        &mut self,
+        ctx: &SimulationContext,
+    ) -> Result<Vec<EventPayload>> {
         self.population
-            .update_journeys(&self.time, self.time_step, &self.orders)
+            .update_journeys(ctx, &self.time, self.time_step, &self.orders)
+            .await
     }
 
-    pub(super) fn step<'a>(
+    pub(super) async fn step<'a>(
         &mut self,
+        ctx: &SimulationContext,
         events: impl IntoIterator<Item = &'a EventPayload>,
     ) -> Result<()> {
-        for event in events.into_iter() {
-            if let EventPayload::PersonUpdated(payload) = event {
-                self.population
-                    .update_person_status(&payload.person_id, &payload.status)?;
+        let updates = events.into_iter().filter_map(|e| {
+            if let EventPayload::PersonUpdated(payload) = e {
+                Some((&payload.person_id, &payload.status))
+            } else {
+                None
             }
-        }
+        });
+        self.population.update_person_status(ctx, updates).await?;
 
-        self.time += self.time_step;
+        self.step_time();
 
         Ok(())
+    }
+
+    pub(super) fn step_time(&mut self) {
+        self.time += self.time_step;
     }
 }
 

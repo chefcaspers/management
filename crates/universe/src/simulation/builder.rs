@@ -176,7 +176,7 @@ impl SimulationBuilder {
         }
 
         tracing::debug!(target: "caspers::simulation::builder", "building population");
-        let population = PopulationData::try_new(ctx).await?;
+        let population = PopulationData::try_new_from_ctx(ctx).await?;
         let orders = OrderData::try_new(ctx).await?;
 
         Ok(State::new(config, objects, population, orders, routers))
@@ -206,11 +206,11 @@ impl SimulationBuilder {
             .try_collect()?;
 
         Ok(Simulation {
+            population: PopulationRunner::try_new(&ctx).await?,
             ctx,
             config,
             state,
             sites,
-            population: PopulationRunner::new(),
             event_tracker: EventTracker::new(),
             stats_buffer: EventStatsBuffer::new(),
         })

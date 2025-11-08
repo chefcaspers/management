@@ -8,14 +8,13 @@ use tracing::instrument;
 use url::Url;
 use uuid::Uuid;
 
-pub use self::agents::*;
 pub use self::builders::*;
 pub use self::error::*;
 pub use self::idents::*;
 pub use self::models::*;
 pub use self::simulation::*;
 pub use self::state::*;
-#[cfg(feature = "templates")]
+#[cfg(any(test, feature = "templates"))]
 pub use self::templates::*;
 pub use crate::context::*;
 
@@ -26,15 +25,16 @@ mod agents;
 mod builders;
 mod context;
 mod error;
+mod functions;
 mod idents;
 mod models;
 #[cfg(feature = "python")]
 mod python;
 mod simulation;
 mod state;
-#[cfg(feature = "templates")]
+#[cfg(any(test, feature = "templates"))]
 mod templates;
-#[cfg(feature = "templates")]
+#[cfg(any(test, feature = "templates"))]
 pub mod test_utils;
 
 #[cfg_attr(feature = "python", pyclass(get_all, set_all))]

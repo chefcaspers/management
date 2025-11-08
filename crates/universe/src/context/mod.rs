@@ -1,13 +1,15 @@
 use std::sync::{Arc, LazyLock};
+use std::time::Duration;
 
 use arrow::array::RecordBatch;
 use arrow::datatypes::SchemaRef;
 use arrow_schema::{DataType, Field, FieldRef, Schema, SchemaBuilder};
+use chrono::{DateTime, Utc};
 use datafusion::catalog::CatalogProvider;
 use datafusion::dataframe::DataFrameWriteOptions;
 use datafusion::execution::SessionStateBuilder;
 use datafusion::logical_expr::dml::InsertOp;
-use datafusion::prelude::{DataFrame, SessionContext, col, lit};
+use datafusion::prelude::{DataFrame, Expr, SessionContext, col, lit};
 use datafusion::scalar::ScalarValue;
 use datafusion::sql::TableReference;
 use url::Url;
@@ -35,6 +37,9 @@ pub struct SimulationContextBuilder {
 
     object_data: Option<ObjectData>,
     population_data: Option<RecordBatch>,
+
+    simulation_start_time: Option<DateTime<Utc>>,
+    simulation_time_step: Option<Duration>,
 }
 
 impl SimulationContextBuilder {
@@ -54,6 +59,22 @@ impl SimulationContextBuilder {
 
     pub fn with_working_directory(mut self, working_directory: impl Into<Option<Url>>) -> Self {
         self.working_directory = working_directory.into();
+        self
+    }
+
+    pub fn with_simulation_start_time(
+        mut self,
+        simulation_start_time: impl Into<Option<DateTime<Utc>>>,
+    ) -> Self {
+        self.simulation_start_time = simulation_start_time.into();
+        self
+    }
+
+    pub fn with_simulation_time_step(
+        mut self,
+        simulation_time_step: impl Into<Option<Duration>>,
+    ) -> Self {
+        self.simulation_time_step = simulation_time_step.into();
         self
     }
 
@@ -78,7 +99,10 @@ impl SimulationContextBuilder {
             .with_default_features()
             .with_session_id(simulation_id.to_string())
             .build();
-        (SessionContext::new_with_state(state), simulation_id)
+
+        let ctx = SessionContext::new_with_state(state);
+
+        (ctx, simulation_id)
     }
 
     pub async fn load_snapshots(&self) -> Result<DataFrame> {
@@ -130,6 +154,10 @@ impl SimulationContextBuilder {
             ctx,
             simulation_id,
             snapshot_id,
+            current_time: self.simulation_start_time.unwrap_or_else(Utc::now),
+            time_step: self
+                .simulation_time_step
+                .unwrap_or_else(|| Duration::new(60, 0)),
         };
 
         // TODO: this is a but of a backdoor to allow for initializing a simulation
@@ -138,7 +166,7 @@ impl SimulationContextBuilder {
             (None, None) => (),
             (Some(population_data), Some(object_data)) => {
                 let population = sim_ctx.ctx().read_batch(population_data)?;
-                let population_data = PopulationData::try_new_with_frame(population).await?;
+                let population_data = PopulationData::try_new(population).await?;
                 let sim_state = State::new(
                     &Default::default(),
                     object_data,
@@ -185,6 +213,8 @@ impl SimulationContextBuilder {
 pub struct SimulationContext {
     simulation_id: Uuid,
     snapshot_id: Uuid,
+    current_time: DateTime<Utc>,
+    time_step: Duration,
     ctx: SessionContext,
 }
 
@@ -203,6 +233,26 @@ impl SimulationContext {
 
     pub fn simulation_id(&self) -> &Uuid {
         &self.simulation_id
+    }
+
+    pub fn current_time(&self) -> &DateTime<Utc> {
+        &self.current_time
+    }
+
+    pub(crate) fn current_time_expr(&self) -> Expr {
+        static TZ: LazyLock<Arc<str>> = LazyLock::new(|| "UTC".into());
+        lit(ScalarValue::TimestampMillisecond(
+            Some(self.current_time().timestamp_millis()),
+            Some(TZ.clone()),
+        ))
+    }
+
+    pub fn time_step(&self) -> &Duration {
+        &self.time_step
+    }
+
+    pub(crate) fn step_time(&mut self) {
+        self.current_time += self.time_step;
     }
 
     pub fn system(&self) -> schemas::SystemSchema<'_> {

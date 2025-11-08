@@ -4,24 +4,20 @@ use itertools::Itertools as _;
 use rand::distr::{Distribution, Uniform};
 use tracing::{Level, Span, field, instrument};
 
+use crate::Result;
 use crate::agents::{PopulationRunner, SiteRunner};
 use crate::builders::{EventDataBuilder, EventStatsBuffer};
 use crate::context::SimulationContext;
-use crate::error::Result;
 use crate::idents::SiteId;
 use crate::state::State;
 
 pub use self::builder::*;
 pub use self::events::*;
+pub use self::next::*;
 
 mod builder;
 mod events;
-
-/// Trait for entities that need to be updated each simulation step
-pub trait Simulatable {
-    /// Update the entity state based on the current simulation context
-    fn step(&mut self, events: &[EventPayload], context: &State) -> Result<Vec<EventPayload>>;
-}
+mod next;
 
 /// The main simulation engine
 ///
@@ -59,8 +55,18 @@ impl Simulation {
         &self.ctx
     }
 
+    pub fn state(&self) -> &State {
+        &self.state
+    }
+
     pub fn event_stats(&self) -> &EventStats {
         &self.event_tracker.total_stats
+    }
+
+    /// Advance the simulation time by one step (for testing)
+    #[cfg(any(test, feature = "templates"))]
+    pub fn advance_time(&mut self) {
+        self.state.step_time();
     }
 
     /// Run the simulation for a specified number of steps
@@ -94,19 +100,26 @@ impl Simulation {
     #[instrument(skip(self), fields(caspers.total_events_generated = field::Empty))]
     async fn step(&mut self) -> Result<()> {
         // move people
-        let mut events = self.state.move_people()?;
+        let mut events = self.state.move_people(&self.ctx).await?;
 
         // advance all sites and collect events
         for (site_id, site) in self.sites.iter_mut() {
             // query population to get new orders for the site
-            let population_events = self.population.step(site_id, &self.state)?.collect_vec();
+            let population_events = self
+                .population
+                .step(&self.ctx, site_id, &self.state)
+                .await?
+                .collect_vec();
 
             // update the site state with new orders
             let interactions_events = self.state.process_population_events(&population_events)?;
             events.extend(population_events);
 
             // advance the site and collect events
-            if let Ok(site_events) = site.step(&interactions_events, &self.state) {
+            if let Ok(site_events) = site
+                .step(&self.ctx, &interactions_events, &self.state)
+                .await
+            {
                 events.extend(interactions_events);
                 self.state.process_site_events(&site_events)?;
                 events.extend(site_events);
@@ -123,7 +136,7 @@ impl Simulation {
             .push_stats(self.state.current_time(), "simulation", &stats)?;
 
         // update the state with the collected events
-        self.state.step(&events)?;
+        self.state.step(&self.ctx, &events).await?;
 
         self.write_events(events).await?;
 
@@ -179,7 +192,7 @@ impl Simulation {
     }
 }
 
-#[cfg(feature = "templates")]
+#[cfg(any(test, feature = "templates"))]
 impl Simulation {
     pub async fn try_new_with_template(
         template: crate::templates::Template,

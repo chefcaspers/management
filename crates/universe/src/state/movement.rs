@@ -36,10 +36,10 @@ pub enum Transport {
 
 impl Transport {
     /// Returns the default velocity of the transport in km/h.
-    fn default_velocity_km_h(&self) -> f64 {
+    pub fn default_velocity_km_h(&self) -> f64 {
         match self {
             Transport::Foot => 5.0,
-            Transport::Bicycle => 10.0,
+            Transport::Bicycle => 15.0,
             Transport::Car => 60.0,
             Transport::Bus => 30.0,
             Transport::Train => 100.0,
@@ -48,15 +48,15 @@ impl Transport {
         }
     }
 
-    fn default_velocity_m_s(&self) -> f64 {
+    pub fn default_velocity_m_s(&self) -> f64 {
         self.default_velocity_km_h() / 3.6
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct JourneyLeg {
-    destination: Point,
-    distance_m: usize,
+    pub destination: Point,
+    pub distance_m: usize,
 }
 
 impl<T: Into<Point>> From<(T, usize)> for JourneyLeg {
@@ -94,13 +94,13 @@ impl Journey {
         self.current_leg_progress = 0.0;
     }
 
-    pub fn advance(&mut self, transport: &Transport, time_step: std::time::Duration) -> Vec<Point> {
+    pub fn advance(&mut self, time_step: std::time::Duration) -> Vec<Point> {
         if self.is_done() {
             return Vec::new();
         }
 
         // cumpute the total distance travelled during this step.
-        let velocity_m_s = transport.default_velocity_m_s();
+        let velocity_m_s = self.transport.default_velocity_m_s();
         let distance_m = velocity_m_s * time_step.as_secs_f64();
         let mut distance_remaining = distance_m;
 
@@ -568,10 +568,10 @@ mod tests {
 
         // Test advancing a journey with a single time step that completes all legs
         let mut journey1 = journey.clone();
-        let transport = Transport::Car;
+        journey1.transport = Transport::Car;
         let time_step = std::time::Duration::from_secs(60); // 60 seconds at car speed should complete all legs
 
-        let traversed_points = journey1.advance(&transport, time_step);
+        let traversed_points = journey1.advance(time_step);
 
         // We should have traversed all points
         assert_eq!(traversed_points.len(), journey.legs.len());
@@ -579,11 +579,11 @@ mod tests {
 
         // Test advancing a journey with multiple time steps
         let mut journey2 = journey.clone();
-        let transport = Transport::Foot;
+        journey2.transport = Transport::Foot;
         let time_step = std::time::Duration::from_secs(5); // 5 seconds at walking speed
 
         // First step should traverse part of the first leg
-        let traversed_points1 = journey2.advance(&transport, time_step);
+        let traversed_points1 = journey2.advance(time_step);
         assert_eq!(
             traversed_points1.len(),
             1,
@@ -599,7 +599,7 @@ mod tests {
         );
 
         // Second step should complete the first leg and start on the second
-        let traversed_points2 = journey2.advance(&transport, time_step);
+        let traversed_points2 = journey2.advance(time_step);
         assert_eq!(
             traversed_points2.len(),
             2,
@@ -613,7 +613,7 @@ mod tests {
 
         // Test with zero time step
         let mut journey3 = journey.clone();
-        let traversed_points = journey3.advance(&transport, std::time::Duration::from_secs(0));
+        let traversed_points = journey3.advance(std::time::Duration::from_secs(0));
         assert!(
             traversed_points.is_empty(),
             "Zero time step should not traverse any points"
@@ -629,7 +629,7 @@ mod tests {
 
         // Test with empty journey
         let mut empty_journey = Journey::default();
-        let traversed_points = empty_journey.advance(&transport, time_step);
+        let traversed_points = empty_journey.advance(time_step);
         assert!(
             traversed_points.is_empty(),
             "Empty journey should not traverse any points"
@@ -673,9 +673,9 @@ mod tests {
 
         // Test after completing first leg
         let mut journey = journey;
-        let transport = Transport::Foot;
+        journey.transport = Transport::Foot;
         let time_step = std::time::Duration::from_secs(72); // 72s at 5km/h = 100m
-        journey.advance(&transport, time_step);
+        journey.advance(time_step);
 
         assert_eq!(journey.current_leg_index, 1);
         assert_eq!(journey.current_leg_progress, 0.0);
@@ -685,7 +685,7 @@ mod tests {
 
         // Test partial progress in second leg
         let time_step = std::time::Duration::from_secs(36); // 36s at 5km/h = 50m
-        journey.advance(&transport, time_step);
+        journey.advance(time_step);
 
         assert_eq!(journey.current_leg_index, 1);
         assert_eq!(journey.current_leg_progress, 0.25); // 50m/200m
@@ -695,7 +695,7 @@ mod tests {
 
         // Test completing the journey
         let time_step = std::time::Duration::from_secs(252); // 252s at 5km/h = 350m
-        journey.advance(&transport, time_step);
+        journey.advance(time_step);
 
         assert!(journey.is_done());
         assert_eq!(journey.distance_completed_m(), 500.0);
@@ -704,7 +704,7 @@ mod tests {
 
         // Test estimated time remaining
         let journey = Journey {
-            transport: Transport::default(),
+            transport: Transport::Bicycle,
             legs: vec![JourneyLeg {
                 destination: Point::new(0.0, 0.0),
                 distance_m: 1000,
