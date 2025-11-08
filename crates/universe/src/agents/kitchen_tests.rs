@@ -2,6 +2,7 @@ use arrow::array::{
     BooleanBuilder, FixedSizeListBuilder, ListBuilder, TimestampMillisecondBuilder,
 };
 use arrow::datatypes::TimestampMillisecondType;
+use datafusion::prelude::named_struct;
 use geo::Point;
 use geoarrow::array::PointBuilder;
 use geoarrow_array::GeoArrowArray;
@@ -13,7 +14,7 @@ use rstest::*;
 use uuid::{ContextV7, Timestamp};
 
 use crate::agents::functions::{OrderSpec, create_order_fixed};
-use crate::test_utils::{builder, print_frame, setup_test_simulation};
+use crate::test_utils::{builder, print_frame, runner_fixed, setup_test_simulation};
 use crate::{RecordBatch, Result, SimulationRunner, SimulationRunnerBuilder};
 
 use super::*;
@@ -241,7 +242,7 @@ async fn test_empty_orders(
     #[future]
     #[with(OrderSpec::Never)]
     prepare_simulation: Result<(SimulationRunner, DataFrame)>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<()> {
     let (mut simulation, orders) = prepare_simulation.await?;
     let mut handler = simulation.kitchens.clone();
 
@@ -266,7 +267,7 @@ async fn test_order_completion(
     #[future]
     #[with(OrderSpec::Once(vec![10]))]
     prepare_simulation: Result<(SimulationRunner, DataFrame)>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<()> {
     let (mut simulation, orders) = prepare_simulation.await?;
     let mut handler = simulation.kitchens.clone();
 
@@ -294,54 +295,60 @@ async fn test_order_completion(
     Ok(())
 }
 
-// #[tokio::test]
-// async fn test_step_progression() -> Result<(), Box<dyn std::error::Error>> {
-//     let mut simulation = setup_test_simulation(None).await?;
-//     let mut handler = KitchenHandler::try_new(simulation.ctx()).await?;
-//
-//     // Generate orders
-//     simulation.step_next(&mut handler).await?;
-//
-//     // Get initial order line data
-//     let initial = handler
-//         .order_lines(simulation.ctx())?
-//         .select([
-//             col("order_line_id"),
-//             col("current_step"),
-//             col("total_steps"),
-//         ])?
-//         .collect()
-//         .await?;
-//
-//     let initial_count: usize = initial.iter().map(|b| b.num_rows()).sum();
-//     assert!(initial_count > 0, "Should have generated some orders");
-//
-//     // All should start at step 1
-//     for batch in &initial {
-//         let steps = batch.column(1).as_primitive::<UInt64Type>();
-//         for step in steps.iter().flatten() {
-//             assert_eq!(step, 1, "All orders should start at step 1");
-//         }
-//     }
-//
-//     // Advance time significantly to trigger step completion
-//     for _ in 0..100 {
-//         handler.process_order_lines(simulation.ctx()).await?;
-//         simulation.advance_time();
-//     }
-//
-//     // Check stats - should still have the orders we created
-//     let stats = handler.get_stats(simulation.ctx()).await?;
-//     println!("Step progression stats: {:?}", stats);
-//
-//     let total_lines = stats.queued + stats.in_progress + stats.completed;
-//     assert_eq!(
-//         total_lines, initial_count,
-//         "Should have same number of order lines, not lose them during processing"
-//     );
-//
-//     Ok(())
-// }
+#[rstest]
+#[tokio::test]
+async fn test_step_progression(
+    #[future]
+    #[with(OrderSpec::Once(vec![10]))]
+    runner_fixed: Result<SimulationRunner>,
+) -> Result<()> {
+    let mut simulation = runner_fixed.await?;
+
+    // Generate orders
+    simulation.step().await?;
+
+    let mut handler = simulation.kitchens.clone();
+
+    // Get initial order line data
+    let initial = handler
+        .order_lines(simulation.ctx())?
+        .select([
+            col("order_line_id"),
+            col("current_step"),
+            col("total_steps"),
+        ])?
+        .collect()
+        .await?;
+
+    let initial_count: usize = initial.iter().map(|b| b.num_rows()).sum();
+    assert!(initial_count > 0, "Should have generated some orders");
+
+    // All should start at step 1
+    for batch in &initial {
+        let steps = batch.column(1).as_primitive::<UInt64Type>();
+        for step in steps.iter().flatten() {
+            assert_eq!(step, 1, "All orders should start at step 1");
+        }
+    }
+
+    // Advance time significantly to trigger step completion
+    for _ in 0..100 {
+        handler.process_order_lines(simulation.ctx()).await?;
+        simulation.advance_time();
+    }
+
+    // Check stats - should still have the orders we created
+    let stats = handler.get_stats(simulation.ctx()).await?;
+    println!("Step progression stats: {:?}", stats);
+
+    let total_lines = stats.queued + stats.in_progress + stats.completed;
+    assert_eq!(
+        total_lines, initial_count,
+        "Should have same number of order lines, not lose them during processing"
+    );
+
+    Ok(())
+}
 
 #[tokio::test]
 async fn test_prepare_empty_orders() -> Result<(), Box<dyn std::error::Error>> {
@@ -370,6 +377,33 @@ async fn test_prepare_empty_orders() -> Result<(), Box<dyn std::error::Error>> {
     let stats = handler.get_stats(simulation.ctx()).await?;
     assert_eq!(stats.queued, 0);
     assert_eq!(stats.in_progress, 0);
+
+    Ok(())
+}
+
+#[rstest]
+#[tokio::test]
+async fn test_unreachable_orders(
+    #[future] prepare_simulation: Result<(SimulationRunner, DataFrame)>,
+) -> Result<()> {
+    let (mut simulation, orders) = prepare_simulation.await?;
+    let mut handler = simulation.kitchens.clone();
+
+    let unreachable_order = orders.select([
+        col("person_id"),
+        col("order_id"),
+        col("submitted_at"),
+        named_struct(vec![lit("x"), lit(0.0_f64), lit("y"), lit(0.0_f64)]).alias("destination"),
+        col("items"),
+    ])?;
+
+    print_frame(&unreachable_order).await?;
+
+    let result = handler
+        .prepare_order_lines(simulation.ctx(), unreachable_order)
+        .await;
+
+    assert!(result.is_ok());
 
     Ok(())
 }

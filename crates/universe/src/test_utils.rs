@@ -7,7 +7,9 @@ use rstest::*;
 
 use crate::{Error, Result, Simulation, Template};
 #[cfg(test)]
-use crate::{SimulationContext, SimulationRunner, SimulationRunnerBuilder};
+use crate::{
+    SimulationContext, SimulationRunner, SimulationRunnerBuilder, agents::functions::OrderSpec,
+};
 
 pub async fn setup_test_simulation(template: impl Into<Option<Template>>) -> Result<Simulation> {
     let caspers_root = find_git_root()?.join(".caspers/system/");
@@ -110,6 +112,20 @@ pub(crate) async fn runner(
     #[future] builder: Result<SimulationRunnerBuilder>,
 ) -> Result<SimulationRunner> {
     builder.await?.build().await
+}
+
+#[cfg(test)]
+#[fixture]
+pub(crate) async fn runner_fixed(
+    #[default(OrderSpec::Once(vec![1]))] spec: OrderSpec,
+    #[future] builder: Result<SimulationRunnerBuilder>,
+) -> Result<SimulationRunner> {
+    use crate::agents::functions::create_order_fixed;
+
+    let create_order = Box::new(move |menu_items| create_order_fixed(menu_items, spec.clone()));
+    let builder = builder.await?.with_create_orders(create_order);
+
+    builder.build().await
 }
 
 #[cfg(test)]

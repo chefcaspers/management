@@ -154,7 +154,7 @@ impl SimulationContextBuilder {
             ctx,
             simulation_id,
             snapshot_id,
-            current_time: self.simulation_start_time.unwrap_or_else(|| Utc::now()),
+            current_time: self.simulation_start_time.unwrap_or_else(Utc::now),
             time_step: self
                 .simulation_time_step
                 .unwrap_or_else(|| Duration::new(60, 0)),

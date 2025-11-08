@@ -504,6 +504,16 @@ impl KitchenHandler {
             vec![array_agg(col("kitchen_id")).alias("kitchen_ids")],
         )?;
 
+        // TODO: improve routing data generation and drop this.
+        // https://github.com/chefcaspers/management/issues/33
+        let assigned_count = kitchen_assignments.clone().count().await?;
+        if assigned_count == 0 {
+            tracing::error!("dropping some orders it seems");
+            return Ok(ctx
+                .ctx()
+                .read_batch(RecordBatch::new_empty(ORDER_LINE_STATE.clone()))?);
+        }
+
         let kitchen_line_counts = self
             .order_lines(ctx)?
             // .filter(col("kitchen_id").is_not_null())?
@@ -1032,17 +1042,15 @@ pub(crate) fn unnest_orders_inner(orders: Vec<RecordBatch>, ts: Timestamp) -> Re
         let menu_items = ord.column(1).as_list::<i32>().iter();
         for (order_id, menu_items) in order_ids.zip(menu_items) {
             if let (Some(order_id), Some(menu_items)) = (order_id, menu_items) {
-                for menu_item in menu_items.as_fixed_size_list().iter() {
-                    if let Some(ids) = menu_item {
-                        let ids = ids.as_fixed_size_binary();
-                        let order_line_id = uuid::Uuid::new_v7(ts);
-                        builder.add_value(order_id, order_line_id, ids.value(1))?;
-                    }
+                for ids in menu_items.as_fixed_size_list().iter().flatten() {
+                    let ids = ids.as_fixed_size_binary();
+                    let order_line_id = uuid::Uuid::new_v7(ts);
+                    builder.add_value(order_id, order_line_id, ids.value(1))?;
                 }
             }
         }
     }
-    Ok(builder.finish()?)
+    builder.finish()
 }
 
 struct OrderLineBuilder {

@@ -105,11 +105,6 @@ impl SimulationRunner {
     }
 
     #[cfg(test)]
-    pub(crate) fn sites(&self) -> &KitchenHandler {
-        &self.kitchens
-    }
-
-    #[cfg(test)]
     pub(crate) fn advance_time(&mut self) {
         self.ctx.step_time();
     }

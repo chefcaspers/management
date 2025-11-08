@@ -117,29 +117,26 @@ impl PopulationRunner {
             let mut orders = Vec::new();
 
             for ((person_id, order), pos) in orders_iter {
-                match (person_id, order, pos) {
-                    (Some(person_id), Some(order), Some(Ok(pos))) => {
-                        let items = order
-                            .as_fixed_size_list()
-                            .iter()
-                            .flat_map(|it| {
-                                it.map(|it2| {
-                                    let arr = it2.as_fixed_size_binary();
-                                    (
-                                        BrandId::from(Uuid::from_slice(arr.value(0)).unwrap()),
-                                        MenuItemId::from(Uuid::from_slice(arr.value(1)).unwrap()),
-                                    )
-                                })
+                if let (Some(person_id), Some(order), Some(Ok(pos))) = (person_id, order, pos) {
+                    let items = order
+                        .as_fixed_size_list()
+                        .iter()
+                        .flat_map(|it| {
+                            it.map(|it2| {
+                                let arr = it2.as_fixed_size_binary();
+                                (
+                                    BrandId::from(Uuid::from_slice(arr.value(0)).unwrap()),
+                                    MenuItemId::from(Uuid::from_slice(arr.value(1)).unwrap()),
+                                )
                             })
-                            .collect();
-                        orders.push(EventPayload::OrderCreated(OrderCreatedPayload {
-                            site_id: *site_id,
-                            person_id: Uuid::from_slice(person_id).unwrap().into(),
-                            items,
-                            destination: pos.to_point(),
-                        }));
-                    }
-                    _ => {}
+                        })
+                        .collect();
+                    orders.push(EventPayload::OrderCreated(OrderCreatedPayload {
+                        site_id: *site_id,
+                        person_id: Uuid::from_slice(person_id).unwrap().into(),
+                        items,
+                        destination: pos.to_point(),
+                    }));
                 }
             }
 

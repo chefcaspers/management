@@ -93,8 +93,8 @@ impl ScalarUDFImpl for LongLatAsH3 {
                 let resolutions = res.as_primitive::<Int8Type>();
                 let results: Int64Array = longitudes
                     .into_iter()
-                    .zip(latitudes.into_iter())
-                    .zip(resolutions.into_iter())
+                    .zip(&*latitudes)
+                    .zip(&*resolutions)
                     .map(|((lon, lat), res)| {
                         let lat_lng = LatLng::new(lat?, lon?).ok()?;
                         let resolution = int_to_res(res?).ok()?;
@@ -114,7 +114,7 @@ impl ScalarUDFImpl for LongLatAsH3 {
                 let resolution = int_to_res(res)?;
                 let results: Int64Array = longitudes
                     .into_iter()
-                    .zip(latitudes.into_iter())
+                    .zip(&*latitudes)
                     .map(|(lon, lat)| {
                         let lat_lng = LatLng::new(lat?, lon?).ok()?;
                         let cell = lat_lng.to_cell(resolution);

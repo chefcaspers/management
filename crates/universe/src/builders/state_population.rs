@@ -165,8 +165,9 @@ impl PopulationDataBuilder {
         }
 
         let latlng = LatLng::new(latitude, longitude)?;
+        // TODO: do not use simply hardcoded resolution and grid disk size..
         let cell_index = latlng.to_cell(Resolution::Nine);
-        let cells = cell_index.grid_disk::<Vec<_>>(10);
+        let cells = cell_index.grid_disk::<Vec<_>>(8);
         let solvent = SolventBuilder::new().build();
         let geom = solvent.dissolve(cells)?;
 
