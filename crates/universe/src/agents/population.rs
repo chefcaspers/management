@@ -525,7 +525,6 @@ impl PopulationHandler {
             .select(vec![
                 col("id").alias("person_id"),
                 submitted_at_expression.alias("submitted_at"),
-                // uuidv7().call(vec![current_time.clone()]).alias("order_id"),
                 col("position").alias("destination"),
                 self.create_orders
                     .call(vec![current_time.clone(), col("state")])

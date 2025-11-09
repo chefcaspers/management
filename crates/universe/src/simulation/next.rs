@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use arrow::{array::RecordBatch, compute::concat_batches};
 use datafusion::{
+    functions::core::expr_ext::FieldAccessor as _,
     logical_expr::ScalarUDF,
     prelude::{col, lit},
 };
@@ -76,6 +77,22 @@ pub struct SimulationRunner {
 }
 
 impl SimulationRunner {
+    pub async fn run(&mut self, steps: usize) -> Result<()> {
+        tracing::info!(
+            target: "caspers::simulation",
+            "statrting simulation run for {} steps ({} / {})",
+            steps,
+            self.ctx.simulation_id(),
+            self.ctx.snapshot_id()
+        );
+
+        for _ in 0..steps {
+            self.step().await?;
+        }
+
+        Ok(())
+    }
+
     pub async fn step(&mut self) -> Result<()> {
         let orders = self
             .population
@@ -83,6 +100,18 @@ impl SimulationRunner {
             .await?
             .cache()
             .await?;
+
+        let orders = orders.select([
+            col("person_id"),
+            col("order_created").field("order_id").alias("order_id"),
+            col("order_created")
+                .field("timestamp")
+                .alias("submitted_at"),
+            col("order_created")
+                .field("destination")
+                .alias("destination"),
+            col("order_created").field("items").alias("items"),
+        ])?;
 
         let orders_count = orders.clone().count().await?;
         if orders_count > 0 {
@@ -124,13 +153,14 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn test_simulation_step(
-        #[future] builder: Result<SimulationRunnerBuilder>,
+        #[future]
+        #[with(OrderSpec::Once(vec![10]))]
+        runner_fixed: Result<SimulationRunner>,
     ) -> Result<()> {
-        let mut runner = builder.await?.build().await?;
+        let mut runner = runner_fixed.await?;
 
-        runner.step().await?;
+        runner.run(100).await?;
 
-        print_frame(&runner.kitchens.sites(&runner.ctx)?).await?;
         print_frame(&runner.kitchens.order_lines(&runner.ctx)?).await?;
 
         Ok(())
