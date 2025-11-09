@@ -1,13 +1,17 @@
 use std::sync::Arc;
 
 use arrow::{array::RecordBatch, compute::concat_batches};
+use arrow_schema::DataType;
 use datafusion::{
     logical_expr::ScalarUDF,
-    prelude::{col, lit},
+    prelude::{cast, col, concat, lit},
 };
 
 use crate::agents::{KitchenHandler, PopulationHandler, functions::create_order};
-use crate::{ObjectLabel, Result, SimulationContext};
+use crate::{
+    ObjectLabel, Result, SimulationContext, SimulationEvent,
+    functions::{uuid_to_string, uuidv7},
+};
 
 pub struct SimulationRunnerBuilder {
     ctx: SimulationContext,
@@ -76,6 +80,22 @@ pub struct SimulationRunner {
 }
 
 impl SimulationRunner {
+    pub async fn run(&mut self, steps: usize) -> Result<()> {
+        tracing::info!(
+            target: "caspers::simulation",
+            "statrting simulation run for {} steps ({} / {})",
+            steps,
+            self.ctx.simulation_id(),
+            self.ctx.snapshot_id()
+        );
+
+        for _ in 0..steps {
+            self.step().await?;
+        }
+
+        Ok(())
+    }
+
     pub async fn step(&mut self) -> Result<()> {
         let orders = self
             .population
@@ -86,10 +106,25 @@ impl SimulationRunner {
 
         let orders_count = orders.clone().count().await?;
         if orders_count > 0 {
-            self.kitchens.step(&self.ctx, Some(orders)).await?;
+            let _order_events = orders.clone().select([
+                uuidv7().call(vec![col("submitted_at")]).alias("id"),
+                concat(vec![
+                    lit("/population/"),
+                    uuid_to_string().call(vec![col("person_id")]),
+                ])
+                .alias("source"),
+                lit("1.0").alias("specversion"),
+                SimulationEvent::OrderCreated.event_type_lit(),
+                cast(col("submitted_at"), DataType::LargeUtf8).alias("time"),
+                SimulationEvent::OrderCreated.data_expr(),
+            ])?;
+
+            self.kitchens.step(&self.ctx, Some(orders)).await?
         } else {
-            self.kitchens.step(&self.ctx, None).await?;
-        }
+            self.kitchens.step(&self.ctx, None).await?
+        };
+
+        self.ctx.step_time();
 
         Ok(())
     }
@@ -118,20 +153,20 @@ mod tests {
     use super::*;
     use crate::{
         Journey, PersonId,
-        test_utils::{builder, print_frame, runner},
+        agents::functions::OrderSpec,
+        test_utils::{print_frame, runner, runner_fixed},
     };
 
     #[rstest]
     #[tokio::test]
     async fn test_simulation_step(
-        #[future] builder: Result<SimulationRunnerBuilder>,
+        #[future]
+        #[with(OrderSpec::Once(vec![10]))]
+        runner_fixed: Result<SimulationRunner>,
     ) -> Result<()> {
-        let mut runner = builder.await?.build().await?;
+        let mut runner = runner_fixed.await?;
 
-        runner.step().await?;
-
-        print_frame(&runner.kitchens.sites(&runner.ctx)?).await?;
-        print_frame(&runner.kitchens.order_lines(&runner.ctx)?).await?;
+        runner.run(100).await?;
 
         Ok(())
     }
