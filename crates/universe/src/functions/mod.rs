@@ -1,4 +1,5 @@
 mod h3;
+mod uuid_to_str;
 mod uuid_v7;
 
 #[macro_export]
@@ -22,3 +23,4 @@ macro_rules! make_udf_function {
 
 make_udf_function!(h3::LongLatAsH3, h3_longlatash3);
 make_udf_function!(uuid_v7::UuidV7, uuidv7);
+make_udf_function!(uuid_to_str::UuidToString, uuid_to_string);

@@ -14,10 +14,12 @@ use crate::state::State;
 pub use self::builder::*;
 pub use self::events::*;
 pub use self::next::*;
+pub use self::population_event_schemas::*;
 
 mod builder;
 mod events;
 mod next;
+mod population_event_schemas;
 
 /// The main simulation engine
 ///
