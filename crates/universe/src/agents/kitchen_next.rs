@@ -29,8 +29,9 @@ use crate::error::Result;
 use crate::functions::h3_longlatash3;
 use crate::models::{KitchenStation, Station};
 use crate::state::{OrderLineStatus, State};
+use crate::test_utils::print_frame;
 // use crate::test_utils::print_frame;
-use crate::{Brand, Error, EventPayload, ObjectLabel, parse_json};
+use crate::{Brand, Error, EventPayload, EventsHelper, ObjectLabel, parse_json};
 use crate::{SimulationContext, idents::*};
 
 #[cfg(test)]
@@ -207,12 +208,12 @@ impl KitchenHandler {
         &mut self,
         ctx: &SimulationContext,
         incoming_orders: Option<DataFrame>,
-    ) -> Result<()> {
+    ) -> Result<DataFrame> {
+        let mut events = EventsHelper::empty(ctx)?;
         if let Some(orders) = incoming_orders {
             self.prepare_order_lines(ctx, orders).await?;
         }
-        self.process_order_lines(ctx).await?;
-        Ok(())
+        Ok(events.union(self.process_order_lines(ctx).await?)?)
     }
 
     /// Prepare new orders and order lines for processing.
@@ -329,22 +330,22 @@ impl KitchenHandler {
     ///
     /// * `ctx`: The simulation context.
     /// * `state`: The simulation state.
-    async fn process_order_lines(&mut self, ctx: &SimulationContext) -> Result<()> {
+    async fn process_order_lines(&mut self, ctx: &SimulationContext) -> Result<DataFrame> {
+        let mut events = EventsHelper::empty(ctx)?;
+
         // Early return if no order lines to process
         if self.order_lines.is_empty() || self.order_lines.iter().all(|b| b.num_rows() == 0) {
-            return Ok(());
+            return Ok(events);
         }
 
-        self.prepare_steps(ctx).await?;
+        events = events.union(self.prepare_steps(ctx).await?)?;
 
         let current_time = ctx.current_time_expr();
 
         // Step 1: Advance steps for completed work
         // For order lines where step_completion_time has passed, increment current_step
-        let base_lines = self.order_lines(ctx)?;
-
-        let lines_to_advance = base_lines
-            .clone()
+        let lines_to_advance = self
+            .order_lines(ctx)?
             .filter(
                 col("is_complete")
                     .is_false()
@@ -359,8 +360,25 @@ impl KitchenHandler {
             .cache()
             .await?;
 
+        let step_finished_events = lines_to_advance
+            .clone()
+            .join_on(
+                self.order_lines(ctx)?,
+                JoinType::Left,
+                [col("order_line_id_adv").eq(col("order_line_id"))],
+            )?
+            .filter(col("current_step").gt(lit(1_i32)))?
+            .select([
+                col("step_completion_time").alias("timestamp"),
+                col("order_line_id"),
+                col("assigned_to").alias("station_id"),
+                col("current_step").alias("step_index"),
+            ])?;
+        events = events.union(EventsHelper::step_finished(step_finished_events)?)?;
+
         // Update order lines: advance steps and mark completed ones
-        let advanced_order_lines = base_lines
+        let advanced_order_lines = self
+            .order_lines(ctx)?
             .join_on(
                 lines_to_advance,
                 JoinType::Left,
@@ -414,7 +432,7 @@ impl KitchenHandler {
 
         self.order_lines = advanced_order_lines.collect().await?;
 
-        Ok(())
+        Ok(events)
     }
 
     /// Get completed orders
@@ -768,7 +786,9 @@ impl KitchenHandler {
     /// ## Parameters
     ///
     /// * `ctx`: The simulation context.
-    async fn prepare_steps(&mut self, ctx: &SimulationContext) -> Result<()> {
+    async fn prepare_steps(&mut self, ctx: &SimulationContext) -> Result<DataFrame> {
+        let mut events = EventsHelper::empty(ctx)?;
+
         let mut curr_stats = self.get_stats(ctx).await?;
         let mut steps = 0;
         // TODO: see if we can make the assignments in a single pass.
@@ -784,7 +804,7 @@ impl KitchenHandler {
                 break;
             }
         }
-        Ok(())
+        Ok(events)
     }
 
     /// Get statistics about the kitchen state

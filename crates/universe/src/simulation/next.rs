@@ -1,16 +1,16 @@
 use std::sync::Arc;
 
 use arrow::{array::RecordBatch, compute::concat_batches};
-use arrow_schema::DataType;
 use datafusion::{
+    functions_aggregate::count::count_all,
     logical_expr::ScalarUDF,
-    prelude::{cast, col, concat, lit},
+    prelude::{DataFrame, col, lit},
 };
 
-use crate::agents::{KitchenHandler, PopulationHandler, functions::create_order};
+use crate::{EventsHelper, ObjectLabel, Result, SimulationContext};
 use crate::{
-    ObjectLabel, Result, SimulationContext, SimulationEvent,
-    functions::{uuid_to_string, uuidv7},
+    agents::{KitchenHandler, PopulationHandler, functions::create_order},
+    test_utils::print_frame,
 };
 
 pub struct SimulationRunnerBuilder {
@@ -104,28 +104,30 @@ impl SimulationRunner {
             .cache()
             .await?;
 
-        let orders_count = orders.clone().count().await?;
-        if orders_count > 0 {
-            let _order_events = orders.clone().select([
-                uuidv7().call(vec![col("submitted_at")]).alias("id"),
-                concat(vec![
-                    lit("/population/"),
-                    uuid_to_string().call(vec![col("person_id")]),
-                ])
-                .alias("source"),
-                lit("1.0").alias("specversion"),
-                SimulationEvent::OrderCreated.event_type_lit(),
-                cast(col("submitted_at"), DataType::LargeUtf8).alias("time"),
-                SimulationEvent::OrderCreated.data_expr(),
-            ])?;
+        let mut events = EventsHelper::empty(&self.ctx)?;
 
+        let orders_count = orders.clone().count().await?;
+        let kitchen_events = if orders_count > 0 {
+            events = events.union(EventsHelper::orders_created(orders.clone())?)?;
             self.kitchens.step(&self.ctx, Some(orders)).await?
         } else {
             self.kitchens.step(&self.ctx, None).await?
         };
+        events = events.union(kitchen_events)?;
 
         self.ctx.step_time();
+        self.send_events(events).await?;
 
+        Ok(())
+    }
+
+    async fn send_events(&self, events: DataFrame) -> Result<()> {
+        let aggreagte = events.aggregate(vec![col("type")], vec![count_all()])?;
+        let type_count = aggreagte.clone().count().await?;
+        if type_count > 0 {
+            print_frame(&aggreagte).await?;
+            // print_frame(&events).await?;
+        }
         Ok(())
     }
 
@@ -153,18 +155,13 @@ mod tests {
     use super::*;
     use crate::{
         Journey, PersonId,
-        agents::functions::OrderSpec,
-        test_utils::{print_frame, runner, runner_fixed},
+        test_utils::{print_frame, runner},
     };
 
     #[rstest]
     #[tokio::test]
-    async fn test_simulation_step(
-        #[future]
-        #[with(OrderSpec::Once(vec![10]))]
-        runner_fixed: Result<SimulationRunner>,
-    ) -> Result<()> {
-        let mut runner = runner_fixed.await?;
+    async fn test_simulation_step(#[future] runner: Result<SimulationRunner>) -> Result<()> {
+        let mut runner = runner.await?;
 
         runner.run(100).await?;
 
