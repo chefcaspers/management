@@ -8,6 +8,9 @@ import osmnx as ox
 import pyarrow as pa
 from pint import UnitRegistry
 from shapely.geometry import LineString, Point
+import h3
+import shapely
+import json
 
 from caspers_universe._internal import Site
 
@@ -65,11 +68,9 @@ def prepare_site(
     and processes it for use in route planning within the simulation.
 
     Args:
-        location (str): The location name.
-        lat (float): The latitude of the location.
-        lng (float): The longitude of the location.
-        network_type (Literal["bike", "drive", "walk"], optional): The type of network to use. Defaults to "bike".
-        distance (int, optional): The radius around the location to use for the network. Defaults to 3000.
+        site: The site to prepare routing data for.
+        network_type: The type of network to use. Defaults to "bike".
+        distance: The radius around the location to use for the network. Defaults to 3000.
 
     Returns:
         tuple[pa.Table, pa.Table]: The nodes and edges tables.
@@ -79,6 +80,33 @@ def prepare_site(
         dist=distance,
         network_type=network_type,
     )
+    nodes = _process_nodes(site.name, neighbourhood)
+    edges = _process_edges(site.name, neighbourhood)
+
+    return nodes, edges
+
+
+def site_routing_graph(
+    site: Site,
+    network_type: Literal["bike", "drive", "walk"] = "bike",
+) -> tuple[pa.Table, pa.Table]:
+    """Prepare site routing data for Caspers Universe.
+
+    This downloads the street / path network around the given location
+    and processes it for use in route planning within the simulation.
+
+    Args:
+        site: The site to prepare routing data for.
+        network_type: The type of network to use. Defaults to "bike".
+
+    Returns:
+        tuple[pa.Table, pa.Table]: The nodes and edges tables.
+    """
+    cell = h3.latlng_to_cell(site.latitude, site.longitude, 9)
+    cells = h3.grid_disk(cell, 10)
+    delivery_area = h3.cells_to_geo(cells)
+    delivery_area = shapely.from_geojson(json.dumps(delivery_area))
+    neighbourhood = ox.graph_from_polygon(delivery_area, network_type=network_type)
     nodes = _process_nodes(site.name, neighbourhood)
     edges = _process_edges(site.name, neighbourhood)
 

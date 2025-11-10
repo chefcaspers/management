@@ -717,12 +717,6 @@ impl PopulationHandler {
             Some(Box::new(prev_dest_y)),
         ));
 
-        // Interpolate position using new_progress
-        let current_pos_x =
-            start_x.clone() + (current_dest_x.clone() - start_x.clone()) * new_progress.clone();
-        let current_pos_y =
-            start_y.clone() + (current_dest_y.clone() - start_y.clone()) * new_progress.clone();
-
         // For now, we'll skip updating position_history via DataFusion as it's complex
         // We'll handle this in a separate step or in Rust code
         // TODO: Implement position_history updates

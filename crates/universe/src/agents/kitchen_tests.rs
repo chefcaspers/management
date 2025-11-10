@@ -59,7 +59,7 @@ impl OrderBuilder {
         self.person_id.append_value(person_id)?;
 
         self.submitted_at
-            .append_value(submitted_at.timestamp_millis() as i64);
+            .append_value(submitted_at.timestamp_millis());
         self.destination.push_point(Some(destination));
 
         let random_vec: Vec<usize> = (0..n_items)

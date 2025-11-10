@@ -12,11 +12,18 @@ def _():
     import pyarrow.parquet as pq
     from caspers_universe import (
         load_simulation_setup,
-        prepare_site,
         run_simulation,
+        site_routing_graph,
     )
 
-    return Path, load_simulation_setup, mo, pq, prepare_site, run_simulation
+    return (
+        Path,
+        load_simulation_setup,
+        mo,
+        pq,
+        run_simulation,
+        site_routing_graph,
+    )
 
 
 @app.cell(hide_code=True)
@@ -45,7 +52,7 @@ def _(mo):
 
 @app.cell
 def _(Path, load_simulation_setup):
-    setup_path = Path("../data").absolute()
+    setup_path = Path("../crates/universe/templates/base").absolute()
     # load the overall simulation setup to get site configurations.
     setup = load_simulation_setup(setup_path.as_uri())
 
@@ -56,15 +63,15 @@ def _(Path, load_simulation_setup):
 
 
 @app.cell
-def routing_data(pq, prepare_site, setup):
+def routing_data(pq, setup, site_routing_graph):
     # this cell might error when marimo processes results,
     # the variables will still be assigned
 
     # load and process open street map data.
     for site in setup.sites:
-        nodes, edges = prepare_site(site.info)
-        pq.write_table(nodes, f"../data/routing/nodes/{site.info.name}.parquet")
-        pq.write_table(edges, f"../data/routing/edges/{site.info.name}.parquet")
+        nodes, edges = site_routing_graph(site.info)
+        pq.write_table(nodes, f"./data/routing/nodes/{site.info.name}.parquet")
+        pq.write_table(edges, f"./data/routing/edges/{site.info.name}.parquet")
 
     print("done")
     return
@@ -80,9 +87,9 @@ def run_simulation(Path, run_simulation, setup):
 
 
 @app.cell(hide_code=True)
-def site_input(mo):
+def site_input(mo, setup):
     dropdown = mo.ui.dropdown(
-        options={},
+        options={site.info.name: idx for idx, site in enumerate(setup.sites)},
         value="london",
         label="pick a location",
     )
@@ -95,7 +102,6 @@ def site_plot(dropdown, setup):
     from caspers_universe import plot_site
 
     plot_site(setup.sites[dropdown.value].info)
-
     return
 
 
