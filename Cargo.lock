@@ -619,6 +619,7 @@ dependencies = [
  "object_store",
  "opentelemetry",
  "parquet",
+ "paste",
  "pbjson",
  "pbjson-types",
  "prost 0.13.5",

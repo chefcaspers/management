@@ -21,6 +21,7 @@ geoarrow-schema = { workspace = true }
 itertools = { workspace = true }
 object_store = { workspace = true }
 parquet = { workspace = true }
+paste = { workspace = true }
 pbjson = { workspace = true }
 pbjson-types = { workspace = true }
 prost = { workspace = true }

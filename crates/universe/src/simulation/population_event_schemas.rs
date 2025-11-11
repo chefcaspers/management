@@ -12,6 +12,66 @@ use crate::{
     functions::{uuid_to_string, uuidv7},
 };
 
+/// Macro to generate FIELD, EXPR, and NULL statics for event fields
+macro_rules! event_field {
+    (
+        $field_name:ident {
+            name: $name:expr,
+            fields: {
+                $($field:ident: $field_type:expr),* $(,)?
+            }
+        }
+    ) => {
+        paste::paste! {
+            static [<$field_name:upper _FIELD>]: LazyLock<FieldRef> = LazyLock::new(|| {
+                FieldRef::new(Field::new(
+                    $name,
+                    DataType::Struct(
+                        vec![
+                            $(
+                                Field::new(stringify!($field), $field_type, false),
+                            )*
+                        ]
+                        .into(),
+                    ),
+                    true,
+                ))
+            });
+
+            static [<$field_name:upper _EXPR>]: LazyLock<Expr> = LazyLock::new(|| {
+                named_struct(vec![
+                    $(
+                        lit(stringify!($field)),
+                        col(stringify!($field)),
+                    )*
+                ])
+                .alias($name)
+            });
+
+            static [<$field_name:upper _NULL>]: LazyLock<Expr> = LazyLock::new(|| {
+                let data_type = match [<$field_name:upper _FIELD>].data_type() {
+                    DataType::Struct(fields) => fields.clone(),
+                    _ => unreachable!(),
+                };
+                cast(lit(ScalarValue::Null), DataType::Struct(data_type)).alias($name)
+            });
+        }
+    };
+}
+
+// Helper macros for common types
+macro_rules! timestamp_field {
+    () => {
+        DataType::Timestamp(TimeUnit::Millisecond, Some("UTC".into()))
+    };
+}
+
+macro_rules! uuid_field {
+    () => {
+        DataType::FixedSizeBinary(16)
+    };
+}
+
 pub(crate) struct EventsHelper {}
 
 impl EventsHelper {
@@ -20,120 +80,98 @@ impl EventsHelper {
         Ok(ctx.ctx().read_batch(empty_events)?)
     }
 
-    pub(crate) fn orders_created(orders: DataFrame) -> Result<DataFrame> {
-        Ok(orders.select([
-            uuidv7().call(vec![col("submitted_at")]).alias("id"),
+    /// Build data struct with only one field populated, rest null
+    fn build_data_struct(active_field: &str, custom_expr: Option<Expr>) -> Expr {
+        let mut fields = vec![];
+
+        for info in EVENT_FIELDS.iter() {
+            fields.push(lit(info.name));
+
+            let expr = if info.name == active_field {
+                custom_expr
+                    .as_ref()
+                    .cloned()
+                    .unwrap_or_else(|| (info.expr)().clone())
+            } else {
+                (info.null)().clone()
+            };
+
+            fields.push(expr);
+        }
+
+        named_struct(fields).alias("data")
+    }
+
+    /// Generic event builder - all events use this
+    pub(crate) fn build_event(
+        df: DataFrame,
+        event_type: SimulationEvent,
+        source_prefix: &str,
+        source_id_col: &str,
+        timestamp_col: &str,
+        active_field: &str,
+        custom_expr: Option<Expr>,
+    ) -> Result<DataFrame> {
+        Ok(df.select(vec![
+            uuidv7().call(vec![col(timestamp_col)]).alias("id"),
             concat(vec![
-                lit("/population/"),
-                uuid_to_string().call(vec![col("person_id")]),
+                lit(source_prefix),
+                uuid_to_string().call(vec![col(source_id_col)]),
             ])
             .alias("source"),
             lit("1.0").alias("specversion"),
-            SimulationEvent::OrderCreated.event_type_lit(),
-            cast(col("submitted_at"), DataType::LargeUtf8).alias("time"),
-            named_struct(vec![
-                lit("order_created"),
-                ORDER_CREATED_EXPR.clone(),
-                lit("order_line_updated"),
-                ORDER_LINE_UPDATED_NULL.clone(),
-                lit("step_started"),
-                ORDER_LINE_STEP_STARTED_NULL.clone(),
-                lit("step_finished"),
-                ORDER_LINE_STEP_FINISHED_NULL.clone(),
-                lit("check_in"),
-                SITE_CHECK_IN_NULL.clone(),
-                lit("check_out"),
-                SITE_CHECK_OUT_NULL.clone(),
-            ])
-            .alias("data"),
+            event_type.event_type_lit(),
+            cast(col(timestamp_col), DataType::LargeUtf8).alias("time"),
+            Self::build_data_struct(active_field, custom_expr),
         ])?)
+    }
+
+    pub(crate) fn orders_created(orders: DataFrame) -> Result<DataFrame> {
+        Self::build_event(
+            orders,
+            SimulationEvent::OrderCreated,
+            "/population/",
+            "person_id",
+            "submitted_at",
+            "order_created",
+            None,
+        )
     }
 
     pub(crate) fn step_started(order_lines: DataFrame) -> Result<DataFrame> {
-        Ok(order_lines.select([
-            uuidv7().call(vec![col("timestamp")]).alias("id"),
-            concat(vec![
-                lit("/stations/"),
-                uuid_to_string().call(vec![col("station_id")]),
-            ])
-            .alias("source"),
-            lit("1.0").alias("specversion"),
-            SimulationEvent::OrderLineStepStarted.event_type_lit(),
-            cast(col("timestamp"), DataType::LargeUtf8).alias("time"),
-            named_struct(vec![
-                lit("order_created"),
-                ORDER_CREATED_NULL.clone(),
-                lit("order_line_updated"),
-                ORDER_LINE_UPDATED_NULL.clone(),
-                lit("step_started"),
-                ORDER_LINE_STEP_EXPR.clone(),
-                lit("step_finished"),
-                ORDER_LINE_STEP_FINISHED_NULL.clone(),
-                lit("check_in"),
-                SITE_CHECK_IN_NULL.clone(),
-                lit("check_out"),
-                SITE_CHECK_OUT_NULL.clone(),
-            ])
-            .alias("data"),
-        ])?)
+        Self::build_event(
+            order_lines,
+            SimulationEvent::OrderLineStepStarted,
+            "/stations/",
+            "station_id",
+            "timestamp",
+            "step_started",
+            None,
+        )
     }
 
     pub(crate) fn step_finished(order_lines: DataFrame) -> Result<DataFrame> {
-        Ok(order_lines.select([
-            uuidv7().call(vec![col("timestamp")]).alias("id"),
-            concat(vec![
-                lit("/stations/"),
-                uuid_to_string().call(vec![col("station_id")]),
-            ])
-            .alias("source"),
-            lit("1.0").alias("specversion"),
-            SimulationEvent::OrderLineStepFinished.event_type_lit(),
-            cast(col("timestamp"), DataType::LargeUtf8).alias("time"),
-            named_struct(vec![
-                lit("order_created"),
-                ORDER_CREATED_NULL.clone(),
-                lit("order_line_updated"),
-                ORDER_LINE_UPDATED_NULL.clone(),
-                lit("step_started"),
-                ORDER_LINE_STEP_STARTED_NULL.clone(),
-                lit("step_finished"),
-                ORDER_LINE_STEP_EXPR.clone(),
-                lit("check_in"),
-                SITE_CHECK_IN_NULL.clone(),
-                lit("check_out"),
-                SITE_CHECK_OUT_NULL.clone(),
-            ])
-            .alias("data"),
-        ])?)
+        Self::build_event(
+            order_lines,
+            SimulationEvent::OrderLineStepFinished,
+            "/stations/",
+            "station_id",
+            "timestamp",
+            "step_finished",
+            None,
+        )
     }
 
     pub(crate) fn order_line_ready(order_lines: DataFrame) -> Result<DataFrame> {
-        Ok(order_lines.select([
-            uuidv7().call(vec![col("timestamp")]).alias("id"),
-            concat(vec![
-                lit("/kitchen/"),
-                uuid_to_string().call(vec![col("kitchen_id")]),
-            ])
-            .alias("source"),
-            lit("1.0").alias("specversion"),
-            SimulationEvent::OrderLineUpdated.event_type_lit(),
-            cast(col("timestamp"), DataType::LargeUtf8).alias("time"),
-            named_struct(vec![
-                lit("order_created"),
-                ORDER_CREATED_NULL.clone(),
-                lit("order_line_updated"),
-                ORDER_LINE_UPDATED_COMPLETED_EXPR.clone(),
-                lit("step_started"),
-                ORDER_LINE_STEP_STARTED_NULL.clone(),
-                lit("step_finished"),
-                ORDER_LINE_STEP_FINISHED_NULL.clone(),
-                lit("check_in"),
-                SITE_CHECK_IN_NULL.clone(),
-                lit("check_out"),
-                SITE_CHECK_OUT_NULL.clone(),
-            ])
-            .alias("data"),
-        ])?)
+        Self::build_event(
+            order_lines,
+            SimulationEvent::OrderLineUpdated,
+            "/kitchen/",
+            "kitchen_id",
+            "timestamp",
+            "order_line_updated",
+            Some(ORDER_LINE_UPDATED_COMPLETED_EXPR.clone()),
+        )
     }
 }
 
@@ -168,160 +206,63 @@ impl SimulationEvent {
     }
 }
 
-static ORDER_CREATED_FIELD: LazyLock<FieldRef> = LazyLock::new(|| {
-    FieldRef::new(Field::new(
-        "order_created",
-        DataType::Struct(
-            vec![
-                Field::new("order_id", DataType::FixedSizeBinary(16), false),
-                Field::new(
-                    "submitted_at",
-                    DataType::Timestamp(TimeUnit::Millisecond, Some("UTC".into())),
-                    false,
+event_field! {
+    OrderCreated {
+        name: "order_created",
+        fields: {
+            order_id: uuid_field!(),
+            submitted_at: timestamp_field!(),
+            destination: DataType::Struct(
+                vec![
+                    Field::new("x", DataType::Float64, false),
+                    Field::new("y", DataType::Float64, false),
+                ]
+                .into(),
+            ),
+            items: DataType::List(Arc::new(Field::new(
+                "item",
+                DataType::FixedSizeList(
+                    Arc::new(Field::new("item", uuid_field!(), false)),
+                    2,
                 ),
-                Field::new(
-                    "destination",
-                    DataType::Struct(
-                        vec![
-                            Field::new("x", DataType::Float64, false),
-                            Field::new("y", DataType::Float64, false),
-                        ]
-                        .into(),
-                    ),
-                    false,
-                ),
-                Field::new(
-                    "items",
-                    DataType::List(Arc::new(Field::new(
-                        "item",
-                        DataType::FixedSizeList(
-                            Arc::new(Field::new("item", DataType::FixedSizeBinary(16), false)),
-                            2,
-                        ),
-                        false,
-                    ))),
-                    false,
-                ),
-            ]
-            .into(),
-        ),
-        true,
-    ))
-});
+                false,
+            ))),
+        }
+    }
+}
 
-static ORDER_CREATED_EXPR: LazyLock<Expr> = LazyLock::new(|| {
-    named_struct(vec![
-        lit("order_id"),
-        col("order_id"),
-        lit("submitted_at"),
-        col("submitted_at"),
-        lit("destination"),
-        col("destination"),
-        lit("items"),
-        col("items"),
-    ])
-    .alias("order_crated")
-});
+event_field! {
+    OrderLineStepStarted {
+        name: "step_started",
+        fields: {
+            timestamp: timestamp_field!(),
+            order_line_id: uuid_field!(),
+            step_index: DataType::Int32,
+        }
+    }
+}
 
-static ORDER_CREATED_NULL: LazyLock<Expr> = LazyLock::new(|| {
-    let data_type = match ORDER_CREATED_FIELD.data_type() {
-        DataType::Struct(fields) => fields.clone(),
-        _ => unreachable!(),
-    };
-    cast(lit(ScalarValue::Null), DataType::Struct(data_type)).alias("order_created")
-});
+event_field! {
+    OrderLineStepFinished {
+        name: "step_finished",
+        fields: {
+            timestamp: timestamp_field!(),
+            order_line_id: uuid_field!(),
+            step_index: DataType::Int32,
+        }
+    }
+}
 
-static ORDER_LINE_STEP_STARTED_FIELD: LazyLock<FieldRef> = LazyLock::new(|| {
-    FieldRef::new(Field::new(
-        "step_started",
-        DataType::Struct(
-            vec![
-                Field::new(
-                    "timestamp",
-                    DataType::Timestamp(TimeUnit::Millisecond, Some("UTC".into())),
-                    false,
-                ),
-                Field::new("order_line_id", DataType::FixedSizeBinary(16), false),
-                Field::new("step_index", DataType::Int32, false),
-            ]
-            .into(),
-        ),
-        true,
-    ))
-});
-
-static ORDER_LINE_STEP_EXPR: LazyLock<Expr> = LazyLock::new(|| {
-    named_struct(vec![
-        lit("timestamp"),
-        col("timestamp"),
-        lit("order_line_id"),
-        col("order_line_id"),
-        lit("step_index"),
-        col("step_index"),
-    ])
-});
-
-static ORDER_LINE_STEP_STARTED_NULL: LazyLock<Expr> = LazyLock::new(|| {
-    let data_type = match ORDER_LINE_STEP_STARTED_FIELD.data_type() {
-        DataType::Struct(fields) => fields.clone(),
-        _ => unreachable!(),
-    };
-    cast(lit(ScalarValue::Null), DataType::Struct(data_type)).alias("step_started")
-});
-
-static ORDER_LINE_STEP_FINISHED_FIELD: LazyLock<FieldRef> = LazyLock::new(|| {
-    FieldRef::new(Field::new(
-        "step_finished",
-        DataType::Struct(
-            vec![
-                Field::new(
-                    "timestamp",
-                    DataType::Timestamp(TimeUnit::Millisecond, Some("UTC".into())),
-                    false,
-                ),
-                Field::new("order_line_id", DataType::FixedSizeBinary(16), false),
-                Field::new("step_index", DataType::Int32, false),
-            ]
-            .into(),
-        ),
-        true,
-    ))
-});
-
-static ORDER_LINE_STEP_FINISHED_NULL: LazyLock<Expr> = LazyLock::new(|| {
-    let data_type = match ORDER_LINE_STEP_FINISHED_FIELD.data_type() {
-        DataType::Struct(fields) => fields.clone(),
-        _ => unreachable!(),
-    };
-    cast(lit(ScalarValue::Null), DataType::Struct(data_type)).alias("step_finished")
-});
-
-static ORDER_LINE_UPDATED_FIELD: LazyLock<FieldRef> = LazyLock::new(|| {
-    FieldRef::new(Field::new(
-        "order_line_updated",
-        DataType::Struct(
-            vec![
-                Field::new(
-                    "timestamp",
-                    DataType::Timestamp(TimeUnit::Millisecond, Some("UTC".into())),
-                    false,
-                ),
-                Field::new("order_line_id", DataType::FixedSizeBinary(16), false),
-                Field::new("status", DataType::Utf8, false),
-            ]
-            .into(),
-        ),
-        true,
-    ))
-});
-
-static ORDER_LINE_UPDATED_NULL: LazyLock<Expr> = LazyLock::new(|| {
-    let data_type = match ORDER_LINE_UPDATED_FIELD.data_type() {
-        DataType::Struct(fields) => fields.clone(),
-        _ => unreachable!(),
-    };
-    cast(lit(ScalarValue::Null), DataType::Struct(data_type)).alias("order_line_updated")
-});
+event_field! {
+    OrderLineUpdated {
+        name: "order_line_updated",
+        fields: {
+            timestamp: timestamp_field!(),
+            order_line_id: uuid_field!(),
+            status: DataType::Utf8,
+        }
+    }
+}
 
 static ORDER_LINE_UPDATED_COMPLETED_EXPR: LazyLock<Expr> = LazyLock::new(|| {
     named_struct(vec![
@@ -334,91 +275,91 @@ static ORDER_LINE_UPDATED_COMPLETED_EXPR: LazyLock<Expr> = LazyLock::new(|| {
     ])
 });
 
-static SITE_CHECK_IN_FIELD: LazyLock<FieldRef> = LazyLock::new(|| {
-    FieldRef::new(Field::new(
-        "check_in",
-        DataType::Struct(
-            vec![
-                Field::new(
-                    "timestamp",
-                    DataType::Timestamp(TimeUnit::Millisecond, Some("UTC".into())),
-                    false,
-                ),
-                Field::new("site_id", DataType::FixedSizeBinary(16), false),
-            ]
-            .into(),
-        ),
-        true,
-    ))
-});
+event_field! {
+    SiteCheckIn {
+        name: "check_in",
+        fields: {
+            timestamp: timestamp_field!(),
+            site_id: uuid_field!(),
+        }
+    }
+}
 
-static SITE_CHECK_IN_NULL: LazyLock<Expr> = LazyLock::new(|| {
-    let data_type = match SITE_CHECK_IN_FIELD.data_type() {
-        DataType::Struct(fields) => fields.clone(),
-        _ => unreachable!(),
-    };
-    cast(lit(ScalarValue::Null), DataType::Struct(data_type)).alias("check_in")
-});
+event_field! {
+    SiteCheckOut {
+        name: "check_out",
+        fields: {
+            timestamp: timestamp_field!(),
+            orders: DataType::List(Arc::new(Field::new(
+                "item",
+                uuid_field!(),
+                false,
+            ))),
+        }
+    }
+}
 
-static SITE_CHECK_OUT_FIELD: LazyLock<FieldRef> = LazyLock::new(|| {
-    FieldRef::new(Field::new(
-        "check_out",
-        DataType::Struct(
-            vec![
-                Field::new(
-                    "timestamp",
-                    DataType::Timestamp(TimeUnit::Millisecond, Some("UTC".into())),
-                    false,
-                ),
-                Field::new(
-                    "orders",
-                    DataType::List(Arc::new(Field::new(
-                        "item",
-                        DataType::FixedSizeBinary(16),
-                        false,
-                    ))),
-                    false,
-                ),
-            ]
-            .into(),
-        ),
-        true,
-    ))
-});
+// Event registry for iteration
+struct EventFieldInfo {
+    name: &'static str,
+    field: fn() -> &'static FieldRef,
+    expr: fn() -> &'static Expr,
+    null: fn() -> &'static Expr,
+}
 
-static SITE_CHECK_OUT_NULL: LazyLock<Expr> = LazyLock::new(|| {
-    let data_type = match SITE_CHECK_OUT_FIELD.data_type() {
-        DataType::Struct(fields) => fields.clone(),
-        _ => unreachable!(),
-    };
-    cast(lit(ScalarValue::Null), DataType::Struct(data_type)).alias("check_out")
+static EVENT_FIELDS: LazyLock<Vec<EventFieldInfo>> = LazyLock::new(|| {
+    vec![
+        EventFieldInfo {
+            name: "order_created",
+            field: || &ORDERCREATED_FIELD,
+            expr: || &ORDERCREATED_EXPR,
+            null: || &ORDERCREATED_NULL,
+        },
+        EventFieldInfo {
+            name: "order_line_updated",
+            field: || &ORDERLINEUPDATED_FIELD,
+            expr: || &ORDERLINEUPDATED_EXPR,
+            null: || &ORDERLINEUPDATED_NULL,
+        },
+        EventFieldInfo {
+            name: "step_started",
+            field: || &ORDERLINESTEPSTARTED_FIELD,
+            expr: || &ORDERLINESTEPSTARTED_EXPR,
+            null: || &ORDERLINESTEPSTARTED_NULL,
+        },
+        EventFieldInfo {
+            name: "step_finished",
+            field: || &ORDERLINESTEPFINISHED_FIELD,
+            expr: || &ORDERLINESTEPFINISHED_EXPR,
+            null: || &ORDERLINESTEPFINISHED_NULL,
+        },
+        EventFieldInfo {
+            name: "check_in",
+            field: || &SITECHECKIN_FIELD,
+            expr: || &SITECHECKIN_EXPR,
+            null: || &SITECHECKIN_NULL,
+        },
+        EventFieldInfo {
+            name: "check_out",
+            field: || &SITECHECKOUT_FIELD,
+            expr: || &SITECHECKOUT_EXPR,
+            null: || &SITECHECKOUT_NULL,
+        },
+    ]
 });
 
 static EVENT_SCHEMA: LazyLock<SchemaRef> = LazyLock::new(|| {
+    let data_fields: Vec<FieldRef> = EVENT_FIELDS
+        .iter()
+        .map(|info| (info.field)().clone())
+        .collect();
+
     SchemaRef::new(Schema::new(vec![
-        Field::new("id", DataType::FixedSizeBinary(16), false),
+        Field::new("id", uuid_field!(), false),
         Field::new("source", DataType::Utf8, false),
         Field::new("specversion", DataType::Utf8, false),
         Field::new("type", DataType::Utf8, false),
-        Field::new(
-            "time",
-            DataType::Timestamp(TimeUnit::Millisecond, Some("UTC".into())),
-            false,
-        ),
-        Field::new(
-            "data",
-            DataType::Struct(
-                vec![
-                    ORDER_CREATED_FIELD.clone(),
-                    ORDER_LINE_UPDATED_FIELD.clone(),
-                    ORDER_LINE_STEP_STARTED_FIELD.clone(),
-                    ORDER_LINE_STEP_FINISHED_FIELD.clone(),
-                    SITE_CHECK_IN_FIELD.clone(),
-                    SITE_CHECK_OUT_FIELD.clone(),
-                ]
-                .into(),
-            ),
-            false,
-        ),
+        Field::new("time", timestamp_field!(), false),
+        Field::new("data", DataType::Struct(data_fields.into()), false),
     ]))
 });
