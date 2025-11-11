@@ -1,13 +1,15 @@
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use arrow::{array::RecordBatch, compute::concat_batches};
+use arrow_schema::{DataType, Field, Schema, SchemaRef, TimeUnit, extension::Uuid};
 use datafusion::{
     functions_aggregate::count::count_all,
     logical_expr::ScalarUDF,
-    prelude::{DataFrame, col, lit},
+    prelude::{DataFrame, cast, col, lit},
+    scalar::ScalarValue,
 };
 
-use crate::{EventsHelper, ObjectLabel, Result, SimulationContext};
+use crate::{Error, EventsHelper, ObjectLabel, OrderStatus, Result, SimulationContext};
 use crate::{
     agents::{KitchenHandler, PopulationHandler, functions::create_order},
     test_utils::print_frame,
@@ -64,19 +66,71 @@ impl SimulationRunnerBuilder {
 
         let population = PopulationHandler::try_new(&self.ctx, create_orders).await?;
         let kitchens = KitchenHandler::try_new(&self.ctx).await?;
+
+        // TODO: load orders from snapshot
+        let orders = self
+            .ctx
+            .ctx()
+            .read_batch(RecordBatch::new_empty(ORDER_STATE.clone()))?
+            .collect()
+            .await?;
+
         Ok(SimulationRunner {
             ctx: self.ctx,
             population,
             kitchens,
+            orders,
         })
     }
 }
+
+static ORDER_STATE: LazyLock<SchemaRef> = LazyLock::new(|| {
+    SchemaRef::new(Schema::new(vec![
+        Field::new("person_id", DataType::FixedSizeBinary(16), false).with_extension_type(Uuid),
+        Field::new("order_id", DataType::FixedSizeBinary(16), true),
+        Field::new(
+            "submitted_at",
+            DataType::Timestamp(TimeUnit::Millisecond, Some("UTC".into())),
+            true,
+        ),
+        Field::new(
+            "destination",
+            DataType::Struct(
+                vec![
+                    Field::new("x", DataType::Float64, false),
+                    Field::new("y", DataType::Float64, false),
+                ]
+                .into(),
+            ),
+            false,
+        ),
+        Field::new("status", DataType::Utf8, false),
+        Field::new_list(
+            "items",
+            Field::new_list_field(
+                DataType::FixedSizeList(
+                    Field::new_list_field(DataType::FixedSizeBinary(16), false).into(),
+                    2,
+                ),
+                false,
+            ),
+            true,
+        ),
+        Field::new_list(
+            "order_lines",
+            Field::new_list_field(DataType::FixedSizeBinary(16), false),
+            true,
+        ),
+    ]))
+});
 
 pub struct SimulationRunner {
     pub(crate) ctx: SimulationContext,
 
     pub(crate) population: PopulationHandler,
     pub(crate) kitchens: KitchenHandler,
+
+    orders: Vec<RecordBatch>,
 }
 
 impl SimulationRunner {
@@ -101,6 +155,21 @@ impl SimulationRunner {
             .population
             .create_orders(&self.ctx)
             .await?
+            .select([
+                col("person_id"),
+                col("order_id"),
+                col("submitted_at"),
+                col("destination"),
+                lit(OrderStatus::Submitted.as_ref()).alias("status"),
+                col("items"),
+                cast(
+                    lit(ScalarValue::Null),
+                    DataType::List(
+                        Field::new_list_field(DataType::FixedSizeBinary(16), false).into(),
+                    ),
+                )
+                .alias("order_lines"),
+            ])?
             .cache()
             .await?;
 
@@ -108,7 +177,10 @@ impl SimulationRunner {
 
         let orders_count = orders.clone().count().await?;
         let kitchen_events = if orders_count > 0 {
+            let curr_orders = self.ctx.ctx().read_batches(self.orders.iter().cloned())?;
+            self.orders = orders.clone().union(curr_orders)?.collect().await?;
             events = events.union(EventsHelper::orders_created(orders.clone())?)?;
+
             self.kitchens.step(&self.ctx, Some(orders)).await?
         } else {
             self.kitchens.step(&self.ctx, None).await?

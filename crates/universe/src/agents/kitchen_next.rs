@@ -210,10 +210,13 @@ impl KitchenHandler {
         incoming_orders: Option<DataFrame>,
     ) -> Result<DataFrame> {
         let mut events = EventsHelper::empty(ctx)?;
+
         if let Some(orders) = incoming_orders {
             self.prepare_order_lines(ctx, orders).await?;
         }
-        Ok(events.union(self.process_order_lines(ctx).await?)?)
+        events = events.union(self.process_order_lines(ctx).await?)?;
+
+        Ok(events)
     }
 
     /// Prepare new orders and order lines for processing.
@@ -232,7 +235,7 @@ impl KitchenHandler {
         ctx: &SimulationContext,
         orders: DataFrame,
     ) -> Result<()> {
-        let resolution = lit(6_i8);
+        let resolution = lit(5_i8);
 
         // assign order to sites
         let orders = orders
@@ -454,6 +457,30 @@ impl KitchenHandler {
         Ok(events)
     }
 
+    fn completed_orders(&self, ctx: &SimulationContext) -> Result<DataFrame> {
+        Ok(self
+            .order_lines(ctx)?
+            .aggregate(
+                vec![col("order_id")],
+                vec![
+                    bool_and(col("is_complete")).alias("all_complete"),
+                    // NOTE: we can choose any kitchen since we just need it to join
+                    // in site_id and all lines in an order are processed at the
+                    // same site and thus all kitchens that proicessed lines are at the site.
+                    first_value(col("kitchen_id"), vec![]).alias("kitchen_id2"),
+                    array_agg(col("order_line_id")).alias("order_lines"),
+                ],
+            )?
+            .filter(col("all_complete").eq(lit(true)))?
+            .join_on(
+                self.stations(ctx)?
+                    .select_columns(&["kitchen_id", "site_id"])?,
+                JoinType::Left,
+                vec![col("kitchen_id").eq(col("kitchen_id2"))],
+            )?
+            .select_columns(&["order_id", "site_id"])?)
+    }
+
     /// Get completed orders
     ///
     /// This method gets all order lines for completed orders and returns them as a DataFrame.
@@ -467,43 +494,30 @@ impl KitchenHandler {
         ctx: &SimulationContext,
     ) -> Result<Option<DataFrame>> {
         // Group by order_id and check if all lines are complete
-        let completed_orders = self
-            .order_lines(ctx)?
-            .aggregate(
-                vec![col("order_id")],
-                vec![bool_and(col("is_complete")).alias("all_complete")],
-            )?
-            .filter(col("all_complete").eq(lit(true)))?
-            .collect()
-            .await?;
+        let completed_orders = self.completed_orders(ctx)?.collect().await?;
+        let completed_order_ids = completed_orders
+            .iter()
+            .flat_map(|b| b.column(0).as_fixed_size_binary().iter().flatten())
+            .map(|o| lit(ScalarValue::FixedSizeBinary(16, Some(o.to_vec()))))
+            .collect_vec();
 
-        let completed_count = completed_orders.iter().map(|b| b.num_rows()).sum::<usize>();
-        if completed_count == 0 {
+        if completed_order_ids.len() == 0 {
             return Ok(None);
         }
 
-        let completed_orders = concat_batches(completed_orders[0].schema_ref(), &completed_orders)?;
-        let completed_orders: Vec<_> = completed_orders
-            .column(0)
-            .as_fixed_size_binary()
-            .iter()
-            .flatten()
-            .map(|o| lit(ScalarValue::FixedSizeBinary(16, Some(o.to_vec()))))
-            .collect();
-
         let completed_lines = self
             .order_lines(ctx)?
-            .filter(col("order_id").in_list(completed_orders.clone(), false))?
+            .filter(col("order_id").in_list(completed_order_ids.clone(), false))?
             .collect()
             .await?;
 
         self.order_lines = self
             .order_lines(ctx)?
-            .filter(col("order_id").in_list(completed_orders, true))?
+            .filter(col("order_id").in_list(completed_order_ids, true))?
             .collect()
             .await?;
 
-        Ok(Some(ctx.ctx().read_batches(completed_lines)?))
+        Ok(Some(ctx.ctx().read_batches(completed_orders)?))
     }
 
     /// Assign order lines to kitchens.

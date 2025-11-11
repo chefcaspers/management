@@ -138,6 +138,18 @@ impl EventsHelper {
         )
     }
 
+    pub(crate) fn orders_ready(orders: DataFrame) -> Result<DataFrame> {
+        Self::build_event(
+            orders,
+            SimulationEvent::OrderReady,
+            "/sites/",
+            "site_id",
+            "timestamp",
+            "order_ready",
+            None,
+        )
+    }
+
     pub(crate) fn step_started(order_lines: DataFrame) -> Result<DataFrame> {
         Self::build_event(
             order_lines,
@@ -177,6 +189,7 @@ impl EventsHelper {
 
 pub enum SimulationEvent {
     OrderCreated,
+    OrderReady,
     OrderPickedUp,
     OrderDelivered,
     OrderLineStepStarted,
@@ -191,6 +204,7 @@ impl SimulationEvent {
         use SimulationEvent::*;
         match self {
             OrderCreated => "caspers.universe.order_created",
+            OrderReady => "caspers.universe.order_ready",
             OrderPickedUp => "caspers.universe.order_picked_up",
             OrderDelivered => "caspers.universe.order_delivered",
             OrderLineStepStarted => "caspers.universe.order_line_step_started",
@@ -227,6 +241,16 @@ event_field! {
                 ),
                 false,
             ))),
+        }
+    }
+}
+
+event_field! {
+    OrderReady {
+        name: "order_ready",
+        fields: {
+            order_id: uuid_field!(),
+            timestamp: timestamp_field!(),
         }
     }
 }
@@ -314,6 +338,12 @@ static EVENT_FIELDS: LazyLock<Vec<EventFieldInfo>> = LazyLock::new(|| {
             field: || &ORDERCREATED_FIELD,
             expr: || &ORDERCREATED_EXPR,
             null: || &ORDERCREATED_NULL,
+        },
+        EventFieldInfo {
+            name: "order_ready",
+            field: || &ORDERREADY_FIELD,
+            expr: || &ORDERREADY_EXPR,
+            null: || &ORDERREADY_NULL,
         },
         EventFieldInfo {
             name: "order_line_updated",
