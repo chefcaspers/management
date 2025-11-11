@@ -8,7 +8,7 @@ use datafusion::{
 };
 
 use crate::{
-    Result, SimulationContext,
+    OrderLineStatus, Result, SimulationContext,
     functions::{uuid_to_string, uuidv7},
 };
 
@@ -98,6 +98,35 @@ impl EventsHelper {
                 ORDER_LINE_STEP_STARTED_NULL.clone(),
                 lit("step_finished"),
                 ORDER_LINE_STEP_EXPR.clone(),
+                lit("check_in"),
+                SITE_CHECK_IN_NULL.clone(),
+                lit("check_out"),
+                SITE_CHECK_OUT_NULL.clone(),
+            ])
+            .alias("data"),
+        ])?)
+    }
+
+    pub(crate) fn order_line_ready(order_lines: DataFrame) -> Result<DataFrame> {
+        Ok(order_lines.select([
+            uuidv7().call(vec![col("timestamp")]).alias("id"),
+            concat(vec![
+                lit("/kitchen/"),
+                uuid_to_string().call(vec![col("kitchen_id")]),
+            ])
+            .alias("source"),
+            lit("1.0").alias("specversion"),
+            SimulationEvent::OrderLineUpdated.event_type_lit(),
+            cast(col("timestamp"), DataType::LargeUtf8).alias("time"),
+            named_struct(vec![
+                lit("order_created"),
+                ORDER_CREATED_NULL.clone(),
+                lit("order_line_updated"),
+                ORDER_LINE_UPDATED_COMPLETED_EXPR.clone(),
+                lit("step_started"),
+                ORDER_LINE_STEP_STARTED_NULL.clone(),
+                lit("step_finished"),
+                ORDER_LINE_STEP_FINISHED_NULL.clone(),
                 lit("check_in"),
                 SITE_CHECK_IN_NULL.clone(),
                 lit("check_out"),
@@ -292,6 +321,17 @@ static ORDER_LINE_UPDATED_NULL: LazyLock<Expr> = LazyLock::new(|| {
         _ => unreachable!(),
     };
     cast(lit(ScalarValue::Null), DataType::Struct(data_type)).alias("order_line_updated")
+});
+
+static ORDER_LINE_UPDATED_COMPLETED_EXPR: LazyLock<Expr> = LazyLock::new(|| {
+    named_struct(vec![
+        lit("timestamp"),
+        col("timestamp"),
+        lit("order_line_id"),
+        col("order_line_id"),
+        lit("status"),
+        lit(OrderLineStatus::Ready.as_ref()),
+    ])
 });
 
 static SITE_CHECK_IN_FIELD: LazyLock<FieldRef> = LazyLock::new(|| {

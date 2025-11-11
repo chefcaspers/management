@@ -367,7 +367,11 @@ impl KitchenHandler {
                 JoinType::Left,
                 [col("order_line_id_adv").eq(col("order_line_id"))],
             )?
-            .filter(col("current_step").gt(lit(1_i32)))?
+            .filter(
+                col("current_step")
+                    .gt(lit(1_i32))
+                    .and(col("next_step").lt_eq(col("total_steps"))),
+            )?
             .select([
                 col("step_completion_time").alias("timestamp"),
                 col("order_line_id"),
@@ -375,6 +379,21 @@ impl KitchenHandler {
                 col("current_step").alias("step_index"),
             ])?;
         events = events.union(EventsHelper::step_finished(step_finished_events)?)?;
+
+        let order_lines_ready_events = lines_to_advance
+            .clone()
+            .join_on(
+                self.order_lines(ctx)?,
+                JoinType::Left,
+                [col("order_line_id_adv").eq(col("order_line_id"))],
+            )?
+            .filter(col("next_step").gt(col("total_steps")))?
+            .select([
+                col("step_completion_time").alias("timestamp"),
+                col("order_line_id"),
+                col("kitchen_id"),
+            ])?;
+        events = events.union(EventsHelper::order_line_ready(order_lines_ready_events)?)?;
 
         // Update order lines: advance steps and mark completed ones
         let advanced_order_lines = self
