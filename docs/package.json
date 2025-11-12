@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",
-    "build": "astro build",
+    "build": "astro build --outDir ../crates/cli/assets/docs",
     "preview": "astro preview",
     "astro": "astro"
   },

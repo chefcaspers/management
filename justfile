@@ -76,6 +76,10 @@ server:
 build-ui:
     npm -w ui run build
 
+[group('server')]
+build-docs:
+    npm -w docs run build
+
 # run UI dev server (with API proxy)
 [group('server')]
 dev-ui:
@@ -85,4 +89,3 @@ dev-ui:
 [group('server')]
 install-ui:
     npm -w ui install
-

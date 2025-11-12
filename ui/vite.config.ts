@@ -11,7 +11,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: path.resolve(__dirname, '../crates/cli/assets'),
+    outDir: path.resolve(__dirname, '../crates/cli/assets/ui'),
     emptyOutDir: true,
   },
   server: {
@@ -23,4 +23,3 @@ export default defineConfig({
     },
   },
 })
-
