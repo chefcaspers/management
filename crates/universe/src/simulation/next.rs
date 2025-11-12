@@ -1,6 +1,6 @@
 use std::sync::{Arc, LazyLock};
 
-use arrow::{array::RecordBatch, compute::concat_batches};
+use arrow::{array::RecordBatch, compute::concat_batches, util::pretty::print_batches};
 use arrow_schema::{DataType, Field, Schema, SchemaRef, TimeUnit, extension::Uuid};
 use datafusion::{
     functions_aggregate::count::count_all,
@@ -9,11 +9,8 @@ use datafusion::{
     scalar::ScalarValue,
 };
 
-use crate::{Error, EventsHelper, ObjectLabel, OrderStatus, Result, SimulationContext};
-use crate::{
-    agents::{KitchenHandler, PopulationHandler, functions::create_order},
-    test_utils::print_frame,
-};
+use crate::agents::{KitchenHandler, PopulationHandler, functions::create_order};
+use crate::{EventsHelper, ObjectLabel, OrderStatus, Result, SimulationContext};
 
 pub struct SimulationRunnerBuilder {
     ctx: SimulationContext,
@@ -197,8 +194,8 @@ impl SimulationRunner {
         let aggreagte = events.aggregate(vec![col("type")], vec![count_all()])?;
         let type_count = aggreagte.clone().count().await?;
         if type_count > 0 {
-            print_frame(&aggreagte).await?;
-            // print_frame(&events).await?;
+            let agg_batches = aggreagte.collect().await?;
+            print_batches(&agg_batches)?;
         }
         Ok(())
     }
@@ -236,6 +233,10 @@ mod tests {
         let mut runner = runner.await?;
 
         runner.run(100).await?;
+
+        // print_frame(&runner.kitchens.stations(&runner.ctx)?).await?;
+        // print_frame(&runner.kitchens.order_lines(&runner.ctx)?).await?;
+        // print_batches(&runner.orders)?;
 
         Ok(())
     }

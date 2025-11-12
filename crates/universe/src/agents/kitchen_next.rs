@@ -16,7 +16,7 @@ use datafusion::functions::core::expr_ext::FieldAccessor as _;
 use datafusion::functions_aggregate::expr_fn::{array_agg, bool_and, count, first_value, max, min};
 use datafusion::prelude::{
     DataFrame, Expr, SessionContext, array_element, array_has, array_length, array_max, cast,
-    coalesce, col, concat, lit, make_array, power, random, round,
+    coalesce, col, concat, lit, make_array, named_struct, power, random, round,
 };
 use datafusion::scalar::ScalarValue;
 use futures::StreamExt as _;
@@ -29,8 +29,6 @@ use crate::error::Result;
 use crate::functions::h3_longlatash3;
 use crate::models::{KitchenStation, Station};
 use crate::state::{OrderLineStatus, State};
-use crate::test_utils::print_frame;
-// use crate::test_utils::print_frame;
 use crate::{Brand, Error, EventPayload, EventsHelper, ObjectLabel, parse_json};
 use crate::{SimulationContext, idents::*};
 
@@ -473,12 +471,21 @@ impl KitchenHandler {
             )?
             .filter(col("all_complete").eq(lit(true)))?
             .join_on(
-                self.stations(ctx)?
+                self.kitchens(ctx)?
                     .select_columns(&["kitchen_id", "site_id"])?,
                 JoinType::Left,
                 vec![col("kitchen_id").eq(col("kitchen_id2"))],
             )?
-            .select_columns(&["order_id", "site_id"])?)
+            .join_on(
+                self.sites(ctx)?.select([
+                    col("site_id").alias("site_id2"),
+                    named_struct(vec![lit("x"), col("longitude"), lit("y"), col("latitude")])
+                        .alias("start_position"),
+                ])?,
+                JoinType::Left,
+                vec![col("site_id").eq(col("site_id2"))],
+            )?
+            .select_columns(&["order_id", "site_id", "start_position"])?)
     }
 
     /// Get completed orders
@@ -637,7 +644,7 @@ impl KitchenHandler {
     /// ## Parameters
     ///
     /// * `ctx`: The simulation context.
-    async fn assign_steps_to_stations(&mut self, ctx: &SimulationContext) -> Result<()> {
+    async fn assign_steps_to_stations(&mut self, ctx: &SimulationContext) -> Result<DataFrame> {
         // Get lines that need assignment (no completion time or not complete)
         let current_time = ctx.current_time_expr();
         let to_update = self
@@ -731,6 +738,7 @@ impl KitchenHandler {
 
         // Join to_update with station assignments to get station_id for each order_line_id
         let station_updates = to_update
+            .clone()
             .select([col("order_line_id"), col("next_completion_time")])?
             .join_on(
                 station_assignments,
@@ -741,7 +749,25 @@ impl KitchenHandler {
                 col("order_line_id").alias("order_line_id2"),
                 col("station_id"),
                 col("next_completion_time"),
+            ])?
+            .cache()
+            .await?;
+
+        let step_started_events = station_updates
+            .clone()
+            .join_on(
+                self.order_lines(ctx)?,
+                JoinType::Left,
+                [col("order_line_id").eq(col("order_line_id2"))],
+            )?
+            .select([
+                current_time.alias("timestamp"),
+                col("order_line_id"),
+                col("current_step").alias("step_index"),
+                col("station_id"),
             ])?;
+
+        let events = EventsHelper::step_started(step_started_events)?;
 
         let updated = self
             .order_lines(ctx)?
@@ -769,7 +795,7 @@ impl KitchenHandler {
 
         self.order_lines = updated.collect().await?;
 
-        Ok(())
+        Ok(events)
     }
 
     /// Get kitchen stations available for processing orders
@@ -826,17 +852,19 @@ impl KitchenHandler {
         let mut steps = 0;
         // TODO: see if we can make the assignments in a single pass.
         loop {
-            self.assign_steps_to_stations(ctx).await?;
+            let started_events = self.assign_steps_to_stations(ctx).await?;
             let new_stats = self.get_stats(ctx).await?;
             if new_stats == curr_stats {
                 break;
             }
+            events = started_events.union(events)?;
             curr_stats = new_stats;
             steps += 1;
             if steps > 10 {
                 break;
             }
         }
+
         Ok(events)
     }
 
