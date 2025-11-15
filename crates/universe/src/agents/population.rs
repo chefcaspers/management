@@ -28,7 +28,6 @@ use crate::{
     BrandId, EntityView as _, EventPayload, MenuItemId, ObjectLabel, OrderCreatedPayload, PersonId,
     PersonRole, PersonStatusFlag, Result, SimulationContext, SiteId, State,
     agents::functions::create_order,
-    functions::uuidv7,
     state::{Journey, Transport},
 };
 
@@ -533,15 +532,10 @@ impl PopulationHandler {
             .filter(col("items").is_not_null())?
             .select([
                 col("person_id"),
-                uuidv7().call(vec![col("submitted_at")]).alias("order_id"),
                 col("submitted_at"),
                 col("destination"),
                 col("items"),
-            ])?
-            // NOTE: we need to materialize here, to have
-            // consistent order ids after cloning the frame.
-            .cache()
-            .await?;
+            ])?;
 
         Ok(new_orders)
     }

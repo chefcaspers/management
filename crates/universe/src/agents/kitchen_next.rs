@@ -15,7 +15,7 @@ use datafusion::common::JoinType;
 use datafusion::functions::core::expr_ext::FieldAccessor as _;
 use datafusion::functions_aggregate::expr_fn::{array_agg, bool_and, count, first_value, max, min};
 use datafusion::prelude::{
-    DataFrame, Expr, SessionContext, array_element, array_has, array_length, array_max, cast,
+    DataFrame, Expr, SessionContext, array_element, array_has, array_length, array_max, case, cast,
     coalesce, col, concat, lit, make_array, named_struct, power, random, round,
 };
 use datafusion::scalar::ScalarValue;
@@ -26,10 +26,11 @@ use uuid::{ContextV7, Timestamp};
 
 use super::OrderLine;
 use crate::error::Result;
-use crate::functions::h3_longlatash3;
+use crate::functions::{h3_longlatash3, uuidv7};
 use crate::models::{KitchenStation, Station};
 use crate::state::{OrderLineStatus, State};
-use crate::{Brand, Error, EventPayload, EventsHelper, ObjectLabel, parse_json};
+use crate::test_utils::print_frame;
+use crate::{Brand, Error, EventPayload, EventsHelper, ObjectLabel, OrderStatus, parse_json};
 use crate::{SimulationContext, idents::*};
 
 #[cfg(test)]
@@ -51,6 +52,31 @@ static INSTRUCTIONS_FIELD: LazyLock<DataType> = LazyLock::new(|| {
         )
         .into(),
     )
+});
+
+static ORDER_STATE: LazyLock<SchemaRef> = LazyLock::new(|| {
+    SchemaRef::new(Schema::new(vec![
+        Field::new("person_id", DataType::FixedSizeBinary(16), false),
+        Field::new("order_id", DataType::FixedSizeBinary(16), true),
+        Field::new("site_id", DataType::FixedSizeBinary(16), true),
+        Field::new(
+            "submitted_at",
+            DataType::Timestamp(TimeUnit::Millisecond, Some("UTC".into())),
+            true,
+        ),
+        Field::new(
+            "destination",
+            DataType::Struct(
+                vec![
+                    Field::new("x", DataType::Float64, false),
+                    Field::new("y", DataType::Float64, false),
+                ]
+                .into(),
+            ),
+            false,
+        ),
+        Field::new("status", DataType::Utf8, false),
+    ]))
 });
 
 static ORDER_LINE_STATE: LazyLock<SchemaRef> = LazyLock::new(|| {
@@ -142,13 +168,23 @@ impl std::ops::Add for KitchenStats {
     }
 }
 
+/// Handle kitchen operations across all sites
+///
+/// This struct is responsible for managing kitchen operations across all sites.
+/// It provides methods for processing order lines, managing kitchen resources,
+/// and tracking statistics.
 #[derive(Clone)]
 pub(crate) struct KitchenHandler {
-    sites: Vec<RecordBatch>,
-    kitchens: Vec<RecordBatch>,
-    stations: Vec<RecordBatch>,
-    menu_items: Vec<RecordBatch>,
-    order_lines: Vec<RecordBatch>,
+    pub(crate) sites: Vec<RecordBatch>,
+    pub(crate) kitchens: Vec<RecordBatch>,
+    pub(crate) stations: Vec<RecordBatch>,
+    /// metadata required to process order lines
+    pub(crate) menu_items: Vec<RecordBatch>,
+
+    /// orders currently tracked across sites
+    pub(crate) orders: Vec<RecordBatch>,
+    /// individual order lines processed by kitchens
+    pub(crate) order_lines: Vec<RecordBatch>,
 }
 
 impl KitchenHandler {
@@ -178,24 +214,105 @@ impl KitchenHandler {
             stations,
             menu_items,
             // TODO: load this from the snapshot
+            orders: vec![RecordBatch::new_empty(ORDER_STATE.clone())],
             order_lines: vec![RecordBatch::new_empty(ORDER_LINE_STATE.clone())],
         })
     }
 
+    /// Caspers Ghost Kitchen sites
+    ///
+    /// The site data has the following schema:
+    ///
+    /// ```ignore
+    /// {
+    ///   site_id: bytes
+    ///   name: string
+    ///   longitude: float64
+    ///   latitude: float64
+    /// }
+    /// ```
+    ///
+    /// ### Parameters
+    ///
+    /// - `ctx`: The simulation context.
+    ///
+    /// ### Returns
+    ///
+    /// A `Result` containing a [`DataFrame`] with the site data.
     pub(crate) fn sites(&self, ctx: &SimulationContext) -> Result<DataFrame> {
         Ok(ctx.ctx().read_batches(self.sites.iter().cloned())?)
     }
 
+    /// Kitchens installed across sites.
+    ///
+    /// The kitchen data has the following schema:
+    ///
+    /// ```ignore
+    /// {
+    ///   site_id: bytes
+    ///   kitchen_id: bytes
+    ///   accepted_brands: [bytes]
+    /// }
+    /// ```
+    ///
+    /// ### Parameters
+    ///
+    /// - `ctx`: The simulation context.
+    ///
+    /// ### Returns
+    ///
+    /// A `Result` containing a [`DataFrame`] with the kitchen data.
     pub(crate) fn kitchens(&self, ctx: &SimulationContext) -> Result<DataFrame> {
         Ok(ctx.ctx().read_batches(self.kitchens.iter().cloned())?)
     }
 
+    /// Stations installed in kitchens across sites
+    ///
+    /// The station data has the following schema:
+    ///
+    /// ```ignore
+    /// {
+    ///   site_id: bytes
+    ///   kitchen_id: bytes
+    ///   station_id: bytes
+    ///   station_type: string
+    /// }
+    /// ```
+    ///
+    /// ### Parameters
+    ///
+    /// - `ctx`: The simulation context.
+    ///
+    /// ### Returns
+    ///
+    /// A `Result` containing a [`DataFrame`] with the station data.
     pub(crate) fn stations(&self, ctx: &SimulationContext) -> Result<DataFrame> {
         Ok(ctx.ctx().read_batches(self.stations.iter().cloned())?)
     }
 
+    /// Menu items available for ordering.
+    ///
+    /// The menu items data has the following schema:
+    ///
+    /// ```ignore
+    /// {
+    ///   brand_id: bytes
+    ///   menu_item_id: bytes
+    ///   item_price: float64
+    ///   instructions: [
+    ///     {
+    ///       required_station: string
+    ///       expected_duration: int32
+    ///     }
+    ///   ]
+    /// }
+    /// ```
     pub(crate) fn menu_items(&self, ctx: &SimulationContext) -> Result<DataFrame> {
         Ok(ctx.ctx().read_batches(self.menu_items.iter().cloned())?)
+    }
+
+    pub(crate) fn orders(&self, ctx: &SimulationContext) -> Result<DataFrame> {
+        Ok(ctx.ctx().read_batches(self.orders.iter().cloned())?)
     }
 
     pub(crate) fn order_lines(&self, ctx: &SimulationContext) -> Result<DataFrame> {
@@ -210,36 +327,47 @@ impl KitchenHandler {
         let mut events = EventsHelper::empty(ctx)?;
 
         if let Some(orders) = incoming_orders {
-            self.prepare_order_lines(ctx, orders).await?;
+            events = events.union(self.prepare_order_lines(ctx, orders).await?)?;
         }
         events = events.union(self.process_order_lines(ctx).await?)?;
+
+        events = events.union(self.update_order_status(ctx).await?)?;
 
         Ok(events)
     }
 
     /// Prepare new orders and order lines for processing.
     ///
+    /// This processes the raw orders from the population and crates individual
+    /// order lines based on the menu items selected in the order. Each order
+    /// is assigned to a site based on the delivery destination of the order.
+    ///
+    /// Each generated order line contains the recipe/processing information
+    /// required to drive the order line through the kitchen.
+    ///
     /// ## Parameters
     ///
     /// * `ctx`: The simulation context.
     /// * `orders`: The new orders to prepare.
-    /// * `lines`: The individual order lines for all orders.
     ///
     /// ## Returns
     ///
-    /// A DataFrame containing the prepared order lines.
+    /// A DataFrame containing events raised during order preparation.
+    /// The raised events may contain:
+    ///
+    /// * [OrderCreated](crate::SimulationEvent::OrderCreated)
     async fn prepare_order_lines(
         &mut self,
         ctx: &SimulationContext,
         orders: DataFrame,
-    ) -> Result<()> {
+    ) -> Result<DataFrame> {
         let resolution = lit(5_i8);
 
-        // assign order to sites
+        // assign order to sites based on the H3 index of the order destination
         let orders = orders
             .select([
                 col("person_id"),
-                col("order_id"),
+                uuidv7().call(vec![col("submitted_at")]).alias("order_id"),
                 col("submitted_at"),
                 col("destination"),
                 col("items"),
@@ -269,19 +397,21 @@ impl KitchenHandler {
                 col("destination"),
                 col("items"),
             ])?
+            // NOTE: we need to materialize here, to have
+            // consistent order ids after cloning the frame. also perormance.
             .cache()
             .await?;
 
         let orders_count = orders.clone().count().await?;
         if orders_count == 0 {
-            return Ok(());
+            return Ok(EventsHelper::empty(ctx)?);
         }
 
         // flatten orders into lines
         let lines = unnest_orders(ctx, orders.clone(), *ctx.current_time()).await?;
         let lines_count = lines.clone().count().await?;
         if lines_count == 0 {
-            return Ok(());
+            return Ok(EventsHelper::empty(ctx)?);
         }
 
         let menu_items = self.menu_items(ctx)?.select([
@@ -294,7 +424,7 @@ impl KitchenHandler {
             // append site ids and order submission timestamp to allow
             // routing order lines to kitchens at the correct site and time.
             .join_on(
-                orders.select([
+                orders.clone().select([
                     col("site_id"),
                     col("order_id").alias("order_id2"),
                     col("submitted_at"),
@@ -320,7 +450,22 @@ impl KitchenHandler {
             .collect()
             .await?;
 
-        Ok(())
+        let new_order_events = EventsHelper::orders_created(orders.clone())?;
+
+        self.orders = orders
+            .select([
+                col("person_id"),
+                col("order_id"),
+                col("site_id"),
+                col("submitted_at"),
+                col("destination"),
+                lit(OrderStatus::Submitted.as_ref()).alias("status"),
+            ])?
+            .union(self.orders(ctx)?)?
+            .collect()
+            .await?;
+
+        Ok(new_order_events)
     }
 
     /// Process order lines.
@@ -330,7 +475,14 @@ impl KitchenHandler {
     /// ## Parameters
     ///
     /// * `ctx`: The simulation context.
-    /// * `state`: The simulation state.
+    ///
+    /// ## Returns
+    ///
+    /// A `Result` containing the processed order lines. The data frame contains events
+    /// raised during the processing of order lines. This includes the following:
+    ///
+    /// - processing step finished [OrderLineStepFinished](crate::SimulationEvent::OrderLineStepFinished)
+    /// - order line status updated [OrderLineUpdated](crate::SimulationEvent::OrderLineUpdated)
     async fn process_order_lines(&mut self, ctx: &SimulationContext) -> Result<DataFrame> {
         let mut events = EventsHelper::empty(ctx)?;
 
@@ -455,76 +607,57 @@ impl KitchenHandler {
         Ok(events)
     }
 
-    fn completed_orders(&self, ctx: &SimulationContext) -> Result<DataFrame> {
-        Ok(self
+    async fn update_order_status(&mut self, ctx: &SimulationContext) -> Result<DataFrame> {
+        let completed_orders = self
             .order_lines(ctx)?
+            .join_on(
+                self.orders(ctx)?
+                    .filter(col("status").eq(lit(OrderStatus::Submitted.as_ref())))?
+                    .select([col("order_id").alias("order_id_aux"), col("site_id")])?,
+                JoinType::Inner,
+                [col("order_id").eq(col("order_id_aux"))],
+            )?
             .aggregate(
-                vec![col("order_id")],
-                vec![
-                    bool_and(col("is_complete")).alias("all_complete"),
-                    // NOTE: we can choose any kitchen since we just need it to join
-                    // in site_id and all lines in an order are processed at the
-                    // same site and thus all kitchens that proicessed lines are at the site.
-                    first_value(col("kitchen_id"), vec![]).alias("kitchen_id2"),
-                    array_agg(col("order_line_id")).alias("order_lines"),
-                ],
+                vec![col("site_id"), col("order_id").alias("order_id_updated")],
+                vec![bool_and(col("is_complete")).alias("all_complete")],
             )?
             .filter(col("all_complete").eq(lit(true)))?
-            .join_on(
-                self.kitchens(ctx)?
-                    .select_columns(&["kitchen_id", "site_id"])?,
-                JoinType::Left,
-                vec![col("kitchen_id").eq(col("kitchen_id2"))],
-            )?
-            .join_on(
-                self.sites(ctx)?.select([
-                    col("site_id").alias("site_id2"),
-                    named_struct(vec![lit("x"), col("longitude"), lit("y"), col("latitude")])
-                        .alias("start_position"),
-                ])?,
-                JoinType::Left,
-                vec![col("site_id").eq(col("site_id2"))],
-            )?
-            .select_columns(&["order_id", "site_id", "start_position"])?)
-    }
-
-    /// Get completed orders
-    ///
-    /// This method gets all order lines for completed orders and returns them as a DataFrame.
-    /// The orders are then removed from the order lines tracked in the kitchen handler.
-    ///
-    /// ## Returns
-    ///
-    /// A DataFrame containing all order lines for completed orders.
-    pub(crate) async fn get_completed_orders(
-        &mut self,
-        ctx: &SimulationContext,
-    ) -> Result<Option<DataFrame>> {
-        // Group by order_id and check if all lines are complete
-        let completed_orders = self.completed_orders(ctx)?.collect().await?;
-        let completed_order_ids = completed_orders
-            .iter()
-            .flat_map(|b| b.column(0).as_fixed_size_binary().iter().flatten())
-            .map(|o| lit(ScalarValue::FixedSizeBinary(16, Some(o.to_vec()))))
-            .collect_vec();
-
-        if completed_order_ids.len() == 0 {
-            return Ok(None);
-        }
-
-        let completed_lines = self
-            .order_lines(ctx)?
-            .filter(col("order_id").in_list(completed_order_ids.clone(), false))?
-            .collect()
+            .cache()
             .await?;
 
-        self.order_lines = self
-            .order_lines(ctx)?
-            .filter(col("order_id").in_list(completed_order_ids, true))?
-            .collect()
-            .await?;
+        // update the order status to completed
+        let updated_orders = self
+            .orders(ctx)?
+            .join_on(
+                completed_orders
+                    .clone()
+                    .select_columns(&["order_id_updated", "all_complete"])?,
+                JoinType::Left,
+                [col("order_id").eq(col("order_id_updated"))],
+            )?
+            .select([
+                col("person_id"),
+                col("order_id"),
+                col("site_id"),
+                col("submitted_at"),
+                col("destination"),
+                case(col("all_complete"))
+                    .when(lit(true), lit(OrderStatus::Ready.as_ref()))
+                    .otherwise(col("status"))?
+                    .alias("status"),
+            ])?;
 
-        Ok(Some(ctx.ctx().read_batches(completed_orders)?))
+        self.orders = updated_orders.collect().await?;
+
+        let completed_orders = completed_orders.select([
+            col("site_id"),
+            col("order_id_updated").alias("order_id"),
+            ctx.current_time_expr().alias("timestamp"),
+        ])?;
+
+        let order_ready_events = EventsHelper::orders_ready(completed_orders)?;
+
+        Ok(order_ready_events)
     }
 
     /// Assign order lines to kitchens.
