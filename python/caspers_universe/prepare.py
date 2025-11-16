@@ -1,16 +1,16 @@
+import json
 from copy import deepcopy
 from typing import Literal
 from uuid import NAMESPACE_DNS, uuid5
 
 import geoarrow.pyarrow as ga
+import h3
 import networkx as nx
 import osmnx as ox
 import pyarrow as pa
+import shapely
 from pint import UnitRegistry
 from shapely.geometry import LineString, Point
-import h3
-import shapely
-import json
 
 from caspers_universe._internal import Site
 

@@ -232,7 +232,7 @@ impl KitchenHandler {
     /// }
     /// ```
     ///
-    /// ### Parameters
+    /// ### Arguments
     ///
     /// - `ctx`: The simulation context.
     ///
@@ -255,7 +255,7 @@ impl KitchenHandler {
     /// }
     /// ```
     ///
-    /// ### Parameters
+    /// ### Arguments
     ///
     /// - `ctx`: The simulation context.
     ///
@@ -279,7 +279,7 @@ impl KitchenHandler {
     /// }
     /// ```
     ///
-    /// ### Parameters
+    /// ### Arguments
     ///
     /// - `ctx`: The simulation context.
     ///
@@ -336,6 +336,90 @@ impl KitchenHandler {
         Ok(events)
     }
 
+    /// Get orders ready for pickup by couriers
+    ///
+    /// ### Arguments
+    ///
+    /// * `ctx` - The simulation context.
+    ///
+    /// ### Returns
+    ///
+    /// A [`DataFrame`] containing delivery information with the following schema.
+    ///
+    /// ```ignore
+    /// {
+    ///   person_id: bytes
+    ///   site_id: bytes
+    ///   order_id: bytes
+    ///   start_position: {
+    ///     x: float64
+    ///     y: float64
+    ///   }
+    ///   destiniation: {
+    ///     x: float64
+    ///     y: float64
+    ///   }
+    /// }
+    /// ```
+    pub(crate) fn ready_orders(&self, ctx: &SimulationContext) -> Result<DataFrame> {
+        Ok(self
+            .orders(ctx)?
+            .filter(col("status").eq(lit(OrderStatus::Ready.as_ref())))?
+            .join_on(
+                self.sites(ctx)?.select([
+                    col("site_id").alias("site_id2"),
+                    named_struct(vec![lit("x"), col("longitude"), lit("y"), col("latitude")])
+                        .alias("start_position"),
+                ])?,
+                JoinType::Left,
+                [col("site_id").eq(col("site_id2"))],
+            )?
+            .select([
+                col("person_id"),
+                col("site_id"),
+                col("order_id"),
+                col("submitted_at"),
+                col("start_position"),
+                col("destination"),
+            ])?)
+    }
+
+    /// Set the status for the given orders.
+    ///
+    /// This function updates the status of the given orders to the specified status.
+    ///
+    /// ### Arguments
+    ///
+    /// * `ctx` - The simulation context.
+    /// * `order_ids` - The IDs of the orders to update.
+    /// * `status` - The new status for the orders.
+    ///
+    /// ### Returns
+    ///
+    /// A `Result` indicating success or failure.
+    pub(crate) async fn set_order_status(
+        &mut self,
+        ctx: &SimulationContext,
+        order_ids: Vec<Expr>,
+        status: OrderStatus,
+    ) -> Result<()> {
+        self.orders = self
+            .orders(ctx)?
+            .select(vec![
+                col("person_id"),
+                col("order_id"),
+                col("site_id"),
+                col("submitted_at"),
+                col("destination"),
+                case(col("order_id").in_list(order_ids.clone(), false))
+                    .when(lit(true), lit(status.as_ref()))
+                    .otherwise(col("status"))?,
+            ])?
+            .collect()
+            .await?;
+        Ok(())
+    }
+
     /// Prepare new orders and order lines for processing.
     ///
     /// This processes the raw orders from the population and crates individual
@@ -345,7 +429,7 @@ impl KitchenHandler {
     /// Each generated order line contains the recipe/processing information
     /// required to drive the order line through the kitchen.
     ///
-    /// ## Parameters
+    /// ## Arguments
     ///
     /// * `ctx`: The simulation context.
     /// * `orders`: The new orders to prepare.
@@ -450,7 +534,7 @@ impl KitchenHandler {
             .collect()
             .await?;
 
-        let new_order_events = EventsHelper::orders_created(orders.clone())?;
+        let new_order_events = EventsHelper::order_created(orders.clone())?;
 
         self.orders = orders
             .select([
@@ -472,7 +556,7 @@ impl KitchenHandler {
     ///
     /// This method processes order lines by advancing steps and marking completed ones.
     ///
-    /// ## Parameters
+    /// ## Arguments
     ///
     /// * `ctx`: The simulation context.
     ///
@@ -655,14 +739,14 @@ impl KitchenHandler {
             ctx.current_time_expr().alias("timestamp"),
         ])?;
 
-        let order_ready_events = EventsHelper::orders_ready(completed_orders)?;
+        let order_ready_events = EventsHelper::order_ready(completed_orders)?;
 
         Ok(order_ready_events)
     }
 
     /// Assign order lines to kitchens.
     ///
-    /// ## Parameters
+    /// ## Arguments
     ///
     /// * `ctx`: The simulation context.
     /// * `order_lines`: The new order lines to assign.
@@ -774,7 +858,7 @@ impl KitchenHandler {
     /// This method assigns individual steps to stations within a kitchen
     /// (if available) for processing.
     ///
-    /// ## Parameters
+    /// ## Arguments
     ///
     /// * `ctx`: The simulation context.
     async fn assign_steps_to_stations(&mut self, ctx: &SimulationContext) -> Result<DataFrame> {
@@ -975,7 +1059,7 @@ impl KitchenHandler {
     /// This method prepares steps for processing by assigning them to stations.
     /// Line items assigned to a suitable kitchen station for processing.
     ///
-    /// ## Parameters
+    /// ## Arguments
     ///
     /// * `ctx`: The simulation context.
     async fn prepare_steps(&mut self, ctx: &SimulationContext) -> Result<DataFrame> {

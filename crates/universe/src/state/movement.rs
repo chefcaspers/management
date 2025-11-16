@@ -22,6 +22,9 @@ use uuid::Uuid;
 
 use crate::Result;
 
+#[path = "movement_next.rs"]
+pub(crate) mod next;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum Transport {
     Foot,

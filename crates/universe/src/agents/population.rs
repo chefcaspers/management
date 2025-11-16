@@ -12,7 +12,7 @@ use chrono::{DateTime, Utc};
 use datafusion::{
     functions::core::expr_ext::FieldAccessor as _,
     logical_expr::ScalarUDF,
-    prelude::{DataFrame, array_element, array_length, cast, col, lit, random, round},
+    prelude::{DataFrame, Expr, array_element, array_length, case, cast, col, lit, random, round},
     scalar::ScalarValue,
 };
 use geo::Point;
@@ -538,6 +538,30 @@ impl PopulationHandler {
             ])?;
 
         Ok(new_orders)
+    }
+
+    pub(crate) async fn set_person_status(
+        &mut self,
+        ctx: &SimulationContext,
+        person_ids: Vec<Expr>,
+        status: PersonStatusFlag,
+    ) -> Result<()> {
+        self.population = self
+            .population(ctx)?
+            .select(vec![
+                col("id"),
+                col("role"),
+                case(col("id").in_list(person_ids.clone(), false))
+                    .when(lit(true), lit(status.as_ref()))
+                    .otherwise(col("status"))?
+                    .alias("status"),
+                col("properties"),
+                col("position"),
+                col("state"),
+            ])?
+            .collect()
+            .await?;
+        Ok(())
     }
 
     pub(crate) async fn start_journeys(

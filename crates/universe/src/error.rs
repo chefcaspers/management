@@ -95,6 +95,14 @@ impl From<h3o::error::DissolutionError> for Error {
     }
 }
 
+impl From<h3o::error::InvalidCellIndex> for Error {
+    fn from(error: h3o::error::InvalidCellIndex) -> Self {
+        Error::H3 {
+            source: Box::new(error),
+        }
+    }
+}
+
 impl From<h3o::error::InvalidLatLng> for Error {
     fn from(error: h3o::error::InvalidLatLng) -> Self {
         Error::H3 {
