@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.17.0"
+__generated_with = "0.18.0"
 app = marimo.App(width="medium")
 
 
@@ -28,8 +28,7 @@ def _():
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     ### Prepare data to efficiently compute courier routes at runtime
 
     We want to have a realistic simulation and provide realisitic looking data.
@@ -45,8 +44,7 @@ def _(mo):
     This data is used within the rust kernel to create a representation optimized for
     route-finding which allows us to compute all courier trips and generally movements
     along road networks on-the-fly.
-    """
-    )
+    """)
     return
 
 
@@ -102,6 +100,47 @@ def site_plot(dropdown, setup):
     from caspers_universe import plot_site
 
     plot_site(setup.sites[dropdown.value].info)
+    return
+
+
+@app.cell
+def _(dropdown, setup):
+    from lonboard import Map, H3HexagonLayer
+    from lonboard.basemap import CartoStyle, MaplibreBasemap
+    import h3
+
+    from pyarrow import Table
+
+    # from shapely.geometry import Po
+
+    site = setup.sites[dropdown.value].info
+
+    resolutions = [6, 7, 8, 9, 10]
+    cells = [
+        h3.latlng_to_cell(site.latitude, site.longitude, res) for res in resolutions
+    ]
+
+    table = Table.from_pydict({"h3_index": cells})
+
+    # cell = h3.latlng_to_cell(site.latitude, site.longitude, 9)
+    # locations = [h3.cells_to_geo([cell]) for cell in cells]
+    # features = [{"type": "Feature", "geometry": geo, "properties": {}} for geo in locations]
+
+    # series = gpd.GeoSeries(location)
+    # gdf = gpd.GeoDataFrame.from_features(features)
+
+    # A GeoDataFrame with Polygon or MultiPolygon geometries
+    basemap = MaplibreBasemap(mode="interleaved", style=CartoStyle.DarkMatter)
+    # layer = PolygonLayer.from_geopandas(
+    #    gdf,
+    #    get_fill_color=[255, 0, 0],
+    #    get_line_color=[0, 100, 100, 150],
+    # )
+    layer = H3HexagonLayer(
+        table, get_hexagon=table["h3_index"], get_fill_color=[255, 0, 0]
+    )
+    m = Map(layer, basemap=basemap)
+    m
     return
 
 

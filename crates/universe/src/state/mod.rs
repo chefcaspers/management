@@ -24,7 +24,7 @@ use crate::{OrderDataBuilder, idents::*};
 
 use self::movement::JourneyPlanner;
 
-pub(crate) use self::movement::{Journey, RoutingData, Transport};
+pub(crate) use self::movement::{Journey, RoutingData, Transport, next::MovementHandler};
 pub use self::objects::{ObjectData, ObjectLabel};
 pub use self::orders::OrderData;
 pub(crate) use self::orders::{OrderLineStatus, OrderStatus};

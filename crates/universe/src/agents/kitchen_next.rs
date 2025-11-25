@@ -29,7 +29,6 @@ use crate::error::Result;
 use crate::functions::{h3_longlatash3, uuidv7};
 use crate::models::{KitchenStation, Station};
 use crate::state::{OrderLineStatus, State};
-use crate::test_utils::print_frame;
 use crate::{Brand, Error, EventPayload, EventsHelper, ObjectLabel, OrderStatus, parse_json};
 use crate::{SimulationContext, idents::*};
 
@@ -361,27 +360,31 @@ impl KitchenHandler {
     ///   }
     /// }
     /// ```
-    pub(crate) fn ready_orders(&self, ctx: &SimulationContext) -> Result<DataFrame> {
-        Ok(self
-            .orders(ctx)?
-            .filter(col("status").eq(lit(OrderStatus::Ready.as_ref())))?
-            .join_on(
-                self.sites(ctx)?.select([
-                    col("site_id").alias("site_id2"),
-                    named_struct(vec![lit("x"), col("longitude"), lit("y"), col("latitude")])
-                        .alias("start_position"),
+    pub(crate) fn ready_orders(&self, ctx: &SimulationContext) -> Result<Option<DataFrame>> {
+        if self.orders.is_empty() || self.orders.iter().map(|b| b.num_rows()).sum::<usize>() < 1 {
+            return Ok(None);
+        };
+        Ok(Some(
+            self.orders(ctx)?
+                .filter(col("status").eq(lit(OrderStatus::Ready.as_ref())))?
+                .join_on(
+                    self.sites(ctx)?.select([
+                        col("site_id").alias("site_id2"),
+                        named_struct(vec![lit("x"), col("longitude"), lit("y"), col("latitude")])
+                            .alias("origin"),
+                    ])?,
+                    JoinType::Left,
+                    [col("site_id").eq(col("site_id2"))],
+                )?
+                .select([
+                    col("person_id"),
+                    col("site_id"),
+                    col("order_id"),
+                    col("submitted_at"),
+                    col("origin"),
+                    col("destination"),
                 ])?,
-                JoinType::Left,
-                [col("site_id").eq(col("site_id2"))],
-            )?
-            .select([
-                col("person_id"),
-                col("site_id"),
-                col("order_id"),
-                col("submitted_at"),
-                col("start_position"),
-                col("destination"),
-            ])?)
+        ))
     }
 
     /// Set the status for the given orders.

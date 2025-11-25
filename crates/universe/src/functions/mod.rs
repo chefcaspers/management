@@ -1,4 +1,6 @@
-mod h3;
+use geodatafusion::udf::geo::measurement::{Distance, Length};
+
+mod h3_long_lat_as_h3;
 mod uuid_to_str;
 mod uuid_v7;
 
@@ -21,6 +23,8 @@ macro_rules! make_udf_function {
     };
 }
 
-make_udf_function!(h3::LongLatAsH3, h3_longlatash3);
+make_udf_function!(h3_long_lat_as_h3::LongLatAsH3, h3_longlatash3);
 make_udf_function!(uuid_v7::UuidV7, uuidv7);
 make_udf_function!(uuid_to_str::UuidToString, uuid_to_string);
+make_udf_function!(Length, st_length);
+make_udf_function!(Distance, st_distance);

@@ -155,7 +155,7 @@ static JOURNEY_STATE: LazyLock<SchemaRef> = LazyLock::new(|| {
         Field::new("person_id", DataType::FixedSizeBinary(16), false),
         Field::new("transport", DataType::Utf8View, false),
         Field::new(
-            "start_position",
+            "origin",
             DataType::Struct(
                 vec![
                     Field::new("x", DataType::Float64, false),
@@ -721,7 +721,7 @@ impl PopulationHandler {
             None,
             vec![(
                 Box::new(col("current_leg_index").eq(lit(0_u64))),
-                Box::new(col("start_position").field("x")),
+                Box::new(col("origin").field("x")),
             )],
             Some(Box::new(prev_dest_x)),
         ));
@@ -730,7 +730,7 @@ impl PopulationHandler {
             None,
             vec![(
                 Box::new(col("current_leg_index").eq(lit(0_u64))),
-                Box::new(col("start_position").field("y")),
+                Box::new(col("origin").field("y")),
             )],
             Some(Box::new(prev_dest_y)),
         ));
@@ -742,7 +742,7 @@ impl PopulationHandler {
         let updated_journeys = active_journeys.select(vec![
             col("person_id"),
             col("transport"),
-            col("start_position"),
+            col("origin"),
             col("journey_legs"),
             new_leg_index.alias("current_leg_index"),
             new_progress.alias("current_leg_progress"),
@@ -805,7 +805,7 @@ impl PopulationHandler {
             None,
             vec![(
                 Box::new(col("current_leg_index").eq(lit(0_u64))),
-                Box::new(col("start_position").field("x")),
+                Box::new(col("origin").field("x")),
             )],
             Some(Box::new(prev_dest_x)),
         ));
@@ -814,7 +814,7 @@ impl PopulationHandler {
             None,
             vec![(
                 Box::new(col("current_leg_index").eq(lit(0_u64))),
-                Box::new(col("start_position").field("y")),
+                Box::new(col("origin").field("y")),
             )],
             Some(Box::new(prev_dest_y)),
         ));

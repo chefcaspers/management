@@ -18,9 +18,10 @@ use datafusion::{
 };
 use itertools::Itertools;
 
-use crate::agents::{KitchenHandler, PopulationHandler, functions::create_order};
 use crate::{
-    EventsHelper, ObjectLabel, PersonRole, PersonStatusFlag, Result, SimulationContext,
+    EventsHelper, MovementHandler, ObjectLabel, PersonRole, PersonStatusFlag, Result,
+    SimulationContext,
+    agents::{KitchenHandler, PopulationHandler, functions::create_order},
     functions::h3_longlatash3,
 };
 
@@ -76,10 +77,26 @@ impl SimulationRunnerBuilder {
         let population = PopulationHandler::try_new(&self.ctx, create_orders).await?;
         let kitchens = KitchenHandler::try_new(&self.ctx).await?;
 
+        // TODO: have a more explicit strategy for using h3 to henerate routing data.
+        let resolution = lit(5_i8);
+        let site_cell_ids = kitchens
+            .sites(&self.ctx)?
+            .select([h3_longlatash3()
+                .call(vec![col("longitude"), col("latitude"), resolution.clone()])
+                .alias("site_cell")])?
+            .collect()
+            .await?
+            .iter()
+            .flat_map(|b| b.column(0).as_primitive::<Int64Type>().iter())
+            .flatten()
+            .collect_vec();
+        let movement = MovementHandler::try_new(&self.ctx, site_cell_ids, resolution).await?;
+
         Ok(SimulationRunner {
             ctx: self.ctx,
             population,
             kitchens,
+            movement,
         })
     }
 }
@@ -89,6 +106,8 @@ pub struct SimulationRunner {
 
     pub(crate) population: PopulationHandler,
     pub(crate) kitchens: KitchenHandler,
+
+    movement: MovementHandler,
 }
 
 impl SimulationRunner {
@@ -111,10 +130,11 @@ impl SimulationRunner {
     pub async fn step(&mut self) -> Result<()> {
         let mut events = EventsHelper::empty(&self.ctx)?;
 
-        if let Some(picked_up_orders) = self.assign_drivers().await? {
+        if let Some(picked_up_orders) = self.assign_couriers().await? {
+            let picked_up_orders = picked_up_orders.cache().await?;
             let person_ids = picked_up_orders
                 .clone()
-                .select([col("assigned_driver")])?
+                .select([col("assigned_courier")])?
                 .collect()
                 .await?
                 .iter()
@@ -124,10 +144,19 @@ impl SimulationRunner {
             self.population
                 .set_person_status(&self.ctx, person_ids, PersonStatusFlag::Delivering)
                 .await?;
+
+            let journey_data = picked_up_orders.clone().select([
+                col("assigned_courier").alias("person_id"),
+                col("origin").alias("origin"),
+                col("destination"),
+            ])?;
+            let journeys = self.movement.plan_journeys(&self.ctx, journey_data).await?;
+            self.population.start_journeys(&self.ctx, journeys).await?;
+
             events = events.union(EventsHelper::order_picked_up(
                 picked_up_orders.clone().select([
                     col("site_id"),
-                    col("assigned_driver").alias("courier_id"),
+                    col("assigned_courier").alias("courier_id"),
                     col("order_id"),
                     self.ctx.current_time_expr().alias("timestamp"),
                 ])?,
@@ -155,22 +184,44 @@ impl SimulationRunner {
         Ok(())
     }
 
-    async fn assign_drivers(&mut self) -> Result<Option<DataFrame>> {
+    /// Assign courires to ready order for pickup.
+    ///
+    /// The returned DataFrame has the following schema:
+    ///
+    /// ```ignore
+    /// {
+    ///   site_id: bytes(16)
+    ///   order_id: bytes(16)
+    ///   submitted_at: timestamp[ms]
+    ///   start_position: {
+    ///     x: float64
+    ///     y: float64
+    ///   }
+    ///   destination: {
+    ///     x: float64
+    ///     y: float64
+    ///   }
+    ///   assigned_courier: bytes(16)
+    /// }
+    /// ```
+    async fn assign_couriers(&mut self) -> Result<Option<DataFrame>> {
+        // TODO: more explicitly handle this when we consolidate location handling.
         let resolution = lit(9_i8);
+        let Some(order_for_pickup) = self.kitchens.ready_orders(&self.ctx)? else {
+            return Ok(None);
+        };
 
-        let order_for_pickup = self
-            .kitchens
-            .ready_orders(&self.ctx)?
+        let order_for_pickup = order_for_pickup
             .select([
                 col("site_id"),
                 col("order_id"),
                 col("submitted_at"),
-                col("start_position"),
+                col("origin"),
                 col("destination"),
                 h3_longlatash3()
                     .call(vec![
-                        col("start_position").field("x"),
-                        col("start_position").field("y"),
+                        col("origin").field("x"),
+                        col("origin").field("y"),
                         resolution.clone(),
                     ])
                     .alias("location"),
@@ -183,7 +234,7 @@ impl SimulationRunner {
                 col("site_id"),
                 col("order_id"),
                 col("submitted_at"),
-                col("start_position"),
+                col("origin"),
                 col("destination"),
                 col("location"),
                 row_number().alias("driver_queue_pos"),
@@ -210,7 +261,7 @@ impl SimulationRunner {
             return Ok(None);
         }
 
-        let available_drivers = self
+        let available_couriers = self
             .population
             .population(&self.ctx)?
             // TODO: This should filter on check-in once we have a check-in status implemented.
@@ -238,7 +289,7 @@ impl SimulationRunner {
 
         let assigned_orders = order_for_pickup
             .join_on(
-                available_drivers,
+                available_couriers,
                 JoinType::Left,
                 [col("location").eq(col("location_queue"))],
             )?
@@ -246,7 +297,7 @@ impl SimulationRunner {
                 col("site_id"),
                 col("order_id"),
                 col("submitted_at"),
-                col("start_position"),
+                col("origin"),
                 col("destination"),
                 col("driver_queue_pos"),
                 col("couriers"),
@@ -256,13 +307,13 @@ impl SimulationRunner {
                 col("site_id"),
                 col("order_id"),
                 col("submitted_at"),
-                col("start_position"),
+                col("origin"),
                 col("destination"),
                 array_element(
                     col("couriers"),
                     cast(col("driver_queue_pos"), DataType::Int32),
                 )
-                .alias("assigned_driver"),
+                .alias("assigned_courier"),
             ])?;
 
         Ok(Some(assigned_orders))
@@ -302,7 +353,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        Journey, MovementHandler, PersonId,
+        Journey, PersonId,
         test_utils::{print_frame, runner},
     };
 
@@ -313,15 +364,8 @@ mod tests {
 
         print_batches(&runner.kitchens.orders)?;
         print_batches(&runner.kitchens.order_lines)?;
-        // print_batches(&runner.orders)?;
 
         runner.run(100).await?;
-
-        // print_batches(&runner.population.population)?;
-
-        // print_frame(&runner.kitchens.stations(&runner.ctx)?).await?;
-        // print_frame(&runner.kitchens.order_lines(&runner.ctx)?).await?;
-        // print_batches(&runner.orders)?;
 
         Ok(())
     }
