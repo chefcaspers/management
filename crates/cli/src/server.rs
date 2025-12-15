@@ -12,21 +12,24 @@ use crate::ServerArgs;
 
 pub(super) async fn handle(args: ServerArgs) -> Result<()> {
     // Get the assets directory path relative to the crate root
-    let assets_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
+    let assets_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets/ui");
     let index_path = assets_dir.join("index.html");
+    let ui_service = ServeDir::new(&assets_dir).not_found_service(ServeFile::new(&index_path));
+    tracing::info!(target: "caspers::server", "Serving ui static files from: {:?}", assets_dir);
 
-    tracing::info!(target: "caspers::server", "Serving static files from: {:?}", assets_dir);
-
-    // Create the static file service
-    let serve_dir = ServeDir::new(&assets_dir).not_found_service(ServeFile::new(&index_path));
+    let assets_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets/docs");
+    let index_path = assets_dir.join("index.html");
+    let docs_service = ServeDir::new(&assets_dir).not_found_service(ServeFile::new(&index_path));
+    tracing::info!(target: "caspers::server", "Serving docs static files from: {:?}", assets_dir);
 
     // Build application routes
     let app = Router::new()
         .route("/api/health", get(health_check))
         .route("/api/simulation", get(simulation_status))
+        .nest_service("/docs", docs_service)
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive())
-        .fallback_service(serve_dir);
+        .fallback_service(ui_service);
 
     let addr: SocketAddr = args
         .server

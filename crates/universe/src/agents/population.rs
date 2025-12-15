@@ -12,7 +12,7 @@ use chrono::{DateTime, Utc};
 use datafusion::{
     functions::core::expr_ext::FieldAccessor as _,
     logical_expr::ScalarUDF,
-    prelude::{DataFrame, array_element, array_length, cast, col, lit, random, round},
+    prelude::{DataFrame, Expr, array_element, array_length, case, cast, col, lit, random, round},
     scalar::ScalarValue,
 };
 use geo::Point;
@@ -28,7 +28,6 @@ use crate::{
     BrandId, EntityView as _, EventPayload, MenuItemId, ObjectLabel, OrderCreatedPayload, PersonId,
     PersonRole, PersonStatusFlag, Result, SimulationContext, SiteId, State,
     agents::functions::create_order,
-    functions::uuidv7,
     state::{Journey, Transport},
 };
 
@@ -156,7 +155,7 @@ static JOURNEY_STATE: LazyLock<SchemaRef> = LazyLock::new(|| {
         Field::new("person_id", DataType::FixedSizeBinary(16), false),
         Field::new("transport", DataType::Utf8View, false),
         Field::new(
-            "start_position",
+            "origin",
             DataType::Struct(
                 vec![
                     Field::new("x", DataType::Float64, false),
@@ -533,17 +532,36 @@ impl PopulationHandler {
             .filter(col("items").is_not_null())?
             .select([
                 col("person_id"),
-                uuidv7().call(vec![col("submitted_at")]).alias("order_id"),
                 col("submitted_at"),
                 col("destination"),
                 col("items"),
-            ])?
-            // NOTE: we need to materialize here, to have
-            // consistent order ids after cloning the frame.
-            .cache()
-            .await?;
+            ])?;
 
         Ok(new_orders)
+    }
+
+    pub(crate) async fn set_person_status(
+        &mut self,
+        ctx: &SimulationContext,
+        person_ids: Vec<Expr>,
+        status: PersonStatusFlag,
+    ) -> Result<()> {
+        self.population = self
+            .population(ctx)?
+            .select(vec![
+                col("id"),
+                col("role"),
+                case(col("id").in_list(person_ids.clone(), false))
+                    .when(lit(true), lit(status.as_ref()))
+                    .otherwise(col("status"))?
+                    .alias("status"),
+                col("properties"),
+                col("position"),
+                col("state"),
+            ])?
+            .collect()
+            .await?;
+        Ok(())
     }
 
     pub(crate) async fn start_journeys(
@@ -703,7 +721,7 @@ impl PopulationHandler {
             None,
             vec![(
                 Box::new(col("current_leg_index").eq(lit(0_u64))),
-                Box::new(col("start_position").field("x")),
+                Box::new(col("origin").field("x")),
             )],
             Some(Box::new(prev_dest_x)),
         ));
@@ -712,7 +730,7 @@ impl PopulationHandler {
             None,
             vec![(
                 Box::new(col("current_leg_index").eq(lit(0_u64))),
-                Box::new(col("start_position").field("y")),
+                Box::new(col("origin").field("y")),
             )],
             Some(Box::new(prev_dest_y)),
         ));
@@ -724,7 +742,7 @@ impl PopulationHandler {
         let updated_journeys = active_journeys.select(vec![
             col("person_id"),
             col("transport"),
-            col("start_position"),
+            col("origin"),
             col("journey_legs"),
             new_leg_index.alias("current_leg_index"),
             new_progress.alias("current_leg_progress"),
@@ -787,7 +805,7 @@ impl PopulationHandler {
             None,
             vec![(
                 Box::new(col("current_leg_index").eq(lit(0_u64))),
-                Box::new(col("start_position").field("x")),
+                Box::new(col("origin").field("x")),
             )],
             Some(Box::new(prev_dest_x)),
         ));
@@ -796,7 +814,7 @@ impl PopulationHandler {
             None,
             vec![(
                 Box::new(col("current_leg_index").eq(lit(0_u64))),
-                Box::new(col("start_position").field("y")),
+                Box::new(col("origin").field("y")),
             )],
             Some(Box::new(prev_dest_y)),
         ));

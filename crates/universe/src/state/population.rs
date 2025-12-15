@@ -29,8 +29,8 @@ use crate::{EventPayload, OrderData, OrderStatus};
 use super::movement::Journey;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default, AsRefStr)]
-#[serde(rename_all = "snake_case")]
-#[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
 pub enum PersonStatusFlag {
     #[default]
     Idle,

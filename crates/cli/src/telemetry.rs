@@ -87,7 +87,7 @@ pub(crate) fn init_tracing_subscriber() -> OtelGuard {
             tracing_subscriber::EnvFilter::builder()
                 .with_default_directive(LevelFilter::WARN.into())
                 .parse_lossy(
-                    "caspers_universe=debug,caspers::simulation=debug,caspers::server=debug",
+                    "caspers_universe=debug,caspers::simulation=debug,caspers::server=debug,caspers::universe=debug",
                 ),
         )
         .with(tracing_subscriber::fmt::layer())

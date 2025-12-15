@@ -13,7 +13,7 @@ name = "caspers_universe"
 crate-type = ["cdylib"]
 
 [dependencies]
-caspers-universe = { path = "../crates/universe/", features = ["python"] }
+caspers-universe = { path = "../crates/universe/", features = ["python", "templates"] }
 
 arrow = { workspace = true }
 datafusion = { workspace = true }

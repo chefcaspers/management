@@ -18,11 +18,17 @@ use h3o::{CellIndex, LatLng, Resolution};
 use indexmap::IndexSet;
 use itertools::Itertools as _;
 use serde::{Deserialize, Serialize};
+use strum::AsRefStr;
 use uuid::Uuid;
 
 use crate::Result;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[path = "movement_next.rs"]
+pub(crate) mod next;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default, AsRefStr)]
+#[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
 pub enum Transport {
     Foot,
     #[default]
